@@ -54,6 +54,9 @@
 # nothing. `LINT_ALLOW_EMPTY_SCAN=1` suppresses that guard for a scan root
 # that deliberately declares nothing.
 #
+# A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
+# finding that ends the run: the jobs are not read.
+#
 # Honors SCRIPTS_DIR_OVERRIDE + LABELER_YML_OVERRIDE for fixtures, and
 # LINT_ALLOW_EMPTY_SCAN for a scan root that declares nothing. Exits 0
 # clean, 1 on any drift, 2 if yq is missing, if the workflow is absent or
@@ -68,6 +71,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 # shellcheck source=scripts/lib/generates.sh
 source "${_lib_dir}/lib/generates.sh"
 
@@ -84,7 +89,8 @@ readonly SIZE_ACTION='pascalgn/size-label-action'
 # `explode`: that would turn a key written as an alias into its anchor's
 # text, which the job list (printing the alias) never names, and would
 # expand every alias in `jobs:` on each lookup. The `.steps[]` reads after
-# the lookup follow aliases and merge keys inside the job.
+# the lookup follow aliases and merge keys inside the job, first mapping
+# winning in a merge list (`YQ_MERGE_SPEC`).
 readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # IGNORED entries no `@generates` annotation can ever claim, because
@@ -166,7 +172,18 @@ fi
 # substitution, whose exit status is not propagated under `set -Eeuo
 # pipefail`: a yq failure would otherwise yield an empty list and every
 # rule would score clean against it.
-if ! job_rows="$(yq eval '.jobs | keys | .[]' "${LABELER}")"; then
+if ! odd_key="$(first_odd_job_key "${LABELER}")"; then
+  printf '%s: could not evaluate %s with yq (malformed?)\n' "${0##*/}" "${LABELER}" >&2
+  exit 2
+fi
+# A job key the job list cannot carry would be read as other names or as
+# none, so the size step it hides is never found: a finding that ends the
+# run, since the ignore list cannot be read.
+if [[ -n ${odd_key} ]]; then
+  odd_job_key_message "${LABELER}" "${odd_key}" >&2
+  exit 1
+fi
+if ! job_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[]' "${LABELER}")"; then
   printf '%s: could not evaluate %s with yq (malformed?)\n' "${0##*/}" "${LABELER}" >&2
   exit 2
 fi
@@ -175,13 +192,13 @@ size_steps=0
 ignored_raw=''
 while IFS= read -r job; do
   [[ -n ${job} ]] || continue
-  if ! uses="$(JOB="${job}" yq eval "${JOB_BY_KEY}"' | .steps[].uses // ""' "${LABELER}")"; then
+  if ! uses="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .steps[].uses // ""' "${LABELER}")"; then
     printf '%s: could not evaluate job %s in %s with yq\n' "${0##*/}" "${job}" "${LABELER}" >&2
     exit 2
   fi
   [[ ${uses} == *"${SIZE_ACTION}"* ]] || continue
   size_steps=$((size_steps + 1))
-  if ! step_ignored="$(JOB="${job}" yq eval "${JOB_BY_KEY}
+  if ! step_ignored="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}
     | .steps[]
     | select(.uses // \"\" | test(\"${SIZE_ACTION}\"))
     | .env.IGNORED // \"\"

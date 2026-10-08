@@ -41,7 +41,8 @@
 # GitHub Actions reads a workflow file as one YAML document and refuses
 # one holding several, so a file that `yq` reads as several is a finding
 # and its jobs are not read. A failure of that first read, or of the
-# read listing the jobs, is a counted finding too.
+# read listing the jobs, is a counted finding too. So is a job key the job
+# list cannot carry (see scripts/lib/job-keys.sh), and its jobs are not read.
 #
 # See docs/security/workflow-hardening.md.
 #
@@ -60,6 +61,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly DEFAULT_REPO_SLUG="rvenutolo/linPEAS-flake"
@@ -79,8 +82,10 @@ readonly GUARD_NEEDLE="github.repository == '${REPO_SLUG}'"
 # text, which the job list (printing the alias) never names, and would
 # expand every alias in `jobs:` on each lookup. The `.permissions` and
 # `.if` reads after the lookup follow aliases and merge keys inside the
-# job; the body read prints the job whole, so an alias or a merge key in
-# it reads as written and what it stands for is not searched.
+# job, first mapping winning in a merge list (`YQ_MERGE_SPEC`); the body
+# read hands the matched job alone to `explode`, so an App-token step
+# reached through a job written as an alias or through a merge key is
+# searched as the text it stands for.
 readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 if ! command -v yq >/dev/null 2>&1; then
@@ -104,7 +109,7 @@ fi
 function read_workflow() {
   local -r file="$1" expr="$2" job="$3" what="$4"
   local value
-  if ! value="$(JOB="${job}" yq eval "${expr}" "${file}")"; then
+  if ! value="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${expr}" "${file}")"; then
     printf 'cannot read the %s of job %q from %s\n' "${what}" "${job}" "${file}" >&2
     return 1
   fi
@@ -126,7 +131,7 @@ job_needs_fork_guard() {
   # App installation token = real write privilege despite a read-only
   # GITHUB_TOKEN. A job minting one must carry the fork guard.
   local body
-  if ! body="$(read_workflow "${file}" "${JOB_BY_KEY}" "${job}" body)"; then
+  if ! body="$(read_workflow "${file}" "${JOB_BY_KEY} | explode(.)" "${job}" body)"; then
     exit 2
   fi
   [[ ${body} == *"actions/create-github-app-token"* ]] && return 0
@@ -146,7 +151,7 @@ for f in "${selected_files[@]}"; do
   # The workflow's first read: `yq` prints one index per document, and
   # GitHub Actions refuses a file holding several, so such a file is a
   # finding and is read no further.
-  if ! doc_indexes="$(yq eval 'document_index' "${f}")"; then
+  if ! doc_indexes="$(yq eval "${YQ_MERGE_SPEC[@]}" 'document_index' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
@@ -162,7 +167,19 @@ for f in "${selected_files[@]}"; do
   # status is not propagated under set -Eeuo pipefail, so a yq failure
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
-  if ! rows="$(yq eval '.jobs // {} | keys | .[]' "${f}")"; then
+  # A job key the job list cannot carry would be read as other names or
+  # as none, so it is a finding and the jobs are not read.
+  if ! odd_key="$(first_odd_job_key "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  if [[ -n ${odd_key} ]]; then
+    odd_job_key_message "${f}" "${odd_key}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs // {} | keys | .[]' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue

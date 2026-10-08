@@ -1103,6 +1103,16 @@ through the success branch is pinned by hash, and a gated step is
 refused, so a change there stops this lint rather than silently changing
 what an arm means.
 
+A workflow whose `jobs:` holds a key GitHub Actions refuses (an empty
+one, one holding a line break or a tab, a non-scalar one, or a merge
+key) is a finding and its jobs are not read: the key would be listed as
+other names or as none, hiding a notify job. Every `yq` read of a
+workflow passes YQ_MERGE_SPEC, so a merge list (`<<: [*a, *b]`) inside a
+job is read first mapping wins, as the YAML merge specification says.
+Such a workflow is the one finding: it is not also reported as a scanner
+workflow without a notify job, and a marker naming one of its jobs is not
+judged against jobs that were never read.
+
 Exit codes: 0 every marker matches its job's derived arms and every
 scanner notify job carries its markers, 1 a marker disagrees with the
 derived arms, names a job that is not a notify job, is malformed, sits on
@@ -1384,12 +1394,21 @@ kept: they are what the lint reads. A name in bold or italic with no code
 span is not read, and neither is a code span wrapped in its own emphasis
 markers, which stand between the span and the noun.
 
+A `jobs:` key GitHub Actions refuses (empty, holding a line break or a
+tab, not a scalar, or a merge key) is a finding naming the workflow and
+the key. Such a key is never a job name: a line-break key does not
+resolve as the two names it spells, and the jobs a merge key brings in
+resolve as the jobs they are. The refusal is the only finding for that
+file: the names it can still resolve are listed, so a sentence naming one
+of them is not reported as a ghost.
+
 Exit codes:
 
 ```text
   0  every name claimed in prose resolves to something the sentence's own
       claim noun admits
-  1  ghost or mislabel name(s) found (details printed to stderr)
+  1  ghost or mislabel name(s) found, or a workflow with a job key
+      GitHub Actions refuses (details printed to stderr)
   2  the check could not run: a required tool is missing, a temp file
       cannot be created, a missing or empty name source, a producer that
       lists or reads the scanned files failed, an empty scan set, or a
@@ -1808,7 +1827,7 @@ docs/\_data/ci-check-categories.yml map.
 
 **Options:**
 
-- `--check` — exit 1 if the doc would change; exit 2 if an input file is missing, if ci.yml has needs: references to non-existent jobs, if the category map is neither one map nor empty, or if a tool fails to read them
+- `--check` — exit 1 if the doc would change; exit 2 if an input file is missing, if ci.yml has needs: references to non-existent jobs, if ci.yml holds a job key the job list cannot carry (see scripts/lib/job-keys.sh), if the category map is neither one map nor empty, or if a tool fails to read them
 
 ### scripts/refresh-ci-summary.sh
 
@@ -2555,6 +2574,55 @@ one output while asserting different substrings, if two records share
 one output without a parity exemption, or if nothing was recorded at
 all. The census names every group of scenarios sharing one output before
 reporting the counts.
+
+### scripts/lib/job-keys.sh
+
+Shared reading rules for the `jobs:` map of a workflow.
+Several lints list the job keys one per line and read each key back,
+so a key the line cannot carry (an empty one, one holding a line break
+or a tab, one that is not a scalar) is read as other names or as none,
+and a merge key (`<<`) directly under `jobs:` lists as the key `<<`
+while the jobs it brings in are never read. GitHub Actions refuses a
+job id outside `[A-Za-z_][A-Za-z0-9_-]*`, so no runnable workflow has
+such a key; a lint reads files GitHub has not validated, and counts the
+key as a finding instead of reading around it.
+
+A merge key given a list (`<<: [*P, *Q]`) with a conflicting key is
+read first mapping wins, as the YAML merge specification says. `yq`
+reads it last mapping wins unless it is given
+`--yaml-fix-merge-anchor-to-spec`, so every `yq` read of a workflow
+that follows a merge key passes `"${YQ_MERGE_SPEC[@]}"`. The flag also
+silences the warning `yq` prints when it is absent.
+Source after `set -Eeuo pipefail`.
+
+#### first_odd_job_key()
+
+Print the first job key the job list cannot carry, as a
+JSON string, or nothing when every key is carriable. A key is refused
+when it is a merge key, is not a scalar, is empty, or holds a tab, a
+line break, a carriage return or a NUL. Each key is resolved through an
+alias first. A `jobs:` that is not a map holds no keys.
+
+**Args:**
+
+- `$1` — workflow path
+
+**Exit codes:**
+
+- `1` — yq could not evaluate the file
+
+**Stdout:**
+
+- the first refused key of the first document holding one, as one line of JSON, or nothing
+
+#### odd_job_key_message()
+
+Print the finding for a refused job key.
+
+**Args:**
+
+- `$1` — workflow path
+- `$2` — the key as JSON, from `first_odd_job_key`
 
 ### scripts/lib/locale-gap.sh
 

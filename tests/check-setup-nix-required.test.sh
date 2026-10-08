@@ -37,4 +37,93 @@ expect bad-quick-install.yml 1 \
   "nixbuild/nix-quick-install-action@9d1f2e3a4b5c6d7e8f90a1b2c3d4e5f60718293a installs Nix outside the composite"
 expect no-such-workflow.yml 2 'selected 0 of'
 
+# --- job keys and merge lists, built at run time ----------------------
+# @description Run the script on one workflow written at run time and
+# compare the exit code and that stderr contains the message.
+# @arg $1 scenario name  @arg $2 workflow text (printf format)
+# @arg $3 expected exit code  @arg $4 expected stderr substring
+function expect_built() {
+  local -r name="$1" text="$2" want_exit="$3" want_msg="$4"
+  local dir got_exit=0 got_stderr
+  dir="$(mktemp --directory)"
+  # shellcheck disable=SC2059 # the workflow text is the format
+  printf "${text}" >"${dir}/built.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${dir}" WORKFLOW_FILE_FILTER=built.yml \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  if [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
+    printf 'FAIL %s: stderr missing %q\n  got: %s\n' "${name}" "${want_msg}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly REFUSED='which GitHub Actions refuses'
+readonly NIX_STEP='{uses: cachix/install-nix-action@v1}'
+readonly MERGE_P='x: &p {steps: [{uses: cachix/install-nix-action@v1}]}\n'
+readonly MERGE_Q='y: &q {steps: [{run: echo PAYLOAD_RAN}]}\n'
+expect_built 'empty job key is refused' \
+  "jobs:\n  \"\": {runs-on: x, steps: [${NIX_STEP}]}\n" 1 "${REFUSED}"
+expect_built 'line-break job key is refused' \
+  "jobs:\n  \"a\\\\nb\": {runs-on: x, steps: [${NIX_STEP}]}\n" 1 "${REFUSED}"
+expect_built 'merge key under jobs is refused' \
+  'x: &base {j: {runs-on: x, steps: [{uses: cachix/install-nix-action@v1}]}}\njobs:\n  <<: *base\n' 1 "${REFUSED}"
+expect_built 'merge list reads the first mapping (installer first) as the installer' \
+  "${MERGE_P}${MERGE_Q}"'jobs:\n  a: {runs-on: x, <<: [*p, *q]}\n' 1 'installs Nix outside the composite'
+expect_built 'merge list reads the first mapping (run first) as a run step' \
+  "${MERGE_P}${MERGE_Q}"'jobs:\n  a: {runs-on: x, <<: [*q, *p]}\n' 0 ''
+
+# @description Run the script on one workflow written at run time and
+# compare the exit code and the whole of stderr, with the temp directory
+# shown as DIR and each of yq's own `Error:` lines shown as `Error: YQ`
+# (their wording is yq's). A finding raised twice, a yq failure run twice,
+# or a second finding raised from jobs the script should not have read,
+# changes the text or the count.
+# @arg $1 scenario name  @arg $2 workflow text (printf format)
+# @arg $3 expected exit code  @arg $4 expected stderr
+function expect_exact() {
+  local -r name="$1" text="$2" want_exit="$3" want="$4"
+  local dir got_exit=0 raw got
+  dir="$(mktemp --directory)"
+  # shellcheck disable=SC2059 # the workflow text is the format
+  printf "${text}" >"${dir}/built.yml"
+  raw="$(WORKFLOWS_DIR_OVERRIDE="${dir}" WORKFLOW_FILE_FILTER=built.yml \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  # shellcheck disable=SC2001 # the pattern is anchored per line, which a parameter expansion cannot do
+  got="$(sed 's/^Error:.*/Error: YQ/' <<<"${raw//"${dir}"/DIR}")"
+  if [[ ${got_exit} != "${want_exit}" || ${got} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  got:  %q\n  want: %q\n' "${name}" "${got_exit}" "${want_exit}" "${got}" "${want}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly ODD_HEAD='DIR/built.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: '
+expect_exact 'a workflow yq cannot parse is reported once and counted once' \
+  'jobs: [unterminated\n' 1 \
+  "Error: YQ
+DIR/built.yml: could not evaluate workflow with yq (malformed?)
+check-setup-nix-required: 1 violation(s)"
+expect_exact 'the first refused job key across documents is the one named' \
+  'jobs:\n  "a\\nb": {runs-on: x, steps: [{uses: cachix/install-nix-action@v1}]}\n---\njobs:\n  "": {runs-on: x, steps: [{uses: cachix/install-nix-action@v1}]}\n' 1 \
+  "${ODD_HEAD}"'"a\nb")
+check-setup-nix-required: 1 violation(s)'
+expect_exact 'a refused job key stops the file: its jobs are not read' \
+  'jobs:\n  "": {runs-on: x, steps: [{uses: cachix/install-nix-action@v1}]}\n' 1 \
+  "${ODD_HEAD}"'"")
+check-setup-nix-required: 1 violation(s)'
+
+# The github-token read passes the merge flag as well: a merge list in a
+# setup-nix caller step is read first mapping wins.
+# shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+readonly TOKEN_OK='t: &tok {uses: ./.github/actions/setup-nix, with: {github-token: "${{ secrets.GITHUB_TOKEN }}"}}\n'
+readonly TOKEN_BAD='u: &tbad {uses: ./.github/actions/setup-nix, with: {github-token: wrong}}\n'
+expect_built 'merge list reads the first mapping (wrong token first) as the token' \
+  "${TOKEN_OK}${TOKEN_BAD}"'jobs:\n  a: {runs-on: x, steps: [{<<: [*tbad, *tok]}]}\n' 1 'has wrong github-token'
+expect_built 'merge list reads the first mapping (right token first) as the token' \
+  "${TOKEN_OK}${TOKEN_BAD}"'jobs:\n  a: {runs-on: x, steps: [{<<: [*tok, *tbad]}]}\n' 0 ''
+
 printf 'all tests passed\n'

@@ -22,6 +22,11 @@
 #      issue, so the description a maintainer sees is whichever workflow
 #      opened one last.
 #
+# A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
+# violation and that workflow's jobs are not read. A merge list inside a
+# job is read first mapping wins, as the YAML merge specification says
+# (`YQ_MERGE_SPEC`).
+#
 # Honors WORKFLOWS_DIR_OVERRIDE (default: .github/workflows) and
 # LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
 #
@@ -37,6 +42,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/log.sh
 source "${_lib_dir}/lib/log.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 # Every read below goes through yq, and a yq that is not there fails the
 # first read. Scored as "no caller declares a description", that reading
@@ -68,7 +75,18 @@ function main() {
     # Left to `set -e` it would end the run under yq's status, which the
     # exit-code convention reads as a violation found rather than as a
     # file that was never examined.
-    if ! out="$(yq eval "
+    local odd_key
+    if ! odd_key="$(first_odd_job_key "${wf}" 2>/dev/null)"; then
+      printf 'notify-label-descriptions lint: %s could not be parsed\n' "${wf}" >&2
+      exit 2
+    fi
+    if [[ -n ${odd_key} ]]; then
+      printf 'notify-label-descriptions lint: ' >&2
+      odd_job_key_message "${wf}" "${odd_key}" >&2
+      failed=1
+      continue
+    fi
+    if ! out="$(yq eval "${YQ_MERGE_SPEC[@]}" "
       [ .jobs[].steps[]
         | select(.uses // \"\" | test(\"${COMPOSITE_SUFFIX}(@|\$)\"))
         | select(.with.\"label-description\" != null)
@@ -97,7 +115,8 @@ function main() {
 
   # A scan set that matched workflows but no notify caller means the
   # composite moved or was renamed, not that every description is fine.
-  if ((callers == 0)); then
+  # A workflow refused for its job keys is a violation already.
+  if ((callers == 0 && failed == 0)); then
     if [[ ${LINT_ALLOW_EMPTY_SCAN:-} == 1 ]]; then
       printf 'notify-label-descriptions lint: no notify callers, allowed\n'
       exit 0

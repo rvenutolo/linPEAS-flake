@@ -37,6 +37,8 @@ source "${_lib_dir}/lib/enumerate.sh"
 source "${_lib_dir}/lib/generates.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 root="${ROOT_OVERRIDE:-$(repo_toplevel)}"
 readonly ROOT="${root}"
@@ -151,9 +153,11 @@ glob_into workflow_files '.github/workflows YAML' \
 # of a second, so no textual pre-filter stands between this lint and the
 # syntax tree: a pre-filter would also be unsound against a folded run
 # scalar whose source splits the phrase across lines and whose evaluated
-# value joins it back together.
+# value joins it back together. A job's merge list is read first mapping
+# wins (YQ_MERGE_SPEC), the way the YAML merge specification reads it, so
+# a step list a later mapping would override is not the one searched.
 function workflow_facts() {
-  yq '[
+  yq eval "${YQ_MERGE_SPEC[@]}" '[
       ([.jobs[]?.steps[]?.run // ""] | map(select(test("nix flake update"))) | length > 0),
       ((.env.LOCK_DERIVED_GENERATORS // "") != ""),
       ((.env.COMMITTABLE_PATHS // "") != "")
@@ -164,7 +168,7 @@ function workflow_facts() {
 # a workflow whose fact line already reported the key non-empty, so an
 # empty result here is a parse fault rather than an absent key.
 function workflow_list() {
-  yq --exit-status ".env.${2} // \"\"" -- "$1"
+  yq eval "${YQ_MERGE_SPEC[@]}" --exit-status ".env.${2} // \"\"" -- "$1"
 }
 
 declare -a lock_writing=()

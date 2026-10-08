@@ -390,4 +390,39 @@ LC_ALL=en_US.UTF-8 classify "ASCII floating major still skips under en_US.UTF-8"
 # usage error: too few args.
 classify "usage error (too few args)" "<error>" v9.0.0 deadbeef
 
+# --- merge list inside the named check job, built from good.yml ---
+# A merge list gives the first mapping the win, as the YAML merge
+# specification says; yq reads the last one unless told otherwise.
+# @arg $1 scenario name
+# @arg $2 the merge list, in the order under test
+# @arg $3 expected exit code
+# @arg $4 expected stderr
+function expect_merge_order() {
+  local -r name="$1" order="$2" want_exit="$3" want="$4"
+  local dir content got_exit=0 got_stderr
+  dir="$(mktemp --directory)"
+  content="$(<"${FIXTURES}/good.yml")"
+  {
+    printf '%s\n' "${content%%$'\njobs:'*}"
+    printf 'x-write: &write\n  permissions:\n    contents: write\n  steps:\n    - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5\n'
+    printf 'x-read: &read\n  timeout-minutes: 15\n  permissions:\n    contents: read\n  steps:\n    - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5\n'
+    printf 'jobs:\n  check:\n    <<: %s\n' "${order}"
+    printf '  notify:%s\n' "${content#*$'\n'  notify:}"
+  } >"${dir}/wf.yml"
+  got_stderr="$(WORKFLOW_PATH_OVERRIDE="${dir}/wf.yml" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  rm --recursive --force -- "${dir}"
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  got:  %q\n  want: %q\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" "${want}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_merge_order 'a merge list in the check job is read first mapping wins: the writer first is refused' \
+  '[*write, *read]' 1 \
+  "job check: permissions must be exactly { contents: read } (got: contents:write)
+${ONE_FAILED}"
+expect_merge_order 'a merge list in the check job is read first mapping wins: the reader first passes' \
+  '[*read, *write]' 0 ''
+
 printf 'all tests passed\n'

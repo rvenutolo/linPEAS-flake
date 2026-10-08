@@ -215,6 +215,9 @@
 #      Two job keys that print as the same text (a literal `build:` twice,
 #      or `1` beside `"1"`) are a finding too, naming the key: they share
 #      one lookup and one line range, so one job would shadow the other.
+#      A merge key directly under `jobs:` is a finding too: it lists as
+#      the job `<<` and the jobs it brings in are never read; a merge key
+#      written as an alias is one too.
 #      A file holding a carriage return that does not end a CRLF line
 #      break is a finding too: yq counts it as a line break and the
 #      newline-separated read does not, so every job line after it is off.
@@ -276,6 +279,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -332,7 +337,7 @@ readonly NIX_EXEMPT_MARKER='egress-nix-exempt:'
 # into its anchor's text, which the job list (printing the alias) never
 # names, and would expand every alias in `jobs:` on each lookup. The
 # `.steps[]` reads after the lookup follow aliases and merge keys inside
-# the job.
+# the job, first mapping winning in a merge list (`YQ_MERGE_SPEC`).
 readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # Resolved against this script's own location rather than the scan root:
@@ -424,7 +429,19 @@ for f in "${selected_files[@]}"; do
   # status is not propagated under set -Eeuo pipefail, so a yq failure
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
-  if ! job_rows="$(yq eval '.jobs | keys | .[]' "${f}")"; then
+  # A merge key directly under `jobs:` lists as the job `<<` while the
+  # jobs it brings in are never read, so it is a finding and the file is
+  # read no further. The key is resolved through an alias first.
+  if ! merge_keys="$(yq eval "${YQ_MERGE_SPEC[@]}" '[.jobs | select(kind == "map") | to_entries[] | .key | explode(.) | select(tag == "!!merge")] | length' "${f}")"; then
+    fail "${f}: could not evaluate workflow with yq (malformed?)"
+    continue
+  fi
+  # One count per document; any count above zero is a merge key.
+  if [[ ${merge_keys//[0$'\n']/} != '' ]]; then
+    fail "${f}: jobs: holds a merge key, which GitHub Actions refuses; its jobs are not read"
+    continue
+  fi
+  if ! job_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[]' "${f}")"; then
     fail "${f}: could not evaluate workflow with yq (malformed?)"
     continue
   fi
@@ -432,7 +449,7 @@ for f in "${selected_files[@]}"; do
   # empty line, which command substitution strips, so a file whose only
   # job has such a key would read as no jobs at all. The count is held to
   # ASCII digits before the arithmetic below reads it.
-  if ! job_count="$(yq eval '.jobs | keys | length' "${f}")"; then
+  if ! job_count="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | length' "${f}")"; then
     fail "${f}: could not evaluate workflow with yq (malformed?)"
     continue
   fi
@@ -471,7 +488,7 @@ for f in "${selected_files[@]}"; do
   declare -A JOB_START=()
   declare -A JOB_END=()
   declare -a row_names=() row_starts=()
-  if ! odd_keys="$(yq eval '.jobs | keys | .[] | select(tostring | test("[\t\n]")) | tostring | @json' "${f}")"; then
+  if ! odd_keys="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[] | select(tostring | test("[\t\n]")) | tostring | @json' "${f}")"; then
     fail "${f}: could not evaluate job keys with yq (malformed?)"
     continue
   fi
@@ -479,7 +496,7 @@ for f in "${selected_files[@]}"; do
     fail "${f}: job key ${odd_keys%%$'\n'*} holds a tab or a line break, which the job line read cannot carry"
     continue
   fi
-  if ! job_line_rows="$(yq eval '.jobs | keys | .[] | [., line] | join("\t")' "${f}")"; then
+  if ! job_line_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[] | [., line] | join("\t")' "${f}")"; then
     fail "${f}: could not evaluate job line numbers with yq (malformed?)"
     continue
   fi
@@ -595,7 +612,7 @@ for f in "${selected_files[@]}"; do
     # dies on the step walk has read no allowlist at all, and its exit 1
     # would surface as an allowlist found wanting. Each read below
     # finds the job through JOB_BY_KEY.
-    if ! endpoints="$(JOB="${job}" yq eval "${JOB_BY_KEY}"'
+    if ! endpoints="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"'
       | .steps[]
       | select(.uses // "" | test("step-security/harden-runner@"))
       | .with."allowed-endpoints" // ""
@@ -607,11 +624,11 @@ for f in "${selected_files[@]}"; do
     # A job with no harden-runner step has no allowlist to lint.
     [[ -z ${endpoints} ]] && continue
 
-    if ! uses="$(JOB="${job}" yq eval "${JOB_BY_KEY}"' | .steps[].uses // ""' "${f}")"; then
+    if ! uses="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .steps[].uses // ""' "${f}")"; then
       printf '%s: cannot read the step uses: list for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi
-    if ! runs="$(JOB="${job}" yq eval "${JOB_BY_KEY}"' | .steps[].run // ""' "${f}")"; then
+    if ! runs="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .steps[].run // ""' "${f}")"; then
       printf '%s: cannot read the step run: list for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi

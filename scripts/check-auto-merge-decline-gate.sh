@@ -20,6 +20,11 @@
 # `gh pr merge ... --auto` must also contain `--json state` and a
 # `CLOSED|MERGED` token co-located with `exit 1`.
 #
+# A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
+# finding and that workflow's jobs are not read. A merge list inside a
+# job is read first mapping wins, as the YAML merge specification says
+# (`YQ_MERGE_SPEC`).
+#
 # See docs/security/workflow-hardening.md.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
@@ -33,6 +38,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -53,6 +60,19 @@ filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]
 for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
 
+  # A job key the job list cannot carry would hide the jobs behind it
+  # from the read below, so it is a finding and the jobs are not read.
+  if ! odd_key="$(first_odd_job_key "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  if [[ -n ${odd_key} ]]; then
+    odd_job_key_message "${f}" "${odd_key}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+
   # Capture yq's output into a temp file rather than feeding the loop
   # from `< <(yq ...)`: a process substitution's exit status is not
   # propagated under set -Eeuo pipefail, so a yq parse failure would
@@ -60,7 +80,7 @@ for f in "${selected_files[@]}"; do
   # output cannot round-trip through "$(...)" (bash command substitution
   # strips embedded NUL bytes), hence the temp file.
   runs_file="$(make_temp)"
-  if ! yq eval -0 '.jobs[].steps[].run // ""' "${f}" >"${runs_file}"; then
+  if ! yq eval "${YQ_MERGE_SPEC[@]}" -0 '.jobs[].steps[].run // ""' "${f}" >"${runs_file}"; then
     rm --force -- "${runs_file}"
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))

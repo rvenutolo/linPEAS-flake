@@ -43,6 +43,18 @@ jobs:
 EOF
 }
 
+# @description Write a workflow whose job `a` merges two steps' jobs.
+# The over-cap step is P and the in-cap step is Q.
+# @arg $1 destination path  @arg $2 merge list, e.g. "*P, *Q"
+function write_merge_list_caller() {
+  {
+    printf 'name: caller\non:\n  workflow_dispatch:\n'
+    printf 'x-p: &P {steps: [{uses: ./.github/actions/notify-workflow-result, with: {label: l, label-description: "%s"}}]}\n' "${OVER_CAP}"
+    printf 'x-q: &Q {steps: [{uses: ./.github/actions/notify-workflow-result, with: {label: l, label-description: ok}}]}\n'
+    printf 'jobs:\n  a: {<<: [%s]}\n' "$2"
+  } >"$1"
+}
+
 # @description Run the lint against a directory of workflows.
 # @arg $1 scenario name  @arg $2 workflow dir  @arg $3 expected exit
 # @arg $4 expected output substring (empty skips)
@@ -98,6 +110,66 @@ function main() {
   run_scenario 'one label with two descriptions fails' "${root}/conflict" 1 \
     'label beta-drift is filed with more than one description'
 
+  # A merge list inside a job is read first mapping wins, as the YAML
+  # merge specification says, so the first-listed step decides.
+  mkdir -p "${root}/merge-over-first"
+  write_merge_list_caller "${root}/merge-over-first/a.yml" '*P, *Q'
+  run_scenario 'a merge list with the over-cap step first fails' "${root}/merge-over-first" 1 \
+    'label l description is 101 characters, over the 100-character cap'
+  mkdir -p "${root}/merge-ok-first"
+  write_merge_list_caller "${root}/merge-ok-first/a.yml" '*Q, *P'
+  # A second caller keeps this output distinct from the at-cap scenario.
+  write_caller "${root}/merge-ok-first/b.yml" 'gamma-drift' 'gamma'
+  run_scenario 'a merge list with the in-cap step first passes' "${root}/merge-ok-first" 0 \
+    '2 label description(s) across 2 caller workflow(s)'
+
+  # A merge key directly under jobs: is a key GitHub Actions refuses, and
+  # the jobs it brings in are never read, so it is a finding.
+  mkdir -p "${root}/merge-under-jobs"
+  {
+    printf 'name: caller\non:\n  workflow_dispatch:\n'
+    printf 'x-base: &base {a: {steps: [{uses: ./.github/actions/notify-workflow-result, with: {label: l, label-description: "%s"}}]}}\n' "${OVER_CAP}"
+    printf 'jobs:\n  <<: *base\n'
+  } >"${root}/merge-under-jobs/a.yml"
+  run_scenario 'a merge key under jobs: is refused' "${root}/merge-under-jobs" 1 \
+    "notify-label-descriptions lint: ${root}/merge-under-jobs/a.yml: jobs: holds a job key"
+
+  # yq's own error text stays out of the output: the lint's line is the
+  # whole report for a workflow it could not read.
+  mkdir -p "${root}/unparsable-only"
+  printf 'jobs: [\n  this is not: valid: yaml\n' >"${root}/unparsable-only/a.yml"
+  local only_out only_rc=0
+  only_out="$(WORKFLOWS_DIR_OVERRIDE="${root}/unparsable-only" "${SCRIPT}" 2>&1)" || only_rc=$?
+  if [[ ${only_rc} -ne 2 || ${only_out} != "notify-label-descriptions lint: ${root}/unparsable-only/a.yml could not be parsed" ]]; then
+    printf 'FAIL: an unparsable workflow reports one line — exit %d\n%s\n' "${only_rc}" "${only_out}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: an unparsable workflow reports one line (exit %d)\n' "${only_rc}"
+  fi
+
+  # A failing read of the job keys is a could-not-run of its own, even
+  # when the read of the steps would succeed. The shim fails only the
+  # read that prints keys as JSON.
+  local stub_dir real_yq
+  stub_dir="$(mktemp --directory)"
+  real_yq="$(command -v yq)"
+  cat >"${stub_dir}/yq" <<EOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [[ \${arg} == *'to_json(0)'* ]]; then
+    exit 9
+  fi
+done
+exec ${real_yq} "\$@"
+EOF
+  chmod +x -- "${stub_dir}/yq"
+  mkdir -p "${root}/key-read-fails"
+  write_caller "${root}/key-read-fails/a.yml" 'delta-drift' 'delta'
+  PATH="${stub_dir}:${PATH}" run_scenario 'a failing job-key read is a could-not-run' "${root}/key-read-fails" 2 \
+    "${root}/key-read-fails/a.yml could not be parsed"
+  rm --force -- "${stub_dir}/yq"
+  rmdir -- "${stub_dir}"
+
   # A scan set holding workflows but no notify caller means the composite
   # moved or was renamed. Scored clean, that is a lint reporting on a
   # composite it never found.
@@ -120,7 +192,7 @@ EOF
   mkdir -p "${root}/unparsable"
   printf 'jobs: [\n  this is not: valid: yaml\n' >"${root}/unparsable/a.yml"
   run_scenario 'an unparsable workflow is a could-not-run' "${root}/unparsable" 2 \
-    'could not be parsed'
+    "${root}/unparsable/a.yml could not be parsed"
 
   # An empty scan root is the deliberate-fixture case the shared
   # enumeration helper gates behind LINT_ALLOW_EMPTY_SCAN.

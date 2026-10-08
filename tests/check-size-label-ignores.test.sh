@@ -139,7 +139,7 @@ function main() {
   # ignores nothing — a finding about content the lint never read.
   expect 'tooling: an unparsable workflow is a could-not-run' \
     "${DECLARING_SCRIPTS}" "${work}/bad-malformed.yml" 2 \
-    'could not evaluate'
+    'bad-malformed.yml with yq (malformed?)'
 
   # (j) TOOLING: the workflow parses and runs the size-label action, but
   # the step carries no ignore list. Nothing to compare against, so no
@@ -252,6 +252,34 @@ EOF
     "${size_step}" "${size_step}" >"${work}/key-twice.yml"
   expect 'key as data: a key written twice' "${DECLARING_SCRIPTS}" "${work}/key-twice.yml" 1 \
     "${work}/key-twice.yml: IGNORED lists docs/key-twice.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
+
+  # A job key the job list cannot carry is refused, never read as other
+  # names or as none, and so is a merge key under `jobs:`.
+  local refused='which GitHub Actions refuses'
+  local size_body=$'    runs-on: ubuntu-latest\n    steps:\n%s\n        env:\n          IGNORED: "docs/alpha.md"\n'
+  # shellcheck disable=SC2059 # size_body is the format
+  printf 'name: a\non:\n  workflow_dispatch: {}\njobs:\n  "a\\nb":\n'"${size_body}" "${size_step}" >"${work}/key-line-break.yml"
+  expect 'key refused: a line break' "${DECLARING_SCRIPTS}" "${work}/key-line-break.yml" 1 "${refused}"
+  # shellcheck disable=SC2059
+  printf 'name: a\non:\n  workflow_dispatch: {}\njobs:\n  "":\n'"${size_body}" "${size_step}" >"${work}/key-empty.yml"
+  expect 'key refused: empty' "${DECLARING_SCRIPTS}" "${work}/key-empty.yml" 1 "${refused}"
+  # shellcheck disable=SC2059
+  printf 'name: a\non:\n  workflow_dispatch: {}\nx: &base\n  size:\n'"${size_body}"'jobs:\n  <<: *base\n' "${size_step}" >"${work}/key-merge.yml"
+  expect 'key refused: a merge key under jobs' "${DECLARING_SCRIPTS}" "${work}/key-merge.yml" 1 "${refused}"
+  # A merge list is read first mapping wins, so the job holds the size
+  # step of the first mapping listed.
+  # shellcheck disable=SC2059
+  printf 'name: a\non:\n  workflow_dispatch: {}\np: &P\n  steps:\n    - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7\n      env:\n        IGNORED: "docs/alpha.md\\nCHANGELOG.md"\nq: &Q\n  steps:\n    - run: echo PAYLOAD_RAN\njobs:\n  size:\n    <<: [*P, *Q]\n' >"${work}/merge-list.yml"
+  expect 'merge list: the first mapping wins' "${DECLARING_SCRIPTS}" "${work}/merge-list.yml" 0 ''
+
+  # A failure of the read that names an odd job key ends the run (exit 2)
+  # before the jobs are listed. The stub fails only that read.
+  mkdir -- "${work}/odd-stub"
+  printf '#!/usr/bin/env bash\ncase "$*" in *"!!merge"*) exit 7 ;; esac\nexec %q "$@"\n' \
+    "$(command -v yq)" >"${work}/odd-stub/yq"
+  chmod +x -- "${work}/odd-stub/yq"
+  PATH="${work}/odd-stub:${PATH}" expect 'odd job key read fails' "${DECLARING_SCRIPTS}" "${work}/key-twice.yml" 2 '' '' \
+    "check-size-label-ignores.sh: could not evaluate ${work}/key-twice.yml with yq (malformed?)"
 
   # (m) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' \

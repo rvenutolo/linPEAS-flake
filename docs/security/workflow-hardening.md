@@ -618,6 +618,8 @@ The rule keys off YAML node style (`|`, `>`, and their chomping/indent variants)
 
 Plain single-line `run:` invocations are exempt — they're already a single shell command whose exit status drives the step directly.
 
+A job key the job list cannot carry, or a merge key directly under `jobs:`, is a counted finding and the file's jobs are not read; see "Job keys and merge lists in the `jobs:` reads" in `docs/development/linting.md`.
+
 Enforced by `scripts/check-run-block-strict.sh`. Wired as the `lint-workflow-security` CI job (member check `run-block-strict`) and as a pre-commit hook.
 
 ## fork-guard-release
@@ -631,6 +633,8 @@ A job that mints a GitHub App installation token (via `actions/create-github-app
 GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every guard-required job must carry the guard in its own `if:` expression. Existing `if:` clauses are AND-ed with the repository check.
 
 A file `yq` reads as several YAML documents (GitHub Actions refuses a workflow file holding several) is reported without its jobs being read.
+
+A job key the job list cannot carry, or a merge key directly under `jobs:`, is a counted finding and the file's jobs are not read. The App-token check reads the matched job after `explode`, so a step reached through a job written as an alias or through a merge key inside the job is found, and a merge list is read first mapping wins. See "Job keys and merge lists in the `jobs:` reads" in `docs/development/linting.md`.
 
 Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `lint-workflow-security` CI job (member check `fork-guard-release`) and as a pre-commit hook.
 

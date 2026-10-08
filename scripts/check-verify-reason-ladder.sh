@@ -59,6 +59,10 @@
 #
 # See docs/security/verification.md.
 #
+# Every `yq` read of the workflow passes YQ_MERGE_SPEC, so a merge list
+# (`<<: [*a, *b]`) inside the verify job is read first mapping wins, as
+# the YAML merge specification says.
+#
 # Env overrides (test-only):
 #   VERIFY_WORKFLOW_OVERRIDE  — alternate workflow path
 #   VERIFICATION_DOC_OVERRIDE — alternate verification doc path
@@ -81,6 +85,8 @@ source "${_lib_dir}/lib/temp.sh"
 source "${_lib_dir}/lib/repo.sh"
 # shellcheck source=scripts/lib/ascii-match.sh
 source "${_lib_dir}/lib/ascii-match.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
@@ -115,7 +121,7 @@ fi
 # status is not propagated under `set -Eeuo pipefail`, so an unparsable
 # workflow would yield empty input and every assertion below would pass
 # over nothing.
-if ! step_ids="$(yq eval '.jobs.verify.steps[] | select(has("id")) | .id' "${WORKFLOW}")"; then
+if ! step_ids="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs.verify.steps[] | select(has("id")) | .id' "${WORKFLOW}")"; then
   printf '%s: could not evaluate workflow with yq (malformed?)\n' "${WORKFLOW}" >&2
   exit 2
 fi
@@ -124,7 +130,7 @@ if [[ -z ${step_ids} ]]; then
   exit 2
 fi
 
-if ! env_rows="$(yq eval \
+if ! env_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" \
   ".jobs.verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .env | to_entries[] | .key + \"\t\" + .value" \
   "${WORKFLOW}")"; then
   printf '%s: could not evaluate the attribution step env block with yq\n' "${WORKFLOW}" >&2
@@ -136,7 +142,7 @@ if [[ -z ${env_rows} ]]; then
   exit 2
 fi
 
-if ! ladder_body="$(yq eval \
+if ! ladder_body="$(yq eval "${YQ_MERGE_SPEC[@]}" \
   ".jobs.verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .run" \
   "${WORKFLOW}")"; then
   printf '%s: could not evaluate the attribution step run body with yq\n' "${WORKFLOW}" >&2

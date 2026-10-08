@@ -20,6 +20,10 @@
 # which is a claim about one version's behaviour. A nixpkgs bump that
 # staleifies them now fails a check rather than passing unnoticed.
 #
+# Every `yq` read of the workflow passes YQ_MERGE_SPEC, so a merge list
+# (`<<: [*a, *b]`) inside a job is read first mapping wins, as the YAML
+# merge specification says.
+#
 # WORKFLOW_PATH_OVERRIDE points at an alternate workflow file
 # (used by tests/check-ratchet-pin-audit.test.sh fixtures).
 # RATCHET_DOC_OVERRIDE and RATCHET_VERSION_OVERRIDE are the fixture hooks
@@ -42,6 +46,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
@@ -73,7 +79,7 @@ fi
 function read_workflow() {
   local -r expr="$1" what="${2:-$1}"
   local value
-  if ! value="$(yq eval "${expr}" "${WORKFLOW}")"; then
+  if ! value="$(yq eval "${YQ_MERGE_SPEC[@]}" "${expr}" "${WORKFLOW}")"; then
     printf 'cannot read %s from %s\n' "${what}" "${WORKFLOW}" >&2
     return 1
   fi

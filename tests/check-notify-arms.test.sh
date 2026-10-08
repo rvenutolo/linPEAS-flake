@@ -104,6 +104,15 @@ function gated_workflow() {
   printf 'A failed run <!-- notify-arms: %s/notify = failure -->.\n' "$1" >>"${ROOT}/${DOC}"
 }
 
+# @description Add a workflow outside the scanner set to ROOT whose jobs
+# are given verbatim, with a build job and a notify job under the keys the
+# text builds. The notify step's body is `PAYLOAD_RAN` text only.
+# @arg $1 workflow file name
+# @arg $2 the text from `jobs:` on (a notify job in some odd shape)
+function odd_workflow() {
+  printf '%s\n' "name: ${1%.*}" 'on: push' "$2" >"${ROOT}/.github/workflows/$1"
+}
+
 # @description Run the script against ROOT; assert exit code, stderr, and
 # stdout. The clean path's summary carries the marker tallies and the scan
 # breadth, which is what tells two clean scenarios apart.
@@ -1060,6 +1069,358 @@ and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled
   ROOT="$(mktemp --directory)"
   cp --recursive -- "${BASE}/." "${ROOT}/"
   run_scenario not-a-repository-exits-2 2 'list prose failed enumerating the scan set'
+
+  # A job key GitHub Actions refuses is a counted finding: read as other
+  # names or as none, it would hide a notify job whose marker is wrong.
+  fresh_root
+  odd_workflow linebreak.yml 'jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  "j\nk":
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: linebreak
+          title: linebreak
+          body: "linebreak <!-- notify-arms: linebreak.yml/j k = success -->"'
+  run_scenario job-key-line-break-is-a-finding 1 \
+    '.github/workflows/linebreak.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "j\nk")'
+
+  fresh_root
+  odd_workflow mergekey.yml 'x-jobs: &more
+  notify:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: mergekey
+          title: mergekey
+          body: "mergekey <!-- notify-arms: mergekey.yml/notify = success -->"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  <<: *more'
+  run_scenario job-key-merge-key-is-a-finding 1 \
+    '.github/workflows/mergekey.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "<<")'
+
+  fresh_root
+  odd_workflow emptykey.yml 'jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  "":
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: emptykey
+          title: emptykey
+          body: emptykey'
+  run_scenario job-key-empty-is-a-finding 1 \
+    '.github/workflows/emptykey.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+
+  # A refused scanner workflow is one finding: its missing notify listing
+  # is not also a could-not-run, and the docs markers naming its jobs are
+  # not reported as naming a non-notify job (its jobs were never read).
+  fresh_root
+  printf '  "":\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+    >>"${ROOT}/.github/workflows/octoscan.yml"
+  run_scenario scanner-job-key-refusal-is-a-finding-not-could-not-run 1 \
+    '.github/workflows/octoscan.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+  refute_stderr 'has no notify-workflow-result job'
+  refute_stderr 'which is not a notify-workflow-result job'
+  refute_stderr 'has no notify-arms marker'
+
+  # A docs marker naming a job of a refused non-scanner workflow is covered
+  # by the refusal; it is not reported a second time.
+  fresh_root
+  odd_workflow refused-marked.yml 'jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  "":
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  notify:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: refused
+          title: refused
+          body: refused'
+  printf 'A failed run <!-- notify-arms: refused-marked.yml/notify = failure cancelled -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario refused-workflow-doc-marker-is-not-a-second-finding 1 \
+    '.github/workflows/refused-marked.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+  refute_stderr 'which is not a notify-workflow-result job'
+
+  # Skipping a marker under a refused workflow does not end the scan: a
+  # marker after it is still judged.
+  fresh_root
+  odd_workflow refused-marked.yml 'jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  "":
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  notify:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: refused
+          title: refused
+          body: refused'
+  printf 'A failed run <!-- notify-arms: refused-marked.yml/notify = failure cancelled -->.\nA ghost run <!-- notify-arms: ghost.yml/notify = failure -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario refused-workflow-marker-does-not-end-the-scan 1 \
+    '.github/workflows/refused-marked.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+  also_expect 'marker names ghost.yml/notify, which is not a notify-workflow-result job'
+  refute_stderr 'marker names refused-marked.yml/notify'
+
+  # A merge list gives the first mapping the win; yq reads the last unless
+  # told otherwise. The two mappings gate on different results.
+  local order marker
+  for order in 'failure:[*first, *second]' 'cancelled:[*first, *second]' 'cancelled:[*second, *first]'; do
+    marker="${order%%:*}"
+    order="${order#*:}"
+    fresh_root
+    odd_workflow "mergelist-${marker}.yml" "x-first: &first
+  if: always() && needs.a.result == 'failure'
+x-second: &second
+  if: always() && needs.a.result == 'cancelled'
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: \${{ needs.a.result }}
+          label: mergelist
+          title: mergelist
+          body: mergelist
+    <<: ${order}"
+    printf 'A cancelled run <!-- notify-arms: mergelist-%s.yml/j = %s -->.\n' "${marker}" "${marker}" >>"${ROOT}/${DOC}"
+    case "${order}:${marker}" in
+    '[*first, *second]:failure')
+      # Spare workflows keep the clean summary of each passing order distinct.
+      odd_workflow spare-one.yml 'jobs: {}'
+      run_scenario merge-list-first-gate-failure-passes 0 '' \
+        "match the arms of 10 scanner notify job(s) (${TALLY}); scanned 8 workflow(s) and 1 Markdown file(s)"
+      ;;
+    '[*first, *second]:cancelled')
+      run_scenario merge-list-first-gate-cancelled-marker-is-a-finding 1 \
+        'marker for mergelist-cancelled.yml/j declares "cancelled"; the workflow files on "failure"'
+      ;;
+    *)
+      odd_workflow spare-one.yml 'jobs: {}'
+      odd_workflow spare-two.yml 'jobs: {}'
+      run_scenario merge-list-second-gate-first-cancelled-passes 0 '' \
+        "match the arms of 10 scanner notify job(s) (${TALLY}); scanned 9 workflow(s) and 1 Markdown file(s)"
+      ;;
+    esac
+  done
+
+  # Every other `yq` read of a workflow takes the merge order too. Each
+  # scenario merges two mappings that disagree in the field the read
+  # returns, the first one being what the lint must use, so reading the
+  # last one changes the verdict (a pass becomes a finding or a failed
+  # read). `yq` also warns on stderr when it explodes a merge without the
+  # flag, which the `on:` scenarios check for.
+  local spares
+  # merge-list-outputs: the job's `outputs` comes from the first mapping.
+  fresh_root
+  for spares in 1 2 3; do odd_workflow "spare-m${spares}.yml" 'jobs: {}'; done
+  cat >"${ROOT}/.github/workflows/mergeout.yml" <<'EOF'
+name: mergeout
+on: push
+x-p: &p
+  outputs:
+    has-finding: ${{ steps.c.outputs.has-finding }}
+x-q: &q
+  outputs:
+    other: ${{ steps.c.outputs.other }}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    <<: [*p, *q]
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    if: always() && needs.a.result == 'failure' && needs.a.outputs.has-finding == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.a.result }}
+          label: mergeout
+          title: mergeout
+          body: mergeout
+EOF
+  printf 'A failed run <!-- notify-arms: mergeout.yml/j = finding -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario merge-list-outputs-first-mapping-passes 0 '' 'scanned 10 workflow(s)'
+
+  # merge-list-steps: the step before the notify step is the first mapping.
+  fresh_root
+  for spares in 1 2 3 4; do odd_workflow "spare-m${spares}.yml" 'jobs: {}'; done
+  cat >"${ROOT}/.github/workflows/mergesteps.yml" <<'EOF'
+name: mergesteps
+on: push
+x-ok: &ok
+  uses: actions/checkout@v4
+x-bad: &bad
+  uses: unmodelled/action@v1
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    if: always() && needs.a.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - <<: [*ok, *bad]
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.a.result }}
+          label: mergesteps
+          title: mergesteps
+          body: mergesteps
+EOF
+  printf 'A failed run <!-- notify-arms: mergesteps.yml/j = failure -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario merge-list-steps-first-mapping-passes 0 '' 'scanned 11 workflow(s)'
+
+  # merge-list-body: the notify step's body is the first mapping's, whose
+  # marker matches the gate; the second mapping's marker does not.
+  fresh_root
+  for spares in 1 2 3 4 5; do odd_workflow "spare-m${spares}.yml" 'jobs: {}'; done
+  cat >"${ROOT}/.github/workflows/mergebody.yml" <<'EOF'
+name: mergebody
+on: push
+x-b1: &b1
+  body: "mergebody <!-- notify-arms: mergebody.yml/j = failure -->"
+x-b2: &b2
+  body: "mergebody <!-- notify-arms: mergebody.yml/j = cancelled -->"
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    if: always() && needs.a.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.a.result }}
+          label: mergebody
+          title: mergebody
+          <<: [*b1, *b2]
+EOF
+  run_scenario merge-list-body-first-mapping-passes 0 '' 'scanned 12 workflow(s)'
+
+  # merge-key-on: an `on:` map brought in by a merge key is read without
+  # `yq` warning about the merge order.
+  fresh_root
+  for spares in 1 2 3 4 5 6; do odd_workflow "spare-m${spares}.yml" 'jobs: {}'; done
+  cat >"${ROOT}/.github/workflows/mergeon.yml" <<'EOF'
+name: mergeon
+x-on: &events
+  push:
+    branches: [main]
+on:
+  <<: *events
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    if: always() && needs.a.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.a.result }}
+          label: mergeon
+          title: mergeon
+          body: mergeon
+EOF
+  printf 'A failed run <!-- notify-arms: mergeon.yml/j = failure -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario merge-key-on-map-passes 0 '' 'scanned 13 workflow(s)'
+  if grep --fixed-strings --quiet -- 'WARN' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — yq warned about the merge order\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+
+  # merge-key-on-seq: a mapping inside an `on:` list that holds a merge
+  # key is read without the warning either.
+  fresh_root
+  for spares in 1 2 3 4 5 6 7; do odd_workflow "spare-m${spares}.yml" 'jobs: {}'; done
+  cat >"${ROOT}/.github/workflows/mergeseq.yml" <<'EOF'
+name: mergeseq
+x-on: &events
+  push: true
+on:
+  - pull_request
+  - <<: *events
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    if: always() && needs.a.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.a.result }}
+          label: mergeseq
+          title: mergeseq
+          body: mergeseq
+EOF
+  printf 'A failed run <!-- notify-arms: mergeseq.yml/j = failure -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario merge-key-on-list-passes 0 '' 'scanned 14 workflow(s)'
+  if grep --fixed-strings --quiet -- 'WARN' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — yq warned about the merge order\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
 
   harness_assert_verify
   if ((failures)); then

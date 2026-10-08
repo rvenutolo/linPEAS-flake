@@ -352,17 +352,15 @@ expect_names allowlist-job-twice w.yml \
 # (exit 2). Filtered to one workflow, it runs alone.
 # @arg $1 scenario name  @arg $2 allowlist body  @arg $3 expected exit
 # @arg $4 expected stderr, whole, with @AL@ standing for the allowlist
+# @arg $5 PATH to run under (optional)
 function expect_allowlist_shape() {
-  local -r name="$1" body="$2" want_exit="$3"
+  local -r name="$1" body="$2" want_exit="$3" run_path="${5:-${PATH}}"
   local got_exit=0 got_stderr want
   printf '%s' "${body}" >"${key_dir}/${name}.allow.yml"
   want="${4//@AL@/${key_dir}/${name}.allow.yml}"
-  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" WORKFLOW_FILE_FILTER=good.yml \
+  got_stderr="$(PATH="${run_path}" WORKFLOWS_DIR_OVERRIDE="${FIXTURES}" WORKFLOW_FILE_FILTER=good.yml \
     SCOPE_ALLOWLIST_OVERRIDE="${key_dir}/${name}.allow.yml" \
     "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
-  # yq itself warns on stderr about any merge key it reads; that line is
-  # yq's, not the lint's.
-  got_stderr="$(grep --invert-match --fixed-strings -- '--yaml-fix-merge-anchor-to-spec' <<<"${got_stderr}" || true)"
   if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
     printf 'FAIL %s: exit %s, want %s and %q\n  stderr: %s\n' \
       "${name}" "${got_exit}" "${want_exit}" "${want}" "${got_stderr}" >&2
@@ -376,6 +374,19 @@ expect_names scope-twice w.yml \
   $'w.yml:\n  writer: [issues]\n' 0 ''
 expect_allowlist_shape allowlist-entry-alias $'x: &X {writer: [issues]}\ngood.yml: *X\n' 0 ''
 expect_allowlist_shape allowlist-entry-merge $'x: &X {writer: [issues]}\ngood.yml:\n  <<: *X\n' 0 ''
+# A merge list is read first mapping wins, silently: good.yml's writer
+# grants `issues`, so only the order of the two mappings decides the verdict.
+readonly AL_XY=$'x: &X {writer: [contents]}\ny: &Y {writer: [issues]}\n'
+expect_allowlist_shape allowlist-entry-merge-list-first-wins "${AL_XY}"$'good.yml:\n  <<: [*X, *Y]\n' 1 \
+  "${FIXTURES}/good.yml: job writer grants write scope issues not allowed by @AL@"$'\n1 permission-scope violation(s) found'
+expect_allowlist_shape allowlist-entry-merge-list-second-listed "${AL_XY}"$'good.yml:\n  <<: [*Y, *X]\n' 0 ''
+# A failing read of the allowlist's names stops the run (exit 2).
+mkdir -- "${key_dir}/names-stub"
+printf '#!/usr/bin/env bash\ncase "$*" in *%q*) exit 7 ;; esac\nexec %q "$@"\n' \
+  '.. | select(kind == "scalar")))' "$(command -v yq)" >"${key_dir}/names-stub/yq"
+chmod +x -- "${key_dir}/names-stub/yq"
+expect_allowlist_shape allowlist-names-unread $'good.yml: {writer: [issues]}\n' 2 \
+  '@AL@: could not evaluate allowlist with yq (malformed?)' "${key_dir}/names-stub:${PATH}"
 expect_allowlist_shape allowlist-root-list $'- good.yml\n' 2 \
   '@AL@: the allowlist must be one map of workflow maps (got seq\ scalar)'
 expect_allowlist_shape allowlist-entry-list $'good.yml: [writer]\n' 2 \
@@ -385,6 +396,34 @@ expect_allowlist_shape allowlist-several-documents $'good.yml: {writer: [issues]
   '@AL@: the allowlist holds several YAML documents; it must hold one'
 expect_allowlist_shape allowlist-entry-null $'good.yml:\nother.yml: {writer: [issues]}\n' 1 \
   "${FIXTURES}/good.yml: job writer grants write scope issues not allowed by @AL@"$'\n1 permission-scope violation(s) found'
+# An allowlist name is raw text in the reverse pass's tab-separated rows,
+# so a workflow, job or scope name holding a tab or a line break is
+# refused, as the same names are in a workflow. The entry below would
+# otherwise read as a row for the real writer job and pass as not stale.
+readonly ODD_ALLOW='which GitHub Actions refuses'
+expect_names 'an allowlist job name forging a row is refused' w.yml "${WRITER}" \
+  $'w.yml:\n  writer: [issues]\n  "ghost\\nw.yml\\twriter": [issues]\n' 1 \
+  "@AL@: an allowlist name holds a tab or a line break, ${ODD_ALLOW}; its entries are not read (first: \"ghost\\nw.yml\\twriter\")"
+expect_names 'an allowlist workflow name holding a tab is refused' w.yml "${WRITER}" \
+  $'w.yml:\n  writer: [issues]\n"x\\tw.yml":\n  writer: [issues]\n' 1 \
+  "@AL@: an allowlist name holds a tab or a line break, ${ODD_ALLOW}; its entries are not read (first: \"x\\tw.yml\")"
+expect_names 'an allowlist scope name holding a line break is refused' w.yml "${WRITER}" \
+  $'w.yml:\n  writer: ["issues\\nx"]\n' 1 \
+  "@AL@: an allowlist name holds a tab or a line break, ${ODD_ALLOW}; its entries are not read (first: \"issues\\nx\")"
+# A merge key under jobs: lists as the key `<<`, so the job it brings in
+# is never read; it is refused like any job id GitHub Actions refuses.
+expect_built 'a merge key under jobs is refused' \
+  'on: push\nx: &base\n  j:\n    permissions: {contents: write}\njobs:\n  <<: *base\n' 1 \
+  "%W: ${ODD}kind=scalar, name=\"<<\")
+${ONE}"
+# A merge list is read first mapping wins (the YAML merge spec).
+expect_built 'a merge list reads the first mapping' \
+  'on: push\np: &P\n  permissions: {contents: write}\nq: &Q\n  permissions: {contents: read}\njobs:\n  a:\n    <<: [*Q, *P]\n    steps: []\n' 0 ''
+# The stale-entry read takes a merge list first mapping wins as well: the
+# allowlist grants `issues`, which the first mapping listed holds.
+expect_names 'a merge list in the stale-entry read reads the first mapping' w.yml \
+  $'permissions: {}\np: &P\n  permissions: {issues: write}\nq: &Q\n  permissions: {issues: read}\njobs:\n  writer:\n    <<: [*P, *Q]\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  $'w.yml:\n  writer: [issues]\n' 0 ''
 # A workflow file name is data too.
 expect_names file-name-quote 'q"x.yml' "${WRITER}" \
   $'\'q"x.yml\':\n  writer: [issues]\n' 0 ''

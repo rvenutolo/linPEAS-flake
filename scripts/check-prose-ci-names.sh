@@ -49,10 +49,19 @@
 # span is not read, and neither is a code span wrapped in its own emphasis
 # markers, which stand between the span and the noun.
 #
+# A `jobs:` key GitHub Actions refuses (empty, holding a line break or a
+# tab, not a scalar, or a merge key) is a finding naming the workflow and
+# the key. Such a key is never a job name: a line-break key does not
+# resolve as the two names it spells, and the jobs a merge key brings in
+# resolve as the jobs they are. The refusal is the only finding for that
+# file: the names it can still resolve are listed, so a sentence naming one
+# of them is not reported as a ghost.
+#
 # Exit codes:
 #   0  every name claimed in prose resolves to something the sentence's own
 #      claim noun admits
-#   1  ghost or mislabel name(s) found (details printed to stderr)
+#   1  ghost or mislabel name(s) found, or a workflow with a job key
+#      GitHub Actions refuses (details printed to stderr)
 #   2  the check could not run: a required tool is missing, a temp file
 #      cannot be created, a missing or empty name source, a producer that
 #      lists or reads the scanned files failed, an empty scan set, or a
@@ -72,6 +81,8 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 require_tool git
 require_tool yq
@@ -98,8 +109,17 @@ readonly SCAN_ROOT="${SCAN_ROOT_OVERRIDE:-${REPO_ROOT}}"
 readonly HARNESS_RUNNER="${REPO_ROOT}/scripts/run-harness-group.sh"
 
 # @description Emit every `jobs:` key of every workflow file, one per line.
+#              A merge key is resolved, so the jobs it brings in are
+#              listed; a key holding a line break, a tab or nothing is not
+#              listed, since a line cannot carry it, and nor is a key that
+#              is not a scalar. A scalar key YAML types as an int, a bool or
+#              null is listed as its text. A file whose jobs carry a
+#              refused key reports its finding through odd_job_key_findings
+#              and lists the names it can still resolve, so no other check
+#              reports them missing: a merge key that is not a mapping
+#              cannot be resolved, so that file lists its literal job keys.
 function job_names() {
-  local f
+  local f odd names
   local -a workflow_files=()
   glob_into workflow_files 'workflow YAML' \
     "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
@@ -107,10 +127,38 @@ function job_names() {
   # same way a file does.
   for f in "${workflow_files[@]}"; do
     [[ -f ${f} ]] || continue
+    odd="$(first_odd_job_key "${f}")" || return 1
     # A workflow with no `jobs:` block is a real shape (a reusable
     # fragment), so an empty key list is not a failure; an unparsable file
     # is, and yq exits non-zero for it.
-    yq '.jobs // {} | keys | .[]' "${f}" || return 1
+    if [[ -n ${odd} ]]; then
+      # The refusal is already a finding; a read that fails here is the
+      # refused file's own shape, not a missing precondition.
+      # A read that fails (a merge key that is not a mapping) falls back to
+      # the file's literal job keys, so the refusal is its only finding.
+      names="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
+        names="$(yq eval "${YQ_MERGE_SPEC[@]}" --no-doc '(.jobs // {}) | select(kind == "map") | to_entries[] | .key | select(kind == "scalar" and tag != "!!merge") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
+        names=''
+      if [[ -n ${names} ]]; then printf '%s\n' "${names}"; fi
+      continue
+    fi
+    yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" || return 1
+  done
+}
+
+# @description Emit the finding for the first refused `jobs:` key of each
+#              workflow file that has one, one line per file.
+function odd_job_key_findings() {
+  local f odd
+  local -a workflow_files=()
+  glob_into workflow_files 'workflow YAML' \
+    "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
+  for f in "${workflow_files[@]}"; do
+    [[ -f ${f} ]] || continue
+    odd="$(first_odd_job_key "${f}")" || return 1
+    if [[ -n ${odd} ]]; then
+      odd_job_key_message "${f}" "${odd}"
+    fi
   done
 }
 
@@ -215,8 +263,8 @@ function main() {
     exit 2
   }
 
-  local jobs_out groups_out harness_out workflows_out
-  if ! jobs_out="$(job_names)"; then
+  local jobs_out groups_out harness_out workflows_out odd_out
+  if ! jobs_out="$(job_names)" || ! odd_out="$(odd_job_key_findings)"; then
     printf 'prose-ci-names: could not read workflow job names\n' >&2
     exit 2
   fi
@@ -236,7 +284,9 @@ function main() {
   # A name source that resolves to nothing cannot be distinguished from a
   # tree where every claim happens to be clean, so an empty one is a
   # precondition failure rather than a pass.
-  [[ -n ${jobs_out} ]] || {
+  # A tree whose every workflow is refused lists no job by design, and its
+  # findings are the verdict.
+  [[ -n ${jobs_out} || -n ${odd_out} ]] || {
     printf 'prose-ci-names: no workflow job names under %s\n' "${WORKFLOWS_DIR}" >&2
     exit 2
   }
@@ -495,6 +545,10 @@ AWK
     exit 2
   fi
 
+  if [[ -n ${odd_out} ]]; then
+    printf '%s\n' "${odd_out}" >&2
+  fi
+
   if ((found)); then
     printf 'prose-ci-names: a name claimed as a CI job or required check does not resolve.\n' >&2
     printf '  ghost    — the name runs nowhere; fix the name or add the job.\n' >&2
@@ -503,6 +557,8 @@ AWK
     printf '             batched group job, and a whole workflow is never a required\n' >&2
     printf '             status check, since a check context names a job. Name the\n' >&2
     printf '             job instead.\n' >&2
+  fi
+  if ((found)) || [[ -n ${odd_out} ]]; then
     exit 1
   fi
 

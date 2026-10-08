@@ -193,7 +193,7 @@ ${ONE_BAD}"
 # is empty, or holds a tab, a line break or a NUL could forge, split or
 # garble it, and is refused, naming the first such id. A pipe cannot.
 # An id written as an alias is read through it.
-readonly ODD_A='jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: '
+readonly ODD_A='jobs: holds a job id that is not a scalar, is empty, holds a tab, a line break or a NUL, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: '
 readonly ODD_B=')'
 expect_built 'a job id written as an alias is read through it' \
   'x-k: &k idalias\non: push\njobs:\n  *k :\n    runs-on: x\n' 1 \
@@ -226,6 +226,22 @@ ${ONE_BAD}"
 expect_built 'the first document holding an odd job id is the one named' \
   'on: push\njobs:\n  "f\\tg":\n    runs-on: x\n---\non: push\njobs:\n  "h\\ti":\n    runs-on: x\n' 1 \
   "%W: ${ODD_A}kind=scalar, id=\"f\\tg\"${ODD_B}
+${ONE_BAD}"
+
+# A merge key directly under `jobs:` lists as the job `<<` while the jobs
+# it brings in are never read, so it is refused as a job id.
+expect_built 'a merge key under jobs: is refused' \
+  'x: &j {bad: {runs-on: u, steps: [{run: echo PAYLOAD_RAN}]}}\non: push\njobs:\n  <<: *j\n  good: {timeout-minutes: 5, runs-on: x}\n' 1 \
+  "%W: ${ODD_A}kind=scalar, id=\"<<\"${ODD_B}
+${ONE_BAD}"
+
+# A merge list is read first mapping wins (the YAML merge specification).
+readonly PQ='p: &P {timeout-minutes: 5}\nq: &Q {timeout-minutes: 0}\non: push\njobs:\n  a:\n    runs-on: x\n'
+expect_passes 'a merge list is read first mapping wins, the valid one first' \
+  "${PQ}"'    <<: [*P, *Q]\n'
+expect_built 'a merge list is read first mapping wins, the zero one first' \
+  "${PQ}"'    <<: [*Q, *P]\n' 1 \
+  "%W: job a timeout-minutes must be positive (got 0)
 ${ONE_BAD}"
 
 # A workflow that does not parse fails the first read, once.

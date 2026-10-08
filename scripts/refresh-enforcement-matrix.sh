@@ -31,7 +31,10 @@
 # Exit codes:
 #   0 — matrix in sync, no drift, no gaps (gaps emit WARN to stderr).
 #   1 — --check mode and the file would change.
-#   2 — structural error: typoed reference, orphan enforcer, missing field.
+#   2 — structural error: typoed reference, orphan enforcer, missing field,
+#       or a ci.yml `jobs:` key GitHub Actions refuses (empty, holding a
+#       line break or a tab, not a scalar, or a merge key), which a
+#       name-per-line job list would read as other names or as none.
 #
 # Env overrides (for tests):
 #   INVARIANT_INDEX_OVERRIDE       alternate invariant-index.md path
@@ -73,6 +76,8 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 install_err_trap
 
 # Temp files removed by the EXIT trap. Declared at script scope, not main-local:
@@ -322,10 +327,20 @@ function load_hook_names() {
 }
 
 # load_ci_jobs <ci_yml> <out_file>
+# Exits 2 on a job key the job list cannot carry (see first_odd_job_key).
 function load_ci_jobs() {
   local -r ci_yml="$1" out_file="$2"
   require_tool yq
-  if ! yq eval '.jobs | keys | .[]' "${ci_yml}" | sort --unique >"${out_file}"; then
+  local odd
+  if ! odd="$(first_odd_job_key "${ci_yml}")"; then
+    log_err "could not read the job list from ${ci_yml}"
+    exit 2
+  fi
+  if [[ -n ${odd} ]]; then
+    log_err "$(odd_job_key_message "${ci_yml}" "${odd}")"
+    exit 2
+  fi
+  if ! yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[]' "${ci_yml}" | sort --unique >"${out_file}"; then
     log_err "could not read the job list from ${ci_yml}"
     exit 2
   fi

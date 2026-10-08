@@ -10,6 +10,9 @@
 # allowed-endpoints list, locking in that posture so no step reverts
 # to audit or ships an empty allowlist — see docs/security/trust-model.md.
 #
+# A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
+# counted finding, and the file's jobs are not read.
+#
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
 # Exits 0 on full coverage, 1 on any drift, 2 if yq is missing.
 
@@ -19,6 +22,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -38,6 +43,26 @@ declare -a selected_files=()
 filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]}"
 for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
+  # A refused job key is a finding, and the rows below name a job by its
+  # key, which such a key would split or hide. The read prints one line
+  # per document.
+  if ! odd_keys="$(first_odd_job_key "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  odd_key=''
+  while IFS= read -r line; do
+    if [[ -n ${line} ]]; then
+      odd_key="${line}"
+      break
+    fi
+  done <<<"${odd_keys}"
+  if [[ -n ${odd_key} ]]; then
+    odd_job_key_message "${f}" "${odd_key}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
   # Capture yq's output (and exit status) into a variable rather than
   # feeding the loop from `< <(yq ...)`: a process substitution's exit
   # status is not propagated under set -Eeuo pipefail, so a yq failure
@@ -51,7 +76,7 @@ for f in "${selected_files[@]}"; do
   # split one step into several bogus records. The check only needs to
   # know whether the value is non-empty, so the separator is irrelevant.
   # shellcheck disable=SC2016 # $j is a yq variable inside single-quoted yq expression
-  if ! rows="$(yq eval '
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '
     .jobs | to_entries[] as $j
     | $j.value.steps[]
     | select(.uses // "" | test("step-security/harden-runner@"))

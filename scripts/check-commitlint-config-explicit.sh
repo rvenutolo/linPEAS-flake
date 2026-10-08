@@ -22,9 +22,10 @@
 #      tag of its own is read, and any other shape is a finding, as is a
 #      `configFile:` that is not a scalar. `jobs:`, a job, its steps, a
 #      step, its `with:` and the value written as aliases are read
-#      through them. A job id that is not a scalar, is empty, or holds a
-#      tab, a line break or a NUL is a finding, and that workflow's jobs
-#      are not read.
+#      through them. A job id that is not a scalar, is empty, is a merge
+#      key (`<<`), or holds a tab, a line break or a NUL is a finding, and
+#      that workflow's jobs are not read: a merge key brings in jobs the
+#      per-job read never reaches.
 #   2. Every config path named by such a `configFile` exists on disk.
 #      The value may be a literal path or a GitHub Actions ternary
 #      expression `${{ <cond> && 'A' || 'B' }}`, in which case both `A`
@@ -60,6 +61,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly ACTION_PREFIX="wagoid/commitlint-github-action"
 readonly BASE_CONFIG=".commitlintrc.yml"
@@ -92,10 +95,6 @@ else
 fi
 readonly base_dir
 
-# The `jobs:` node, read through an alias: `explode` handed only that
-# node resolves it in one pass, since an anchor cannot sit on an alias.
-readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0]'
-
 # @description Print a JSON string's text when it holds no escape or
 # quote, else the JSON string itself, so a plain value reads as written
 # and any other is shown unambiguously.
@@ -124,13 +123,13 @@ for f in "${paths[@]}"; do
 
   # The steps are read below as tab-separated rows, and the job id is
   # the one field written as raw text, so an id that is not a scalar, is
-  # empty, or holds a tab, a line break or a NUL could forge, split or
-  # garble a row. GitHub Actions refuses such an id, so it is a finding
+  # empty, is a merge key, or holds a tab, a line break or a NUL could
+  # forge, split or garble a row. GitHub Actions refuses such an id, so it is a finding
   # and the workflow's jobs are not read. Each key is resolved through an
   # alias first, then tested as the text it renders to, whatever its
   # tag. The read prints, per document, the first such id's kind, and
   # its text as JSON (`-` for none).
-  if ! odd_ids="$(yq eval "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", id=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
+  if ! odd_ids="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(tag == "!!merge" or kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", id=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
     fail "$(printf '%s: could not evaluate workflow with yq (malformed?)' "${f}")"
     continue
   fi
@@ -142,7 +141,7 @@ for f in "${paths[@]}"; do
     fi
   done <<<"${odd_ids}"
   if [[ -n ${odd_id} ]]; then
-    fail "$(printf '%s: jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)' \
+    fail "$(printf '%s: jobs: holds a job id that is not a scalar, is empty, is a merge key, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)' \
       "${f}" "${odd_id}")"
     continue
   fi
@@ -171,7 +170,7 @@ for f in "${paths[@]}"; do
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
   # shellcheck disable=SC2016 # yq expression + literal `${{` needle: no shell expansion wanted
-  if ! rows="$(yq eval --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) as $k
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) as $k
     | .value | explode(.) | explode(.) | [.steps] | .[] | select(kind == "seq") | to_entries[]
     | select(.value | explode(.) | explode(.) | explode(.) | (.uses // "") | test("^'"${ACTION_PREFIX}"'"))
     | (.key | tostring) + "\t" + $k + "\t" + (.value | explode(.) | explode(.) | explode(.) |

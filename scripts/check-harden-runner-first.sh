@@ -10,6 +10,9 @@
 # monitor must install before any I/O, so this invariant is binding —
 # see docs/security/trust-model.md.
 #
+# A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
+# counted finding, and the file's jobs are not read.
+#
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow globs match no
@@ -23,6 +26,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -42,12 +47,32 @@ declare -a selected_files=()
 filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]}"
 for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
+  # A refused job key is a finding, and the rows below name a job by its
+  # key, which such a key would split or hide. The read prints one line
+  # per document.
+  if ! odd_keys="$(first_odd_job_key "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  odd_key=''
+  while IFS= read -r line; do
+    if [[ -n ${line} ]]; then
+      odd_key="${line}"
+      break
+    fi
+  done <<<"${odd_keys}"
+  if [[ -n ${odd_key} ]]; then
+    odd_job_key_message "${f}" "${odd_key}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
   # Capture yq's output (and exit status) into a variable rather than
   # feeding the loop from `< <(yq ...)`: a process substitution's exit
   # status is not propagated under set -Eeuo pipefail, so a yq failure
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
-  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.value.steps[0].uses // "null")' "${f}")"; then
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | to_entries[] | .key + "\t" + (.value.steps[0].uses // "null")' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue

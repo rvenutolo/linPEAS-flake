@@ -20,11 +20,14 @@
 # because `timeout-minutes` is not valid on that shape. A job, its
 # `uses:` and its `timeout-minutes:` written as aliases are read through
 # them, as are a job id and `jobs:` itself. A job id that is not a
-# scalar, is empty, or holds a tab, a line break or a NUL is a finding,
-# whatever its tag, and the first one is named by its kind and text:
-# GitHub Actions refuses such an id, and it could forge, split or garble
-# the tab-separated row the jobs are read through, so that workflow's
-# jobs are not read.
+# scalar, is empty, holds a tab, a line break or a NUL, or is a merge key
+# (`<<`) is a finding, whatever its tag, and the first one is named by
+# its kind and text: GitHub Actions refuses such an id, it could forge,
+# split or garble the tab-separated row the jobs are read through, and a
+# merge key lists as the job `<<` while the jobs it brings in are never
+# read, so that workflow's jobs are not read. A merge list inside a job
+# (`<<: [*P, *Q]`) is read first mapping wins, as the YAML merge
+# specification says.
 #
 # No read stops the run. Each can fail on the workflow's own content (an
 # unparsable file fails the first, `jobs: 5` the second), and a failure
@@ -45,6 +48,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -55,11 +60,6 @@ if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
   exit 2
 fi
-
-# The `jobs:` node, read through an alias: `explode` handed only that
-# node resolves it in one pass, since an anchor cannot sit on an alias.
-# shellcheck disable=SC2016 # yq program literal
-readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0]'
 
 failed=0
 shopt -s nullglob
@@ -73,12 +73,13 @@ for f in "${selected_files[@]}"; do
   # The jobs are read below as tab-separated rows, and the job id is the
   # one field written as raw text, so an id that is not a scalar, is
   # empty, or holds a tab, a line break or a NUL could forge, split or
-  # garble a row. Each key is resolved through an alias first, then
+  # garble a row, and a merge key is never expanded into the jobs it
+  # brings in. Each key is resolved through an alias first, then
   # tested as the text it renders to, whatever its tag; a document whose
   # `jobs:` is not a map has no ids to test. The read prints, per
   # document, the first such id's kind, and its text as JSON (`-` for
   # none).
-  if ! odd_ids="$(yq eval "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", id=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
+  if ! odd_ids="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(tag == "!!merge" or kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", id=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
@@ -91,7 +92,7 @@ for f in "${selected_files[@]}"; do
     fi
   done <<<"${odd_ids}"
   if [[ -n ${odd_id} ]]; then
-    printf '%s: jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
+    printf '%s: jobs: holds a job id that is not a scalar, is empty, holds a tab, a line break or a NUL, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
       "${f}" "${odd_id}" >&2
     failed=$((failed + 1))
     continue
@@ -117,7 +118,7 @@ for f in "${selected_files[@]}"; do
   # status is not propagated under set -Eeuo pipefail, so a yq failure
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
-  if ! rows="$(yq eval --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) + "\t" + (.value | explode(.) | explode(.) | ([.uses | select((kind == "scalar") and (tag == "!!str"))] | length > 0 | tostring) + "\t" + ([."timeout-minutes" | kind + "\t" + ((select((kind == "scalar") and (tag == "!!int")) | tostring | select(test("^[0-9]+$"))) // "-") + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))] + ["none\t-\t\"\"\t\"\""] | .[0]))' "${f}")"; then
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) + "\t" + (.value | explode(.) | explode(.) | ([.uses | select((kind == "scalar") and (tag == "!!str"))] | length > 0 | tostring) + "\t" + ([."timeout-minutes" | kind + "\t" + ((select((kind == "scalar") and (tag == "!!int")) | tostring | select(test("^[0-9]+$"))) // "-") + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))] + ["none\t-\t\"\"\t\"\""] | .[0]))' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue

@@ -93,8 +93,11 @@ against the allowlist in both directions and fails on any of:
     through aliases) is stated in the header of
     `scripts/check-permission-scopes.sh`.
 - **Unreadable job id or scope name** — one that is not a scalar, is
-    empty, or holds a tab, a line break or a NUL; that workflow's jobs
-    are not read.
+    empty, or holds a tab, a line break or a NUL, or a merge key directly
+    under `jobs:`; that workflow's jobs are not read.
+- **Unreadable allowlist name** — an allowlist workflow, job or scope
+    name holding a tab or a line break, refused before the allowlist's
+    rows are split, since it could forge a row for another entry.
 
 Wired into the `lint-workflow-security` CI group and as the
 `permission-scopes` pre-commit hook.

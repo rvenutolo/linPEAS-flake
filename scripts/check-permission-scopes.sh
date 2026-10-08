@@ -29,7 +29,13 @@
 # tag, is a violation (a scalar
 # grant bypasses the per-scope allowlist entirely). A job id or a scope
 # name that is not a scalar, is empty, or holds a tab, a line break or a
-# NUL is a violation, and that workflow's jobs are not read.
+# NUL is a violation, and that workflow's jobs are not read; so is a merge
+# key (`<<`) directly under `jobs:`, which lists as a job named `<<`
+# while the jobs it brings in are never read. A merge list is read first
+# mapping wins (see scripts/lib/job-keys.sh). A workflow, job or scope
+# name in the allowlist that holds a tab or a line break is refused
+# (exit 1) before its rows are split, since it could forge a row for
+# another entry.
 #
 # Read and `none` scope values are ignored — least-privilege concern is
 # write over-grant. See docs/security/min-permissions.md.
@@ -48,6 +54,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly DEFAULT_ALLOWLIST=".github/permission-scopes.yml"
@@ -66,7 +74,7 @@ fi
 # The lookups below walk the allowlist's entries, which a list would
 # also have, keyed by index; so it must be one map whose entries are
 # workflow maps or null.
-if ! allowlist_shape="$(yq eval 'explode(.) | kind + " " + ([.[] | select(tag != "!!null") | kind] | unique | join(","))' "${ALLOWLIST}")"; then
+if ! allowlist_shape="$(yq eval "${YQ_MERGE_SPEC[@]}" 'explode(.) | kind + " " + ([.[] | select(tag != "!!null") | kind] | unique | join(","))' "${ALLOWLIST}")"; then
   printf '%s: could not evaluate allowlist with yq (malformed?)\n' "${ALLOWLIST}" >&2
   exit 2
 fi
@@ -74,13 +82,28 @@ if [[ ${allowlist_shape} == *$'\n'* ]]; then
   printf '%s: the allowlist holds several YAML documents; it must hold one\n' "${ALLOWLIST}" >&2
   exit 2
 fi
-if [[ ${allowlist_shape} == 'scalar ' ]] && [[ "$(yq eval 'tag' "${ALLOWLIST}")" == '!!null' ]]; then
+if [[ ${allowlist_shape} == 'scalar ' ]] && [[ "$(yq eval "${YQ_MERGE_SPEC[@]}" 'tag' "${ALLOWLIST}")" == '!!null' ]]; then
   printf '%s: the allowlist is empty\n' "${ALLOWLIST}" >&2
   exit 2
 fi
 if [[ ${allowlist_shape} != 'map map' && ${allowlist_shape} != 'map ' ]]; then
   printf '%s: the allowlist must be one map of workflow maps (got %q)\n' "${ALLOWLIST}" "${allowlist_shape}" >&2
   exit 2
+fi
+
+# A workflow, job or scope name is raw text in the reverse pass's
+# tab-separated rows, so one holding a tab or a line break could forge a
+# row for another entry. The forward pass refuses such names in a
+# workflow; the allowlist's are refused here, before its rows are split.
+# The read prints the first such name as JSON.
+if ! odd_allow="$(yq eval "${YQ_MERGE_SPEC[@]}" '[explode(.) | ((.. | select(kind == "map") | keys | .[]), (.. | select(kind == "scalar"))) | select(tostring | test("[\t\n]")) | tostring | to_json(0)] | .[0] // ""' "${ALLOWLIST}")"; then
+  printf '%s: could not evaluate allowlist with yq (malformed?)\n' "${ALLOWLIST}" >&2
+  exit 2
+fi
+if [[ -n ${odd_allow} ]]; then
+  printf '%s: an allowlist name holds a tab or a line break, which GitHub Actions refuses; its entries are not read (first: %s)\n' \
+    "${ALLOWLIST}" "${odd_allow}" >&2
+  exit 1
 fi
 
 # allowed <workflow-basename> <job> -> newline-separated allowed scope names
@@ -93,7 +116,7 @@ fi
 # and sort passes read the allowlist as written, so an entry written as an
 # alias or through a merge key stops an unfiltered run (exit 2).
 function allowed() {
-  WF="$1" JOB="$2" yq eval 'explode(.) | [to_entries[] | '"$(eq WF)"'] | reverse | .[0] | .value | [to_entries[] | '"$(eq JOB)"'] | reverse | .[0] | .value // [] | .[]' "${ALLOWLIST}"
+  WF="$1" JOB="$2" yq eval "${YQ_MERGE_SPEC[@]}" 'explode(.) | [to_entries[] | '"$(eq WF)"'] | reverse | .[0] | .value | [to_entries[] | '"$(eq JOB)"'] | reverse | .[0] | .value // [] | .[]' "${ALLOWLIST}"
 }
 
 # eq <variable> -> a yq select keeping the entry whose key's text is the
@@ -101,10 +124,6 @@ function allowed() {
 function eq() {
   printf 'select((.key | tostring | @base64) == (strenv(%s) | @base64))' "$1"
 }
-
-# The `jobs:` node, read through an alias: `explode` handed only that
-# node resolves it in one pass, since an anchor cannot sit on an alias.
-readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0]'
 
 failed=0
 shopt -s nullglob
@@ -125,7 +144,7 @@ for f in "${selected_files[@]}"; do
   # an alias first, then tested as the text it renders to, whatever its
   # tag. The read prints, per document, the first such name's kind, and
   # its text as JSON (`-` for none).
-  if ! odd_names="$(yq eval "[${JOBS_NODE}"' | select(kind == "map") | to_entries[] | ((.key | explode(.)), (.value | explode(.) | explode(.) | explode(.) | [.permissions] | .[] | select(kind == "map") | keys[] | explode(.))) | select(kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", name=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
+  if ! odd_names="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | select(kind == "map") | to_entries[] | ((.key | explode(.)), (.value | explode(.) | explode(.) | explode(.) | [.permissions] | .[] | select(kind == "map") | keys[] | explode(.))) | select(tag == "!!merge" or kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", name=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
@@ -159,7 +178,7 @@ for f in "${selected_files[@]}"; do
   # the loop reports it as a violation instead of letting it abort the
   # yq stream mid-file. Every expression after a `select` reads `.`,
   # since one that does not prints even when the `select` keeps nothing.
-  if ! rows="$(yq eval --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) as $k | (.value | explode(.) | explode(.) | explode(.) | [.permissions] | .[])
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) as $k | (.value | explode(.) | explode(.) | explode(.) | [.permissions] | .[])
     | ( (select(kind == "map") | to_entries[] | select(.value == "write") | $k + "\tW\t" + (.key | tostring)),
         (select(kind != "map") | select(tag != "!!null") | select((kind == "scalar" and tag == "!!str" and . == "read-all") | not)
           | $k + "\tS\t" + kind + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))) )' "${f}")"; then
@@ -211,7 +230,7 @@ if [[ -z ${FILE_FILTER} ]]; then
   # would yield empty input and the reverse pass would silently find no
   # stale entries. The allowlist is a precondition file, not a scanned
   # artifact, so an unparsable allowlist is a tooling error (exit 2).
-  if ! allowlist_rows="$(yq eval 'to_entries[] | .key as $wf | (.value | to_entries[] | .key as $job | (.value[] | $wf + "\t" + $job + "\t" + .))' "${ALLOWLIST}")"; then
+  if ! allowlist_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" 'to_entries[] | .key as $wf | (.value | to_entries[] | .key as $job | (.value[] | $wf + "\t" + $job + "\t" + .))' "${ALLOWLIST}")"; then
     printf '%s: could not evaluate allowlist with yq (malformed?)\n' "${ALLOWLIST}" >&2
     exit 2
   fi
@@ -226,7 +245,7 @@ if [[ -z ${FILE_FILTER} ]]; then
       # evaluate as a finding against that file and moves on, so this
       # pass says the same thing rather than inventing a second verdict
       # for the same file.
-      if ! granted="$(JOB="${job}" SCOPE="${scope}" yq eval \
+      if ! granted="$(JOB="${job}" SCOPE="${scope}" yq eval "${YQ_MERGE_SPEC[@]}" \
         "[${JOBS_NODE} | explode(.) | [to_entries[] | $(eq JOB)] | reverse | .[0] | .value | .permissions | select(kind == \"map\") | [to_entries[] | $(eq SCOPE)] | reverse | .[0] | .value] | .[0] // \"\"" \
         "${wf_path}")"; then
         printf '%s: could not evaluate workflow with yq (malformed?)\n' "${wf_path}" >&2
@@ -246,7 +265,7 @@ if [[ -z ${FILE_FILTER} ]]; then
   # as-is lists are compared via join, because yq's == on two arrays is
   # not deep equality. Captured, not process-substituted, for the same
   # exit-status reason as above.
-  if ! unsorted_rows="$(yq eval 'to_entries[] | .key as $wf | (.value | to_entries[] | select((.value | sort | join(",")) != (.value | join(","))) | $wf + "\t" + .key)' "${ALLOWLIST}")"; then
+  if ! unsorted_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" 'to_entries[] | .key as $wf | (.value | to_entries[] | select((.value | sort | join(",")) != (.value | join(","))) | $wf + "\t" + .key)' "${ALLOWLIST}")"; then
     printf '%s: could not evaluate allowlist with yq (malformed?)\n' "${ALLOWLIST}" >&2
     exit 2
   fi

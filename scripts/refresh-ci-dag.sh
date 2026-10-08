@@ -7,7 +7,8 @@
 # @generates docs/architecture/ci-dag.md
 # @option --check exit 1 if the doc would change; exit 2 if an input file
 # is missing, if ci.yml has needs: references to non-existent jobs, if
-# the category map is neither one map nor empty, or if a tool fails to
+# ci.yml holds a job key the job list cannot carry (see
+# scripts/lib/job-keys.sh), if the category map is neither one map nor empty, or if a tool fails to
 # read them
 
 # Replace the content between <!-- BEGIN ci-dag --> and <!-- END ci-dag -->
@@ -20,7 +21,8 @@
 #   scripts/refresh-ci-dag.sh           # mutate the doc in place
 #   scripts/refresh-ci-dag.sh --check   # exit 1 if doc would change;
 #                                       # exit 2 on a missing input file,
-#                                       # dangling needs:, a category map
+#                                       # dangling needs:, a job key the
+#                                       # job list cannot carry, a category map
 #                                       # that is neither one map nor
 #                                       # empty, or a tool failure
 #                                       # reading the jobs
@@ -42,6 +44,8 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 install_err_trap
 
 # Category display name -> mermaid classDef key. Any job whose category
@@ -128,6 +132,18 @@ function main() {
   doc_new="$(make_temp)"
   trap 'rm --force -- "${jobs_file:-}" "${cats_file:-}" "${block_file:-}" "${doc_new:-}"' EXIT
 
+  # A job key the job list cannot carry would render as other nodes or as
+  # none, and a merge key as the node `<<`, so the diagram would be
+  # rewritten from a graph nothing read.
+  if ! odd_key="$(first_odd_job_key "${workflow}")"; then
+    log_err "could not read the job graph from ${workflow}"
+    exit 2
+  fi
+  if [[ -n ${odd_key} ]]; then
+    log_err "$(odd_job_key_message "${workflow}" "${odd_key}")"
+    exit 2
+  fi
+
   # Extract {job: [needs...]} as JSON. Normalize `needs:` to a list:
   # GitHub Actions accepts a scalar string or a sequence; wrapping in
   # an outer array and flattening one level coerces either shape into a
@@ -135,7 +151,7 @@ function main() {
   # A workflow that does not parse is an input this generator could not
   # read. Unchecked, yq's own exit 1 becomes the generator's status, and
   # --check mode reads that as a diagram gone stale.
-  if ! yq -o=json '
+  if ! yq -o=json "${YQ_MERGE_SPEC[@]}" '
     .jobs | with_entries(.value = ([(.value.needs // [])] | flatten))
   ' "${workflow}" >"${jobs_file}"; then
     log_err "could not read the job graph from ${workflow}"

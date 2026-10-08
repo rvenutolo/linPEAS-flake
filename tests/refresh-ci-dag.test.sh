@@ -202,9 +202,9 @@ EOF
     "${SCRIPT}" --check >"${bad_out}" 2>"${bad_err}" || bad_rc=$?
   printf 'harness-assert-outcome: exit=%d\n' "${bad_rc}" >"${bad_outcome}"
   harness_assert_record 'unparsable workflow rejected' \
-    'could not read the job graph' "${bad_outcome}" "${bad_out}" "${bad_err}"
+    "could not read the job graph from ${bad_wf}" "${bad_outcome}" "${bad_out}" "${bad_err}"
   if [[ ${bad_rc} -eq 2 ]] &&
-    grep --fixed-strings --quiet -- 'could not read the job graph' "${bad_err}"; then
+    grep --fixed-strings --quiet -- "could not read the job graph from ${bad_wf}" "${bad_err}"; then
     pass 'unparsable workflow exits 2 (could not run, not drift)'
   else
     fail "unparsable-workflow guard: expected exit 2, got exit ${bad_rc}"
@@ -317,6 +317,97 @@ EOF
     $'x-base: &base\n  job-m: Doc quality\n<<: *base\njob-a: Build + smoke\n'
   ci_dag_key_case "${key_work}" 'written-twice' 'job-d' \
     $'job-d: Build + smoke\njob-d: Doc quality\njob-a: Build + smoke\n'
+  # A job key the job list cannot carry, and a merge key under `jobs:`,
+  # stop the run (exit 2) naming the file, and the diagram is untouched:
+  # a line break renders as two nodes, an empty key as none, and a merge
+  # key as the node `<<`.
+  local refused_name refused_body refused_rc refused_err
+  local -a refused_cases=(
+    'refused-line-break' $'jobs:\n  "a\\nb":\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n'
+    'refused-empty' $'jobs:\n  "":\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n'
+    'refused-merge-key' $'x: &base\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\njobs:\n  <<: *base\n'
+  )
+  for ((i = 0; i < ${#refused_cases[@]}; i += 2)); do
+    refused_name=${refused_cases[i]}
+    refused_body=${refused_cases[i + 1]}
+    printf 'name: ci\non: push\n%s' "${refused_body}" >"${key_work}/${refused_name}.yml"
+    printf 'job-a: Build + smoke\n' >"${key_work}/${refused_name}.cats.yml"
+    printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${key_work}/${refused_name}.md"
+    cp -- "${key_work}/${refused_name}.md" "${key_work}/${refused_name}.md.orig"
+    refused_rc=0
+    CI_WORKFLOW_OVERRIDE="${key_work}/${refused_name}.yml" CATEGORIES_FILE_OVERRIDE="${key_work}/${refused_name}.cats.yml" \
+      DOC_OVERRIDE="${key_work}/${refused_name}.md" \
+      "${SCRIPT}" >"${key_work}/${refused_name}.out" 2>"${key_work}/${refused_name}.err" || refused_rc=$?
+    printf 'harness-assert-outcome: exit=%d\n' "${refused_rc}" >"${key_work}/${refused_name}.outcome"
+    harness_assert_record "job key refused: ${refused_name}" 'which GitHub Actions refuses' \
+      "${key_work}/${refused_name}.outcome" "${key_work}/${refused_name}.out" "${key_work}/${refused_name}.err"
+    refused_err="$(grep --invert-match --fixed-strings -- '--yaml-fix-merge-anchor-to-spec' "${key_work}/${refused_name}.err" || true)"
+    if [[ ${refused_rc} -eq 2 && ${refused_err} == *"${key_work}/${refused_name}.yml"*'which GitHub Actions refuses'* ]] &&
+      cmp --silent -- "${key_work}/${refused_name}.md" "${key_work}/${refused_name}.md.orig"; then
+      pass "job key refused: ${refused_name}"
+    else
+      fail "job key refused: ${refused_name}: exit ${refused_rc}, want 2 and a message naming the file"
+      cat -- "${key_work}/${refused_name}.err" >&2
+    fi
+  done
+  # A merge list inside a job is read first mapping wins, as the YAML
+  # merge specification says: job ml-c takes the needs: of the mapping
+  # listed first, so its one edge comes from ml-a.
+  local ml_rc=0
+  printf 'name: ci\non: push\nx-p: &P {needs: ml-a}\nx-q: &Q {needs: ml-b}\njobs:\n  ml-a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n  ml-b:\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n  ml-c:\n    <<: [*P, *Q]\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n' >"${key_work}/ml.yml"
+  printf 'ml-a: Build + smoke\nml-b: Build + smoke\nml-c: Doc quality\n' >"${key_work}/ml.cats.yml"
+  printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${key_work}/ml.md"
+  CI_WORKFLOW_OVERRIDE="${key_work}/ml.yml" CATEGORIES_FILE_OVERRIDE="${key_work}/ml.cats.yml" \
+    DOC_OVERRIDE="${key_work}/ml.md" \
+    "${SCRIPT}" >"${key_work}/ml.out" 2>"${key_work}/ml.err" || ml_rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${ml_rc}" >"${key_work}/ml.outcome"
+  harness_assert_record 'merge list needs: first mapping wins' 'ml-a --> ml-c' \
+    "${key_work}/ml.outcome" "${key_work}/ml.md" "${key_work}/ml.err"
+  if [[ ${ml_rc} -eq 0 ]] && grep --fixed-strings --quiet -- 'ml-a --> ml-c' "${key_work}/ml.md" &&
+    ! grep --fixed-strings --quiet -- 'ml-b --> ml-c' "${key_work}/ml.md"; then
+    pass 'a merge list in a job is read first mapping wins'
+  else
+    fail "merge list needs: expected exit 0 and the edge ml-a --> ml-c only, got exit ${ml_rc}"
+    cat -- "${key_work}/ml.md" >&2
+  fi
+
+  # A failing read of the job keys stops the run (exit 2) with the
+  # generator's own message, even when every later read would succeed.
+  # The shim fails only the read that prints keys as JSON.
+  local keyread_stub keyread_rc=0 real_yq
+  keyread_stub="$(mktemp --directory)"
+  real_yq="$(command -v yq)"
+  cat >"${keyread_stub}/yq" <<EOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [[ \${arg} == *'to_json(0)'* ]]; then
+    exit 9
+  fi
+done
+exec ${real_yq} "\$@"
+EOF
+  chmod +x -- "${keyread_stub}/yq"
+  printf 'name: ci\non: push\njobs:\n  job-a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n' >"${key_work}/keyread.yml"
+  printf 'job-a: Build + smoke\n' >"${key_work}/keyread.cats.yml"
+  printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${key_work}/keyread.md"
+  cp -- "${key_work}/keyread.md" "${key_work}/keyread.md.orig"
+  PATH="${keyread_stub}:${PATH}" \
+    CI_WORKFLOW_OVERRIDE="${key_work}/keyread.yml" CATEGORIES_FILE_OVERRIDE="${key_work}/keyread.cats.yml" \
+    DOC_OVERRIDE="${key_work}/keyread.md" \
+    "${SCRIPT}" >"${key_work}/keyread.out" 2>"${key_work}/keyread.err" || keyread_rc=$?
+  rm --force -- "${keyread_stub}/yq"
+  rmdir -- "${keyread_stub}"
+  printf 'harness-assert-outcome: exit=%d\n' "${keyread_rc}" >"${key_work}/keyread.outcome"
+  harness_assert_record 'job key read failure aborts' "could not read the job graph from ${key_work}/keyread.yml" \
+    "${key_work}/keyread.outcome" "${key_work}/keyread.out" "${key_work}/keyread.err"
+  if [[ ${keyread_rc} -eq 2 ]] &&
+    grep --fixed-strings --quiet -- "could not read the job graph from ${key_work}/keyread.yml" "${key_work}/keyread.err" &&
+    cmp --silent -- "${key_work}/keyread.md" "${key_work}/keyread.md.orig"; then
+    pass 'a failing job-key read exits 2 with its own message'
+  else
+    fail "job-key read failure: expected exit 2 and the job graph message, got exit ${keyread_rc}"
+    cat -- "${key_work}/keyread.err" >&2
+  fi
   # A category map that is not one map of jobs stops the run (exit 2),
   # as a tool failing to read it does: a list's entries are keyed by
   # index, and every job would read as uncategorised.

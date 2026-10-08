@@ -154,6 +154,144 @@ function expect_en_us() {
   rm --recursive --force -- "${dir}" "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
+# @description A merge list inside the verify job is read first mapping
+# wins, as the YAML merge specification says; yq reads the last one unless
+# told otherwise. One mapping carries a step the attribution env misses,
+# the other does not.
+# @arg $1 scenario name  @arg $2 the merge list  @arg $3 expected exit
+# @arg $4 expected stderr substring (empty skips the check)
+function expect_merge_order() {
+  local -r name="$1" order="$2" want_exit="$3" want_msg="$4"
+  local dir stderr_file stdout_file outcome_file
+  dir="$(mktemp --directory)"
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  cat >"${dir}/workflow.yml" <<EOF
+name: fixture-verify
+on:
+  workflow_dispatch:
+permissions: {}
+x-with-bravo: &with-bravo
+  steps:
+    - id: step-alpha
+      run: echo PAYLOAD_RAN
+    - id: step-bravo
+      run: echo PAYLOAD_RAN
+    - id: attribute
+      env:
+        STEP_ALPHA: \${{ steps.step-alpha.outcome }}
+      run: |
+        if [[ \${STEP_ALPHA} == 'failure' ]]; then reason='alpha-failed'; fi
+x-without-bravo: &without-bravo
+  steps:
+    - id: step-alpha
+      run: echo PAYLOAD_RAN
+    - id: attribute
+      env:
+        STEP_ALPHA: \${{ steps.step-alpha.outcome }}
+      run: |
+        if [[ \${STEP_ALPHA} == 'failure' ]]; then reason='alpha-failed'; fi
+jobs:
+  verify:
+    <<: ${order}
+EOF
+  local got_exit=0
+  VERIFY_WORKFLOW_OVERRIDE="${dir}/workflow.yml" \
+    VERIFICATION_DOC_OVERRIDE="${FIXTURES}/good/verification.md" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+
+  if [[ ${got_exit} -ne ${want_exit} ]] ||
+    { [[ -n ${want_msg} ]] && ! grep --fixed-strings --quiet -- "${want_msg}" "${stderr_file}"; }; then
+    printf 'FAIL: %s — expected exit %d and stderr containing %q; got exit %d and stderr %q\n' \
+      "${name}" "${want_exit}" "${want_msg}" "${got_exit}" "$(cat -- "${stderr_file}")" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${got_exit}"
+  fi
+
+  harness_assert_record "${name}" "${want_msg}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --recursive --force -- "${dir}" "${stderr_file}" "${stdout_file}" "${outcome_file}"
+}
+
+# @description A merge list inside the attribution step is read first
+# mapping wins as well: the step's env and its run body each come from the
+# first mapping that carries them. The env block and the run body are read
+# by separate `yq` calls, so each read has its own scenario pair.
+# @arg $1 scenario name  @arg $2 `env` or `run`: which key the merge list
+# carries  @arg $3 the merge list  @arg $4 expected exit
+# @arg $5 expected stderr substring (empty skips the check)
+function expect_step_merge() {
+  local -r name="$1" carried="$2" order="$3" want_exit="$4" want_msg="$5"
+  local dir stderr_file stdout_file outcome_file
+  dir="$(mktemp --directory)"
+  stderr_file="$(mktemp)"
+  stdout_file="$(mktemp)"
+  outcome_file="$(mktemp)"
+  {
+    cat <<EOF
+name: fixture-verify
+on:
+  workflow_dispatch:
+permissions: {}
+x-env-alpha: &env-alpha
+  env:
+    STEP_ALPHA: \${{ steps.step-alpha.outcome }}
+x-env-both: &env-both
+  env:
+    STEP_ALPHA: \${{ steps.step-alpha.outcome }}
+    STEP_BRAVO: \${{ steps.step-bravo.outcome }}
+x-run-three: &run-three
+  run: |
+    if [[ \${STEP_ALPHA} == 'failure' ]]; then reason='alpha-failed'; fi
+    if [[ \${STEP_BRAVO} == 'failure' ]]; then reason='bravo-failed'; fi
+    if [[ \${STEP_BRAVO} == 'cancelled' ]]; then reason='charlie-failed'; fi
+x-run-four: &run-four
+  run: |
+    if [[ \${STEP_ALPHA} == 'failure' ]]; then reason='alpha-failed'; fi
+    if [[ \${STEP_BRAVO} == 'failure' ]]; then reason='bravo-failed'; fi
+    if [[ \${STEP_BRAVO} == 'cancelled' ]]; then reason='charlie-failed'; fi
+    if [[ \${STEP_ALPHA} == 'cancelled' ]]; then reason='unknown'; fi
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: step-bravo
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        <<: ${order}
+EOF
+    # shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+    if [[ ${carried} == env ]]; then
+      printf '        run: |\n          if [[ ${STEP_ALPHA} == '"'failure'"' ]]; then reason='"'alpha-failed'"'; fi\n'
+      printf '          if [[ ${STEP_BRAVO} == '"'failure'"' ]]; then reason='"'bravo-failed'"'; fi\n'
+    else
+      printf '        env:\n          STEP_ALPHA: ${{ steps.step-alpha.outcome }}\n          STEP_BRAVO: ${{ steps.step-bravo.outcome }}\n'
+    fi
+  } >"${dir}/workflow.yml"
+  local got_exit=0
+  VERIFY_WORKFLOW_OVERRIDE="${dir}/workflow.yml" \
+    VERIFICATION_DOC_OVERRIDE="${FIXTURES}/good/verification.md" \
+    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || got_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
+
+  if [[ ${got_exit} -ne ${want_exit} ]] ||
+    { [[ -n ${want_msg} ]] && ! cat -- "${stdout_file}" "${stderr_file}" | grep --fixed-strings --quiet -- "${want_msg}"; }; then
+    printf 'FAIL: %s — expected exit %d and output containing %q; got exit %d and output %q\n' \
+      "${name}" "${want_exit}" "${want_msg}" "${got_exit}" "$(cat -- "${stdout_file}" "${stderr_file}")" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s (exit %d)\n' "${name}" "${got_exit}"
+  fi
+
+  harness_assert_record "${name}" "${want_msg}" \
+    "${outcome_file}" "${stdout_file}" "${stderr_file}"
+  rm --recursive --force -- "${dir}" "${stderr_file}" "${stdout_file}" "${outcome_file}"
+}
+
 function main() {
   expect 'good' 'workflow.yml' 0 ''
 
@@ -189,6 +327,22 @@ function main() {
   expect_en_us 'non-ASCII letter in a step id is not read as an outcome reference under en_US.UTF-8' \
     's/step-charlie/step-charlié/g' 1 \
     'DIR/workflow.yml: step id step-charlié has no steps.<id>.outcome entry in the attribution env'
+  expect_merge_order 'a merge list in the verify job is read first mapping wins: the step the env misses first is refused' \
+    '[*with-bravo, *without-bravo]' 1 \
+    'step id step-bravo has no steps.<id>.outcome entry in the attribution env'
+  expect_merge_order 'a merge list in the verify job is read first mapping wins: the covered steps first pass' \
+    '[*without-bravo, *with-bravo]' 0 ''
+  expect_step_merge 'a merge list in the attribution step reads its env first mapping wins: the env missing a step first is refused' \
+    env '[*env-alpha, *env-both]' 1 \
+    'step id step-bravo has no steps.<id>.outcome entry in the attribution env'
+  expect_step_merge 'a merge list in the attribution step reads its env first mapping wins: the env covering every step first passes' \
+    env '[*env-both, *env-alpha]' 0 ''
+  expect_step_merge 'a merge list in the attribution step reads its run body first mapping wins: the three-token body first reads as three tokens' \
+    run '[*run-three, *run-four]' 0 \
+    '2 env entries, 3 reason tokens)'
+  expect_step_merge 'a merge list in the attribution step reads its run body first mapping wins: the four-token body first reads as four tokens' \
+    run '[*run-four, *run-three]' 0 \
+    '2 env entries, 4 reason tokens)'
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

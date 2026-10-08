@@ -41,6 +41,9 @@
 #
 # See docs/security/workflow-hardening.md.
 #
+# A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
+# counted finding, and the file's jobs are not read.
+#
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER (workflow
 # fixtures) and ACTIONS_DIR_OVERRIDE (composite-action fixtures).
 # Setting either override scans only what the overrides name, so a
@@ -59,6 +62,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_WORKFLOWS_DIR=".github/workflows"
 readonly DEFAULT_ACTIONS_DIR=".github/actions"
@@ -130,7 +135,28 @@ failed=0
 for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
 
-  if ! rows="$(yq eval "${ROWS_QUERY}" "${f}")"; then
+  # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
+  # finding, and the file's jobs are not read: the rows below name a job
+  # by its position, which a refused key would shift or hide. The read
+  # prints one line per document.
+  if ! odd_keys="$(first_odd_job_key "${f}")"; then
+    printf '%s: could not evaluate workflow or action with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  odd_key=''
+  while IFS= read -r line; do
+    if [[ -n ${line} ]]; then
+      odd_key="${line}"
+      break
+    fi
+  done <<<"${odd_keys}"
+  if [[ -n ${odd_key} ]]; then
+    odd_job_key_message "${f}" "${odd_key}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${ROWS_QUERY}" "${f}")"; then
     printf '%s: could not evaluate workflow or action with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
@@ -143,17 +169,17 @@ for f in "${selected_files[@]}"; do
     # nothing was read from. The row's numbers reach `yq` as data, through
     # `env`.
     if [[ ${shape} == composite ]]; then
-      if ! body="$(DOC="${doc}" IDX="${idx}" yq eval 'select(document_index == env(DOC)) | .runs.steps[env(IDX)].run' "${f}")"; then
+      if ! body="$(DOC="${doc}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .runs.steps[env(IDX)].run' "${f}")"; then
         printf '%s: cannot read composite step[%s] run: block\n' "${f}" "${idx}" >&2
         exit 2
       fi
       where="$(printf 'composite step[%s]' "${idx}")"
     else
-      if ! job="$(DOC="${doc}" JPOS="${jpos}" yq eval 'select(document_index == env(DOC)) | .jobs | to_entries | .[env(JPOS)].key | explode(.)' "${f}")"; then
+      if ! job="$(DOC="${doc}" JPOS="${jpos}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .jobs | to_entries | .[env(JPOS)].key | explode(.)' "${f}")"; then
         printf '%s: cannot read the key of the job at position %s\n' "${f}" "${jpos}" >&2
         exit 2
       fi
-      if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval 'select(document_index == env(DOC)) | .jobs | to_entries | .[env(JPOS)].value.steps[env(IDX)].run' "${f}")"; then
+      if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .jobs | to_entries | .[env(JPOS)].value.steps[env(IDX)].run' "${f}")"; then
         printf '%s: cannot read job %q step[%s] run: block\n' "${f}" "${job}" "${idx}" >&2
         exit 2
       fi

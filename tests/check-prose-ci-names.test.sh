@@ -312,6 +312,178 @@ function main() {
     rm --recursive --force -- "${tag_root}"
   done
 
+  # A job key the job list cannot carry is a finding naming the file and
+  # the key. A line-break key must not resolve as the two names it spells
+  # (the sentence below would pass), and a merge key must not hide the job
+  # it brings in (the sentence names a real job and must stay silent).
+  local odd_root odd_refused
+  odd_refused='jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
+  odd_root="$(mktemp --directory)"
+  mkdir --parents "${odd_root}/docs" "${odd_root}/workflows"
+  git -C "${odd_root}" init --quiet
+  cp -- "${FIXTURES}/clean-passes/lint-groups.yml" "${FIXTURES}/clean-passes/roster.txt" "${odd_root}/"
+  printf 'The %sa%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  "a\\nb":\n    runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-line-break-is-refused' 1 \
+    "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"a\\nb\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
+  also_expect 'docs/x.md:1: ghost: a'
+  printf 'The %sfoo%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  "":\n    runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-empty-is-refused' 1 \
+    "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
+  printf 'The %sj%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'x: &m\n  j:\n    runs-on: ubuntu-latest\njobs:\n  <<: *m\n  foo:\n    runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-merge-key-is-refused' 1 \
+    "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: j' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the merged job j is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  # A tab, a carriage return or a NUL in a key must not leave a readable
+  # name behind either: the name records are tab-split, and a NUL is
+  # dropped from the listing, so each would otherwise make the prose name
+  # `a` resolve.
+  printf 'The %sa%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  local odd_key odd_json
+  for odd_key in 'a\tb' 'a\rb' 'a\0'; do
+    odd_json="${odd_key}"
+    if [[ ${odd_key} == 'a\0' ]]; then odd_json='a\u0000'; fi
+    printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  "%s":\n    runs-on: ubuntu-latest\n' "${odd_key}" \
+      >"${odd_root}/workflows/ci.yml"
+    run_scenario "job-key-${odd_key//\\/}-is-refused" 1 \
+      "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"${odd_json}\")" '' \
+      "${odd_root}/workflows" "${odd_root}"
+    also_expect 'docs/x.md:1: ghost: a'
+  done
+  # A key YAML types as an int, bool or null is a scalar and reads as its
+  # text; a sequence key is not a scalar and is refused.
+  printf 'The %sfoo%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  1:\n    runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-int-is-read' 0 '' '' \
+    "${odd_root}/workflows" "${odd_root}"
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  ? [seq, key]\n  : runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-sequence-is-refused' 1 \
+    "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"[seq, key]\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
+  # A merge key whose value is not a mapping cannot be resolved, so the
+  # file's jobs are not read; the refusal is the verdict, beside an
+  # ordinary workflow and as the only workflow alike.
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n' >"${odd_root}/workflows/ci.yml"
+  printf 's: &s 5\njobs:\n  <<: *s\n  z:\n    runs-on: ubuntu-latest\n' >"${odd_root}/workflows/scalar-merge.yml"
+  run_scenario 'job-key-scalar-merge-key-is-refused' 1 \
+    "${odd_root}/workflows/scalar-merge.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
+  # The read that fails on the refused file's own shape is not echoed
+  # beside the finding.
+  if grep --fixed-strings --quiet -- 'merge anchors' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — yq message printed beside the finding\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${odd_root}/workflows/scalar-merge.yml" "${odd_root}/workflows/ci.yml"
+  mkdir --parents "${odd_root}/solo"
+  printf 's: &s 5\njobs:\n  <<: *s\n  z:\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/only-scalar-merge.yml"
+  run_scenario 'job-key-scalar-merge-key-sole-workflow-is-refused' 1 \
+    "${odd_root}/solo/only-scalar-merge.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  rm --force -- "${odd_root}/solo/only-scalar-merge.yml"
+  # A refused file whose exploded read fails lists its literal job keys, so
+  # the refusal is its only finding and a sentence naming one of its jobs is
+  # not a ghost. A merge list holding a scalar and a later document with the
+  # scalar merge are the same shape.
+  printf 'The %sz%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 's: &s 5\njobs:\n  <<: *s\n  z:\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/lit-scalar-merge.yml"
+  run_scenario 'job-key-scalar-merge-key-keeps-literal-jobs' 1 \
+    "${odd_root}/solo/lit-scalar-merge.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: z' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the literal job z is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${odd_root}/solo/lit-scalar-merge.yml"
+  printf 'p: &p\n  a:\n    runs-on: ubuntu-latest\njobs:\n  <<: [*p, 5]\n  z:\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/lit-merge-list.yml"
+  run_scenario 'job-key-merge-list-with-scalar-keeps-literal-jobs' 1 \
+    "${odd_root}/solo/lit-merge-list.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: z' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the literal job z is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${odd_root}/solo/lit-merge-list.yml"
+  printf 'The %sma%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'jobs:\n  ma:\n    runs-on: ubuntu-latest\n---\ns: &s 5\njobs:\n  <<: *s\n  mz:\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/lit-multidoc.yml"
+  run_scenario 'job-key-scalar-merge-key-multi-document-keeps-literal-jobs' 1 \
+    "${odd_root}/solo/lit-multidoc.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: ma' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the first document job ma is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${odd_root}/solo/lit-multidoc.yml"
+  # A later document with no job map, or a job key YAML types as an int,
+  # does not fail the literal read of the refused file's other jobs.
+  printf 'The %szn%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 's: &s 5\njobs:\n  <<: *s\n  zn:\n    runs-on: ubuntu-latest\n---\njobs: 5\n' >"${odd_root}/solo/lit-nonmap-doc.yml"
+  run_scenario 'job-key-scalar-merge-key-beside-non-map-document-keeps-literal-jobs' 1 \
+    "${odd_root}/solo/lit-nonmap-doc.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: zn' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the literal job zn is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${odd_root}/solo/lit-nonmap-doc.yml"
+  printf 'The %szi%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 's: &s 5\njobs:\n  <<: *s\n  1:\n    runs-on: ubuntu-latest\n  zi:\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/lit-int-key.yml"
+  run_scenario 'job-key-scalar-merge-key-beside-int-key-keeps-literal-jobs' 1 \
+    "${odd_root}/solo/lit-int-key.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: zi' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the literal job zi is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${odd_root}/solo/lit-int-key.yml"
+  # The literal keys are listed one a line: a key holding a line break is
+  # not two names, so a sentence naming half of it is still a ghost.
+  printf 'The %sqx%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 's: &s 5\njobs:\n  <<: *s\n  "qx\\nrx":\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/lit-line-break.yml"
+  run_scenario 'job-key-scalar-merge-key-line-break-key-is-no-literal-name' 1 \
+    "${odd_root}/solo/lit-line-break.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  also_expect 'docs/x.md:1: ghost: qx'
+  rm --force -- "${odd_root}/solo/lit-line-break.yml"
+  printf 'The %sma%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  # Every workflow refused still reports the refusal, not an empty name set.
+  printf 'on: push\njobs:\n  ? [a, b]\n  : {runs-on: x}\n' >"${odd_root}/solo/only-seq-key.yml"
+  run_scenario 'job-key-sole-workflow-all-refused-is-refused' 1 \
+    "${odd_root}/solo/only-seq-key.yml: ${odd_refused} (first: \"[a, b]\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  rm --force -- "${odd_root}/solo/only-seq-key.yml"
+  # A merge list inside a job is read first mapping wins, which also keeps
+  # `yq` from printing its warning about the default order.
+  printf 'Nothing here names a job.\n' >"${odd_root}/docs/x.md"
+  printf 'p: &p\n  runs-on: a\nq: &q\n  runs-on: b\njobs:\n  foo:\n    <<: [*p, *q]\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-merge-list-is-silent' 0 '' '' \
+    "${odd_root}/workflows" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'WARN' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — yq warned about the merge order\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  # A directory named like a workflow matches the glob and is not read.
+  rm --force -- "${odd_root}/workflows/ci.yml"
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n' >"${odd_root}/workflows/real.yml"
+  mkdir --parents "${odd_root}/workflows/dir.yml"
+  run_scenario 'job-key-directory-named-yml-is-skipped' 0 '' '' \
+    "${odd_root}/workflows" "${odd_root}"
+  rm --recursive --force -- "${odd_root}"
+
   # A scan root git cannot enumerate must be loud. Reading the listing
   # through a process substitution instead would lose git's exit status to
   # its subshell, and the run would report a clean tree it never read.
