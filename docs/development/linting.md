@@ -729,9 +729,12 @@ anyway misreads it:
 - a merge key (`<<`) directly under `jobs:` lists as the job `<<`, and
     the jobs it brings in are never reached by `.jobs[]` or `to_entries`.
 
-A job key that is empty, holds a line break, a tab, a carriage return or
-a NUL, is not a scalar, or is a merge key is therefore a counted finding
-that names the file and the key, and that file's jobs are not read. A
+A job key that is empty, holds a line break or a tab, is not a scalar,
+or is a merge key is therefore a counted finding that names the file and
+the key, and that file's jobs are not read. The shared reading also
+refuses a carriage return and a NUL, which `yq` counts as a line break
+and a line-by-line read does not; a lint with a check of its own refuses
+a NUL but reads a carriage return as part of the name. A
 generator (`refresh-ci-dag.sh`, `refresh-enforcement-matrix.sh`) stops
 with exit 2 and leaves its output untouched instead. The shared reading
 is `first_odd_job_key` and `odd_job_key_message` in

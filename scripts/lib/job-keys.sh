@@ -31,10 +31,18 @@ readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | se
 # line break, a carriage return or a NUL. Each key is resolved through an
 # alias first. A `jobs:` that is not a map holds no keys.
 # @arg $1 workflow path
-# @stdout the first refused key as JSON, or nothing
+# @stdout the first refused key of the first document holding one, as one
+# line of JSON, or nothing
 # @exitcode 1 yq could not evaluate the file
 function first_odd_job_key() {
-  yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | select(kind == "map") | to_entries[] | .key | explode(.) | select(tag == "!!merge" or kind != "scalar" or (tostring | test("^$|[\t\n\r\x00]"))) | tostring | to_json(0)] | .[0] // ""' "$1"
+  local rows line
+  rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | select(kind == "map") | to_entries[] | .key | explode(.) | select(tag == "!!merge" or kind != "scalar" or (tostring | test("^$|[\t\n\r\x00]"))) | tostring | to_json(0)] | .[0] // ""' "$1")" || return
+  while IFS= read -r line; do
+    if [[ -n ${line} ]]; then
+      printf '%s\n' "${line}"
+      return 0
+    fi
+  done <<<"${rows}"
 }
 
 # @description Print the finding for a refused job key.

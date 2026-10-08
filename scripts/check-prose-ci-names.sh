@@ -109,7 +109,9 @@ readonly HARNESS_RUNNER="${REPO_ROOT}/scripts/run-harness-group.sh"
 # @description Emit every `jobs:` key of every workflow file, one per line.
 #              A merge key is resolved, so the jobs it brings in are
 #              listed; a key holding a line break, a tab or nothing is not
-#              listed, since a line cannot carry it.
+#              listed, since a line cannot carry it, and nor is a key that
+#              is not a scalar. A scalar key YAML types as an int, a bool or
+#              null is listed as its text.
 function job_names() {
   local f
   local -a workflow_files=()
@@ -122,7 +124,7 @@ function job_names() {
     # A workflow with no `jobs:` block is a real shape (a reusable
     # fragment), so an empty key list is not a failure; an unparsable file
     # is, and yq exits non-zero for it.
-    yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | keys | .[] | select(test("^$|[\t\n\r\x00]") | not)' "${f}" || return 1
+    yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" || return 1
   done
 }
 

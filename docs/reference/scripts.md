@@ -1109,6 +1109,9 @@ key) is a finding and its jobs are not read: the key would be listed as
 other names or as none, hiding a notify job. Every `yq` read of a
 workflow passes YQ_MERGE_SPEC, so a merge list (`<<: [*a, *b]`) inside a
 job is read first mapping wins, as the YAML merge specification says.
+Such a workflow is the one finding: it is not also reported as a scanner
+workflow without a notify job, and a marker naming one of its jobs is not
+judged against jobs that were never read.
 
 Exit codes: 0 every marker matches its job's derived arms and every
 scanner notify job carries its markers, 1 a marker disagrees with the
@@ -2608,7 +2611,7 @@ alias first. A `jobs:` that is not a map holds no keys.
 
 **Stdout:**
 
-- the first refused key as JSON, or nothing
+- the first refused key of the first document holding one, as one line of JSON, or nothing
 
 #### odd_job_key_message()
 

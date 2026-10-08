@@ -216,7 +216,8 @@
 #      or `1` beside `"1"`) are a finding too, naming the key: they share
 #      one lookup and one line range, so one job would shadow the other.
 #      A merge key directly under `jobs:` is a finding too: it lists as
-#      the job `<<` and the jobs it brings in are never read.
+#      the job `<<` and the jobs it brings in are never read; a merge key
+#      written as an alias is one too.
 #      A file holding a carriage return that does not end a CRLF line
 #      break is a finding too: yq counts it as a line break and the
 #      newline-separated read does not, so every job line after it is off.
@@ -430,12 +431,13 @@ for f in "${selected_files[@]}"; do
   # shape) would yield empty input and the check would pass silently.
   # A merge key directly under `jobs:` lists as the job `<<` while the
   # jobs it brings in are never read, so it is a finding and the file is
-  # read no further.
-  if ! merge_keys="$(yq eval "${YQ_MERGE_SPEC[@]}" '[.jobs | select(kind == "map") | to_entries[] | .key | select(tag == "!!merge")] | length' "${f}")"; then
+  # read no further. The key is resolved through an alias first.
+  if ! merge_keys="$(yq eval "${YQ_MERGE_SPEC[@]}" '[.jobs | select(kind == "map") | to_entries[] | .key | explode(.) | select(tag == "!!merge")] | length' "${f}")"; then
     fail "${f}: could not evaluate workflow with yq (malformed?)"
     continue
   fi
-  if [[ ${merge_keys} != 0 ]]; then
+  # One count per document; any count above zero is a merge key.
+  if [[ ${merge_keys//[0$'\n']/} != '' ]]; then
     fail "${f}: jobs: holds a merge key, which GitHub Actions refuses; its jobs are not read"
     continue
   fi

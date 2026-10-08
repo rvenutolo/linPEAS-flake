@@ -65,7 +65,9 @@
 # or a tab, not a scalar, or a merge key) in ci.yml or in any other
 # workflow is a drift entry naming the file and the key: the job lists
 # are read a name per line, so such a key would read as other names or
-# as none, and a merge key brings in jobs that are never listed.
+# as none, and a merge key brings in jobs that are never listed. The
+# refusal is the only finding for that ci.yml: its job list is not held
+# against the category map or the EXEMPT list.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -168,12 +170,19 @@ fi
 # printed with the other drift below so that a run that could not read
 # an input prints no finding.
 declare -a odd_key_findings=()
+ci_jobs_unread=0
 if ! ci_odd_key="$(first_odd_job_key "${CI_FILE}")"; then
   printf 'cannot read job keys from %s\n' "${CI_FILE}" >&2
   exit 2
 fi
 if [[ -n ${ci_odd_key} ]]; then
   odd_key_findings+=("$(odd_job_key_message "${CI_FILE}" "${ci_odd_key}")")
+  # The refusal is the file's one finding: its job list is not read, so
+  # the forward and EXEMPT checks, which hold that list against the map,
+  # would only repeat the refusal as the names the key spells. The reverse
+  # check reads every workflow's resolved jobs and stays meaningful.
+  : >"${ci_jobs_file}"
+  ci_jobs_unread=1
 fi
 
 # The job set the reverse check below holds every category entry against:
@@ -337,6 +346,7 @@ done <"${ci_jobs_file}"
 # valid while covering no job, so the lint would stay green with an
 # exemption that exempts nothing.
 for e in ${EXEMPT[@]+"${EXEMPT[@]}"}; do
+  ((ci_jobs_unread)) && break
   if ! grep --quiet --fixed-strings --line-regexp -- "${e}" "${ci_jobs_file}"; then
     printf 'EXEMPT entry %q is not a job in %s\n' "${e}" "${CI_FILE}" >&2
     failed=$((failed + 1))

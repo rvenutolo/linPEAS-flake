@@ -85,6 +85,9 @@
 # other names or as none, hiding a notify job. Every `yq` read of a
 # workflow passes YQ_MERGE_SPEC, so a merge list (`<<: [*a, *b]`) inside a
 # job is read first mapping wins, as the YAML merge specification says.
+# Such a workflow is the one finding: it is not also reported as a scanner
+# workflow without a notify job, and a marker naming one of its jobs is not
+# judged against jobs that were never read.
 #
 # Exit codes: 0 every marker matches its job's derived arms and every
 # scanner notify job carries its markers, 1 a marker disagrees with the
@@ -695,7 +698,7 @@ function main() {
   enumerate_into docs 'list prose' prose_scan
 
   # Every notify job, keyed "<workflow file>/<job>", with its raw fields.
-  local -A job_fields=() job_block=() derived=() required=()
+  local -A job_fields=() job_block=() derived=() required=() refused=()
   local -i found=0
   local wf base rec uses job needs gate result_in step_if key step
   local -r field=$'[^\t]+'
@@ -716,6 +719,7 @@ function main() {
     if [[ -n ${odd_key} ]]; then
       odd_job_key_message "${WORKFLOWS_REL}/${base}" "${odd_key}" >&2
       found=1
+      refused["${base}"]=1
       continue
     fi
     local listing
@@ -760,6 +764,9 @@ function main() {
   local s found_job
   for s in "${SCANNER_WORKFLOWS[@]}"; do
     [[ -f "${SCAN_ROOT}/${WORKFLOWS_REL}/${s}" ]] || die2 "missing scanner workflow ${WORKFLOWS_REL}/${s}"
+    # A refused workflow was reported as a finding and its jobs were not
+    # read, so having no notify job listed says nothing about it.
+    [[ -z ${refused["${s}"]+set} ]] || continue
     found_job=0
     for rec in "${!job_fields[@]}"; do
       if [[ ${rec%%/*} == "${s}" ]]; then
@@ -816,6 +823,9 @@ function main() {
   function check_marker() {
     local where="$1" origin="$2" own="$3"
     key="${mwf}/${mjob}"
+    # The refusal already counts as the finding for this workflow, and its
+    # jobs were never read, so a marker naming one of them is not judged.
+    [[ -z ${refused["${mwf}"]+set} ]] || return 0
     if [[ -z ${job_fields["${key}"]+set} ]]; then
       printf '%s: marker names %s, which is not a notify-workflow-result job\n' "${where}" "${key}" >&2
       found=1
