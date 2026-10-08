@@ -1134,6 +1134,46 @@ jobs:
   run_scenario job-key-empty-is-a-finding 1 \
     '.github/workflows/emptykey.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
 
+  # A refused scanner workflow is one finding: its missing notify listing
+  # is not also a could-not-run, and the docs markers naming its jobs are
+  # not reported as naming a non-notify job (its jobs were never read).
+  fresh_root
+  printf '  "":\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+    >>"${ROOT}/.github/workflows/octoscan.yml"
+  run_scenario scanner-job-key-refusal-is-a-finding-not-could-not-run 1 \
+    '.github/workflows/octoscan.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+  refute_stderr 'has no notify-workflow-result job'
+  refute_stderr 'which is not a notify-workflow-result job'
+  refute_stderr 'has no notify-arms marker'
+
+  # A docs marker naming a job of a refused non-scanner workflow is covered
+  # by the refusal; it is not reported a second time.
+  fresh_root
+  odd_workflow refused-marked.yml 'jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  "":
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  notify:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: refused
+          title: refused
+          body: refused'
+  printf 'A failed run <!-- notify-arms: refused-marked.yml/notify = failure cancelled -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario refused-workflow-doc-marker-is-not-a-second-finding 1 \
+    '.github/workflows/refused-marked.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+  refute_stderr 'which is not a notify-workflow-result job'
+
   # A merge list gives the first mapping the win; yq reads the last unless
   # told otherwise. The two mappings gate on different results.
   local order marker

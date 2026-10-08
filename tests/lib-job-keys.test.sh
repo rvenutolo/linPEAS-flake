@@ -59,6 +59,11 @@ expect_out jobs-scalar $'jobs: hello\n' "${ODD}" ''
 expect_out carriable $'jobs:\n  ok: {a: 1}\n  other-job_2: {a: 1}\n' "${ODD}" ''
 expect_out jobs-not-a-map $'jobs: [1, 2]\n' "${ODD}" ''
 expect_out no-jobs $'on: push\n' "${ODD}" ''
+# One line however many documents: a clean first document must not lead
+# the output with an empty line.
+expect_out second-document-key $'jobs:\n  ok: {a: 1}\n---\njobs:\n  "a\\nb": {x: 1}\n' "${ODD}" '"a\nb"'
+expect_out later-document-merge $'jobs:\n  ok: {a: 1}\n---\nx: &b\n  j: {a: 1}\njobs:\n  <<: *b\n' "${ODD}" '"<<"'
+expect_out clean-two-documents $'jobs:\n  ok: {a: 1}\n---\njobs:\n  fine: {a: 1}\n' "${ODD}" ''
 # `jobs:` read through an alias is expanded once, and a merge list inside it
 # must not make `yq` warn.
 expect_out aliased-jobs-merge-list $'p: &P\n  permissions: {contents: write}\nq: &Q\n  permissions: {contents: read}\nx: &b\n  a:\n    <<: [*P, *Q]\njobs: *b\n' "${ODD}" ''

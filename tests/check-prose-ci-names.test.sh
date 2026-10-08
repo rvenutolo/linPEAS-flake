@@ -361,6 +361,18 @@ function main() {
       "${odd_root}/workflows" "${odd_root}"
     also_expect 'docs/x.md:1: ghost: a'
   done
+  # A key YAML types as an int, bool or null is a scalar and reads as its
+  # text; a sequence key is not a scalar and is refused.
+  printf 'The %sfoo%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  1:\n    runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-int-is-read' 0 '' '' \
+    "${odd_root}/workflows" "${odd_root}"
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  ? [seq, key]\n  : runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-sequence-is-refused' 1 \
+    "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"[seq, key]\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
   # A merge list inside a job is read first mapping wins, which also keeps
   # `yq` from printing its warning about the default order.
   printf 'Nothing here names a job.\n' >"${odd_root}/docs/x.md"

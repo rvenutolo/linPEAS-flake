@@ -462,6 +462,16 @@ readonly TRIVY_JOB="${CAFE_JOB/  j:/  k:}"$'      - uses: aquasecurity/trivy-act
 expect_text_is job-key-merge-key-hides-jobs $'x: &base\n'"${CAFE_JOB}"$'jobs:\n  <<: *base\n'"${TRIVY_JOB}" \
   $'@F@: jobs: holds a merge key, which GitHub Actions refuses; its jobs are not read\n1 egress-allowlist violation(s)'
 
+# A merge key written as an alias is refused as the merge key it is.
+expect_text_is job-key-merge-key-aliased $'p: &P {j: {runs-on: ubuntu-latest}}\nx: {&m <<: *P}\njobs: { *m : *P }\n' \
+  $'@F@: jobs: holds a merge key, which GitHub Actions refuses; its jobs are not read\n1 egress-allowlist violation(s)'
+
+# A clean two-document file holds no merge key: the count read prints one
+# number per document and each is tested, so the file reaches the later
+# job-count check, which refuses a multi-document count.
+expect_text_is multi-document-no-merge-key $'jobs:\n  j: {runs-on: ubuntu-latest}\n---\nname: second\non: push\njobs:\n  k: {runs-on: ubuntu-latest}\n' \
+  $'@F@: the job count is not a number: $\'1\\n1\'\n1 egress-allowlist violation(s)'
+
 # A failing read for merge keys is one finding, and no read follows it,
 # even when the later reads would succeed. The shim fails only the read
 # that selects the merge tag.
