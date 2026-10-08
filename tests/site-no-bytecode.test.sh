@@ -30,6 +30,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "${REPO_ROOT}/scripts/lib/enumerate.sh"
 readonly FIXTURE_DASHBOARD="${REPO_ROOT}/tests/fixtures/site-no-bytecode/dashboard.yml"
 
 if ! command -v mkdocs >/dev/null; then
@@ -48,7 +50,9 @@ trap 'rm --recursive --force -- "${work}"' EXIT
 function stage_tree() {
   local -r dest="$1"
   mkdir --parents -- "${dest}"
-  git -C "${REPO_ROOT}" ls-files -z --cached |
+  local -a tracked=()
+  enumerate_into tracked 'tracked files' git -C "${REPO_ROOT}" ls-files -z --cached
+  printf '%s\0' "${tracked[@]}" |
     tar --directory="${REPO_ROOT}" --null --files-from=- --ignore-failed-read --create |
     tar --directory="${dest}" --extract
   cp -- "${FIXTURE_DASHBOARD}" "${dest}/docs/_data/dashboard.yml"
@@ -74,17 +78,25 @@ function run_scenario() {
   local rc=0
   (
     cd -- "${tree}"
-    env --unset=PYTHONDONTWRITEBYTECODE --unset=BASH_ENV \
+    env --unset=PYTHONDONTWRITEBYTECODE --unset=PYTHONPYCACHEPREFIX --unset=BASH_ENV \
       timeout 10m mkdocs build --strict --site-dir "${work}/${name}/site" \
       </dev/null >"${out}" 2>"${err}"
   ) || rc=$?
 
-  local found=''
-  if [[ -d ${work}/${name}/site ]]; then
-    found="$(find "${work}/${name}/site" \( -name '__pycache__' -o -name '*.pyc' \) -printf '%P\n' | sort)"
-  fi
   local rendered='no'
   [[ -s ${work}/${name}/site/index.html ]] && rendered='yes'
+  # Every site path is listed and filtered here: an enumeration that matched
+  # only bytecode would read an empty site as a clean one.
+  local found='' site_path=''
+  local -a site_paths=()
+  if [[ ${rendered} == yes ]]; then
+    enumerate_into site_paths 'site output paths' find "${work}/${name}/site" -mindepth 1 -print0
+    for site_path in "${site_paths[@]}"; do
+      case "${site_path##*/}" in
+      __pycache__ | *.pyc) found+="${site_path#"${work}/${name}/site/"}"$'\n' ;;
+      esac
+    done
+  fi
   {
     printf 'harness-assert-outcome: exit=%d\n' "${rc}"
     printf 'planted: %s\n' "${planted:-none}"
