@@ -236,9 +236,8 @@ printf 'OK   job-key-in-arithmetic\n'
 # moves a job's range instead. Each such key is a counted finding naming
 # the key, with nothing run and nothing else read from the file: the
 # build job downloads a release asset its allowlist omits, a violation
-# only a further read would report. An empty key's own job is not read
-# (the job list skips an empty name, as on main), and the same violation
-# shows the build job still is.
+# only a further read would report. An empty key is the same kind of
+# finding: its own job could not be read.
 # @arg $1 scenario name, which also names its marker file  @arg $2 the
 # job key, as a YAML double-quoted body  @arg $3 the expected finding
 # line, after the file name; it and the tally are the whole of stderr
@@ -292,7 +291,7 @@ expect_job_key job-key-digits-line-break-forges-line '7\n5' "job key \"7\\n5\" $
 expect_job_key job-key-leading-line-break '\nx' "job key \"\\nx\" ${odd_key}"
 expect_job_key job-key-forges-whole-rows 'b\t999\nc' "job key \"b\\t999\\nc\" ${odd_key}"
 readonly release_finding="job 'build' downloads a GitHub release asset but does not allowlist release-assets.githubusercontent.com (the github.com redirect is unconditional)"
-expect_job_key job-key-empty '' "${release_finding}"
+expect_job_key job-key-empty '' "a job key is empty or null, so that job's allowlist cannot be read"
 # A key is tested whatever its tag: an integer key is read, and a tag
 # on a key holding a tab does not hide it.
 expect_job_key job-key-integer 5 "${release_finding}" raw
@@ -387,8 +386,7 @@ fi
 printf 'OK   job-key-wildcard\n'
 
 # A job keyed by an alias is looked up by the key the job list prints,
-# and a key written twice reads its last job, once for each time the job
-# list holds it.
+# and a key written twice is a finding naming it.
 # @arg $1 scenario name  @arg $2 the jobs: block  @arg $3 expected stderr
 function expect_jobs_block() {
   local -r name="$1" jobs="$2" want="$3"
@@ -409,48 +407,7 @@ readonly CAFE_FINDING="which no tool in this repo reaches"
 expect_jobs_block job-key-alias $'  *ka :\n'"${CAFE_STEPS}" \
   "@F@: job '*ka' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n1 egress-allowlist violation(s)'
 expect_jobs_block job-key-twice $'  a:\n'"${CLEAN_STEPS}"$'  a:\n'"${CAFE_STEPS}" \
-  "@F@: job 'a' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n'"@F@: job 'a' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n2 egress-allowlist violation(s)'
-
-# A key that prints as an empty name still opens a block, so it ends the
-# job before it. Here the job before it carries a nix host but runs no
-# nix, and the empty-named job's block holds an exempt marker: a range
-# that ran on past the empty-named key read that marker as the earlier
-# job's and passed it.
-# @arg $1 scenario name  @arg $2 the key, written as given
-function expect_empty_name_ends_range() {
-  local -r name="$1" key="$2"
-  local got_exit=0 got_stderr want
-  cat >"${key_dir}/wf/${name}.yml" <<EOF
-name: ${name}
-on:
-  workflow_dispatch: {}
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
-        with:
-          egress-policy: block
-          allowed-endpoints: >
-            cache.nixos.org:443
-      - run: echo PAYLOAD_RAN
-  ${key}:
-    # egress-nix-exempt: belongs to the job with the empty name
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo PAYLOAD_RAN
-EOF
-  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
-    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
-  want="${key_dir}/wf/${name}.yml: job 'build' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ./.github/actions/setup-nix nor a run: nix invocation is detected, and no '# egress-nix-exempt: <reason>' marker justifies it"$'\n1 egress-allowlist violation(s)'
-  if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
-    printf 'FAIL %s: exit %s\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
-    exit 1
-  fi
-  printf 'OK   %s\n' "${name}"
-}
-expect_empty_name_ends_range job-key-null-ends-range null
-expect_empty_name_ends_range job-key-empty-ends-range '""'
+  "@F@: job key 'a' is written more than once, so which job is read is ambiguous"$'\n1 egress-allowlist violation(s)'
 
 # The range itself, for a job that is not the last: a marker inside the
 # first job's block exempts it.
@@ -492,16 +449,174 @@ EOF
 }
 expect_range job-range-holds-own-marker '    # egress-nix-exempt: reaches nix through a script' '' ''
 
+# A job's block ends at the first later line indented no deeper than its
+# key, so a marker written at key indentation (or shallower) belongs to
+# the next key, not to the job above it. The build job allowlists a nix
+# host and runs no nix; only a marker inside its block may exempt it.
+# @arg $1 scenario name  @arg $2 the text between build's last step and
+# the next job's key  @arg $3 `exempt` when build must pass, else `finding`
+# @arg $4 the jobs written after build
+function expect_block() {
+  local -r name="$1" between="$2" verdict="$3" after="$4"
+  local got_exit=0 got_stderr want_exit=0 want=''
+  [[ ${verdict} == finding ]] && want_exit=1
+  {
+    printf '%s\n' "name: ${name}" 'on:' '  workflow_dispatch: {}' 'jobs:' '  build:' \
+      '    runs-on: ubuntu-latest' '    steps:' \
+      '      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3' \
+      '        with:' '          egress-policy: block' '          allowed-endpoints: >' \
+      '            cache.nixos.org:443' '      - run: echo PAYLOAD_RAN'
+    [[ -n ${between} ]] && printf '%s\n' "${between}"
+    [[ -n ${after} ]] && printf '%s\n' "${after}"
+  } >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  [[ ${verdict} == finding ]] && want="${key_dir}/wf/${name}.yml: job 'build' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ./.github/actions/setup-nix nor a run: nix invocation is detected, and no '# egress-nix-exempt: <reason>' marker justifies it"$'\n1 egress-allowlist violation(s)'
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly NEXT_JOB=$'  other:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN'
+expect_block block-marker-above-next-key $'  # egress-nix-exempt: meant for other' finding "${NEXT_JOB}"
+expect_block block-marker-above-next-key-column-0 $'# egress-nix-exempt: meant for other' finding "${NEXT_JOB}"
+expect_block block-marker-after-last-job-key-indent $'  # egress-nix-exempt: belongs to no job' finding ''
+expect_block block-marker-last-in-block $'    # egress-nix-exempt: reaches nix through a script' exempt "${NEXT_JOB}"
+expect_block block-marker-after-blank-in-block $'\n    # egress-nix-exempt: reaches nix through a script\n' exempt "${NEXT_JOB}"
+expect_block block-marker-last-job-in-block $'    # egress-nix-exempt: reaches nix through a script' exempt ''
+# A comment shallower than the key does not end the block while job
+# content follows it; the run of comments just above the next key does.
+expect_block block-column-0-comment-inside-job $'# commented-out step at column 0\n    # egress-nix-exempt: reaches nix through a script\n      - run: echo PAYLOAD_RAN' exempt "${NEXT_JOB}"
+expect_block block-column-0-comment-before-next-key $'# note for the next job\n  # egress-nix-exempt: meant for other' finding "${NEXT_JOB}"
+# A marker indented deeper than the key belongs to the job above it, wherever
+# it sits in that block.
+expect_block block-deeper-marker-above-next-key $'    # egress-nix-exempt: reaches nix through a script' exempt "${NEXT_JOB}"
+
+# yq numbers lines by a lone carriage return, the lint reads by \n alone,
+# so every job line after one is off. Whether the shifted number lands past
+# the last line or inside the file, the file is a finding: the block would
+# be bounded from the wrong line, in the second shape crediting the marker
+# at the end of `other` to `build`.
+# @arg $1 scenario name  @arg $2 the file's text
+function expect_lone_cr() {
+  local -r name="$1" text="$2"
+  local got_exit=0 got_stderr want
+  printf '%b' "${text}" >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  want="${key_dir}/wf/${name}.yml: the file holds a carriage return that is not part of a CRLF line break, which yq counts as a line break and a line-by-line read does not"$'\n1 egress-allowlist violation(s)'
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_lone_cr block-lone-cr 'on: push\rjobs:\r  a:\r    runs-on: x\r  b:\r    runs-on: y\r'
+expect_lone_cr block-lone-cr-shifts-block 'name: t\ron: push\njobs:\n  build:\n\n    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            cache.nixos.org:443\n      - run: echo PAYLOAD_RAN\n  other:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n      # egress-nix-exempt: meant for other\n'
+# yq reports a job key's line without the lines before the first content
+# line (comments, blank lines, a `---`), so every key is that many lines
+# early. Job `a` carries a nix host and no marker, job `b` the same host and
+# a marker: only `a` is a finding, whatever precedes the first content.
+# @arg $1 scenario name  @arg $2 the text before the first content line
+function expect_leading() {
+  local -r name="$1" lead="$2"
+  local got_exit=0 got_stderr want
+  local steps=$'    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            cache.nixos.org:443\n      - run: echo PAYLOAD_RAN\n'
+  {
+    printf '%b' "${lead}"
+    printf '%s\n' 'on: push' 'jobs:' '  a:'
+    printf '%s' "${steps}"
+    printf '%s\n' '  b:' '    # egress-nix-exempt: reaches nix through a script'
+    printf '%s' "${steps}"
+  } >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  want="${key_dir}/wf/${name}.yml: job 'a' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ./.github/actions/setup-nix nor a run: nix invocation is detected, and no '# egress-nix-exempt: <reason>' marker justifies it"$'\n1 egress-allowlist violation(s)'
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_leading lead-none ''
+expect_leading lead-comment '# lead\n'
+expect_leading lead-comments '# one\n# two\n'
+expect_leading lead-blank-comment '\n# lead\n'
+expect_leading lead-comment-blank '# lead\n\n'
+expect_leading lead-shebang-comment '#!/usr/bin/env x\n'
+expect_leading lead-document-start '---\n'
+expect_leading lead-comment-document-start '# lead\n---\n'
+# CRLF line breaks are ordinary.
+printf 'name: crlf\r\non: push\r\njobs:\r\n  build:\r\n    runs-on: ubuntu-latest\r\n    steps:\r\n      - run: echo PAYLOAD_RAN\r\n' >"${key_dir}/wf/block-crlf-clean.yml"
+crlf_exit=0
+crlf_err="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=block-crlf-clean.yml LINT_ALLOW_EMPTY_SCAN=1 \
+  "${SCRIPT}" 2>&1 >/dev/null)" || crlf_exit=$?
+if [[ ${crlf_exit} != 0 || -n ${crlf_err} ]]; then
+  printf 'FAIL block-crlf-clean: exit %s\n  stderr: %s\n' "${crlf_exit}" "${crlf_err}" >&2
+  exit 1
+fi
+printf 'OK   block-crlf-clean\n'
+
+# A job key the lookup cannot tell apart from another, or cannot name at
+# all, is a finding naming the problem, with nothing else read from the
+# file: its allowlist would otherwise go unread or shadow a sibling's.
+# @arg $1 scenario name  @arg $2 the jobs: block  @arg $3 the expected
+# finding line, after the file name
+function expect_key_finding() {
+  local -r name="$1" jobs="$2" want_line="$3"
+  local got_exit=0 got_stderr
+  printf 'name: %s\non:\n  workflow_dispatch: {}\njobs:\n%s' "${name}" "${jobs}" >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${key_dir}/wf/${name}.yml: ${want_line}"$'\n1 egress-allowlist violation(s)' ]]; then
+    printf 'FAIL %s: exit %s, want 1\n  stderr: %s\n' "${name}" "${got_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly EVIL_STEPS=$'    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            evil.example.com:443\n      - run: echo PAYLOAD_RAN\n'
+readonly NIX_HOST_STEPS=$'    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            cache.nixos.org:443\n      - run: echo PAYLOAD_RAN\n'
+readonly EMPTY_KEY_FINDING="a job key is empty or null, so that job's allowlist cannot be read"
+expect_key_finding job-key-empty-string-unread $'  "":\n'"${EVIL_STEPS}" "${EMPTY_KEY_FINDING}"
+expect_key_finding job-key-tilde-unread $'  ~:\n'"${EVIL_STEPS}" "${EMPTY_KEY_FINDING}"
+expect_key_finding job-key-plain-null-unread $'  null:\n'"${EVIL_STEPS}" "${EMPTY_KEY_FINDING}"
+expect_key_finding job-key-duplicate-host-first $'  build:\n'"${NIX_HOST_STEPS}"$'  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  "job key 'build' is written more than once, so which job is read is ambiguous"
+expect_key_finding job-key-duplicate-mixed-tag $'  1:\n'"${NIX_HOST_STEPS}"$'  "1":\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
+  "job key '1' is written more than once, so which job is read is ambiguous"
+# Duplicates need not be adjacent, and with several the finding names the
+# first in byte order.
+readonly OTHER_STEPS=$'    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n'
+expect_key_finding job-key-duplicate-not-adjacent $'  a:\n'"${OTHER_STEPS}"$'  b:\n'"${OTHER_STEPS}"$'  a:\n'"${OTHER_STEPS}" \
+  "job key 'a' is written more than once, so which job is read is ambiguous"
+expect_key_finding job-key-two-duplicates-name-first $'  b:\n'"${OTHER_STEPS}"$'  a:\n'"${OTHER_STEPS}"$'  b:\n'"${OTHER_STEPS}"$'  a:\n'"${OTHER_STEPS}" \
+  "job key 'a' is written more than once, so which job is read is ambiguous"
+
+# A workflow with no jobs has nothing to read and is clean.
+printf 'name: jobs-empty-map\non:\n  workflow_dispatch: {}\njobs: {}\n' >"${key_dir}/wf/jobs-empty-map.yml"
+empty_exit=0
+empty_err="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=jobs-empty-map.yml LINT_ALLOW_EMPTY_SCAN=1 \
+  "${SCRIPT}" 2>&1 >/dev/null)" || empty_exit=$?
+if [[ ${empty_exit} != 0 || -n ${empty_err} ]]; then
+  printf 'FAIL jobs-empty-map: exit %s\n  stderr: %s\n' "${empty_exit}" "${empty_err}" >&2
+  exit 1
+fi
+printf 'OK   jobs-empty-map\n'
+
 # The row check is the range arithmetic's own guard. The key test above
 # leaves yq no way to print a row it fails, so a yq stub answers the job
 # line read with the rows in STUB_ROWS, and fails the key read when
-# STUB_FAIL_KEYS is set; every other read goes to the real yq.
+# STUB_FAIL_KEYS is set; the job count read prints STUB_COUNT, or fails
+# when STUB_FAIL_COUNT is set; every other read goes to the real yq.
 real_yq="$(command -v yq)"
 mkdir -- "${key_dir}/stub"
 # shellcheck disable=SC2016 # the shim's own text
 printf '%s\n' "#!${BASH}" \
   'for a in "$@"; do' \
   '  if [[ -n ${STUB_FAIL_KEYS:-} && ${a} == *"test("* ]]; then exit 7; fi' \
+  '  if [[ -n ${STUB_FAIL_COUNT:-} && ${a} == *"keys | length"* ]]; then exit 7; fi' \
+  '  if [[ -n ${STUB_COUNT:-} && ${a} == *"keys | length"* ]]; then printf "%s\n" "${STUB_COUNT}"; exit 0; fi' \
   '  if [[ ${a} == *"[., line]"* ]]; then printf "%s\n" "${STUB_ROWS}"; exit 0; fi' \
   'done' \
   "exec ${real_yq@Q} \"\$@\"" >"${key_dir}/stub/yq"
@@ -509,11 +624,12 @@ chmod +x -- "${key_dir}/stub/yq"
 cp -- "${key_dir}/wf/job-key-empty.yml" "${key_dir}/wf/stubbed.yml"
 # @arg $1 scenario name  @arg $2 STUB_ROWS  @arg $3 STUB_FAIL_KEYS
 # @arg $4 the expected finding line, after the file name
+# @arg $5 STUB_COUNT  @arg $6 STUB_FAIL_COUNT
 function expect_stubbed() {
-  local -r name="$1" rows="$2" fail_keys="$3" want_line="$4"
+  local -r name="$1" rows="$2" fail_keys="$3" want_line="$4" count="${5:-}" fail_count="${6:-}"
   local got_exit=0 got_stderr
   got_stderr="$(PATH="${key_dir}/stub:${PATH}" STUB_ROWS="${rows}" STUB_FAIL_KEYS="${fail_keys}" \
-    WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=stubbed.yml \
+    STUB_COUNT="${count}" STUB_FAIL_COUNT="${fail_count}" WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER=stubbed.yml \
     "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
   if [[ ${got_exit} != 1 || ${got_stderr} != "${key_dir}/wf/stubbed.yml: ${want_line}"$'\n1 egress-allowlist violation(s)' ]]; then
     printf 'FAIL %s: exit %s, want 1 and %q\n  stderr: %s\n' \
@@ -530,6 +646,20 @@ expect_stubbed job-line-row-digits-then-text $'build\t5\nbuild\t5x' '' "${bad_ro
 expect_stubbed job-line-row-text-then-digits $'build\t5\nbuild\tx5' '' "${bad_row} \$'build\\tx5'"
 expect_stubbed job-line-row-ten-digits $'build\t5\nbuild\t1234567890' '' "${bad_row} \$'build\\t1234567890'"
 expect_stubbed job-key-read-fails '' 1 'could not evaluate job keys with yq (malformed?)'
+# A key row for an empty name ends the read: a malformed row after it is
+# never reached.
+expect_stubbed job-line-row-empty-name-ends-read $'\t5\nbuild\tX' '' "a job key is empty or null, so that job's allowlist cannot be read"
+# A key is read from the line yq reports for it, after the leading lines
+# yq leaves out; a line that does not hold the key is a finding.
+expect_stubbed job-line-row-wrong-line $'build\t1' '' "job key 'build' is not on line 1, where yq reports it, so its line number cannot be trusted to bound its block"
+# Line 1 of the file is `name: job-key-empty`: a key that appears only
+# later in the line, or that is a prefix of a word with no colon after it,
+# is not on that line.
+expect_stubbed job-line-row-key-mid-line $'key\t1' '' "job key 'key' is not on line 1, where yq reports it, so its line number cannot be trusted to bound its block"
+expect_stubbed job-line-row-key-prefix-no-colon $'na\t1' '' "job key 'na' is not on line 1, where yq reports it, so its line number cannot be trusted to bound its block"
+# The job count is read before the arithmetic that uses it.
+expect_stubbed job-count-not-a-number $'build\t5' '' "the job count is not a number: 'x'" x
+expect_stubbed job-count-read-fails $'build\t5' '' 'could not evaluate workflow with yq (malformed?)' '' 1
 
 # LIVE: the real tree must satisfy assertion 7, and the run must have
 # actually scanned something. The assertion checks the printed count is

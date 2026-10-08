@@ -190,15 +190,41 @@
 #
 #      The marker is a YAML comment, gone once yq has parsed the
 #      document, so it is found by a raw-text scan bounded to the job's
-#      own line range (from its key's line, taken from yq's `line`
-#      builtin, to one line before the next job's key line, or to the
-#      end of the file for the last job) rather than by any yq query.
+#      own block (from its key's line, taken from yq's `line` builtin,
+#      to the last line before the first line that is not a comment and
+#      is indented no deeper than the key, or to the end of the file,
+#      without the trailing comments indented no deeper than the key)
+#      rather than by any yq query. A marker comment written at key
+#      indentation or shallower, such as just above the next job's key,
+#      sits outside the block and exempts nothing in the job above it; a
+#      marker indented deeper than the key belongs to the job above it
+#      wherever it sits, and one after a shallower comment still inside
+#      the job is found.
+#      The scan reads text, not YAML comments, so a line of that shape
+#      inside a `run: |` script body also counts as a marker (a known
+#      limit).
 #      The key and its line are read as one tab-separated row, so a job
 #      key holding a tab or a line break, whatever its tag, is a finding
 #      naming the key, and that file is read no further: such a key
 #      would choose its own rows and line numbers, and the range is
 #      computed in bash arithmetic, which runs a command placed in an
 #      array subscript.
+#      A job key that is empty or null is a finding too: the job list
+#      prints it as an empty name and the main loop skips empty names, so
+#      that job's allowlist would never be read.
+#      Two job keys that print as the same text (a literal `build:` twice,
+#      or `1` beside `"1"`) are a finding too, naming the key: they share
+#      one lookup and one line range, so one job would shadow the other.
+#      A file holding a carriage return that does not end a CRLF line
+#      break is a finding too: yq counts it as a line break and the
+#      newline-separated read does not, so every job line after it is off.
+#      yq also reports each key's line without the comment, blank and
+#      `---` lines before the first content line, so that many lines are
+#      added back. The line must then hold the key as a plain, quoted or
+#      alias key before its colon; any other line (an anchored, tagged or
+#      escaped key, or a shift of another cause) is a finding naming the
+#      key, since a block bounded from the wrong line can credit one
+#      job's marker to another.
 #
 #      Breadth is asserted the same way as assertion 6: the run reports
 #      how many jobs carry either host, and finding none on an
@@ -300,12 +326,13 @@ readonly NIX_EXEMPT_MARKER='egress-nix-exempt:'
 # `yq` as data, through `strenv`, and is compared by its base64 text:
 # spliced into the expression, a key holding a quote would be read as
 # `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
-# as wildcards, which base64 text never holds. Of keys written twice the
-# last is read, as `yq`'s own lookup reads it. `jobs:` is not handed to
-# `explode`: that would turn a key written as an alias into its anchor's
-# text, which the job list (printing the alias) never names, and would
-# expand every alias in `jobs:` on each lookup. The `.steps[]` reads after
-# the lookup follow aliases and merge keys inside the job.
+# as wildcards, which base64 text never holds. A key written twice is a
+# finding before any lookup, so the lookup never meets one. `jobs:` is
+# not handed to `explode`: that would turn a key written as an alias
+# into its anchor's text, which the job list (printing the alias) never
+# names, and would expand every alias in `jobs:` on each lookup. The
+# `.steps[]` reads after the lookup follow aliases and merge keys inside
+# the job.
 readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # Resolved against this script's own location rather than the scan root:
@@ -401,16 +428,31 @@ for f in "${selected_files[@]}"; do
     fail "${f}: could not evaluate workflow with yq (malformed?)"
     continue
   fi
-  [[ -n ${job_rows} ]] || continue
+  # A count, not the job list's text: an empty or null key prints as an
+  # empty line, which command substitution strips, so a file whose only
+  # job has such a key would read as no jobs at all. The count is held to
+  # ASCII digits before the arithmetic below reads it.
+  if ! job_count="$(yq eval '.jobs | keys | length' "${f}")"; then
+    fail "${f}: could not evaluate workflow with yq (malformed?)"
+    continue
+  fi
+  if [[ ! ${job_count} =~ ^[0123456789]{1,9}$ ]]; then
+    fail "${f}: the job count is not a number: ${job_count@Q}"
+    continue
+  fi
+  ((job_count > 0)) || continue
 
   # Assertion 7 prep: each job's own line range, for the marker raw-text
   # scan below. A `# egress-nix-exempt:` marker is a YAML comment, gone
   # once yq has parsed the document, so it can only be found by reading
-  # the file's own text — bounded to one job's lines, so a marker sitting
+  # the file's own text — bounded to one job's block, so a marker sitting
   # in a sibling job's block is never credited to this one. `line` (a yq
-  # builtin) reports a job key's own 1-indexed source line; a job's range
-  # runs from there to one line before the next job key's line, or to the
-  # end of the file for the last job in document order.
+  # builtin) reports a job key's own 1-indexed source line; a job's block
+  # runs from there to the last line before the first line that is not a
+  # comment and is indented no deeper than the key, or to the end of the
+  # file, without the trailing comments indented no deeper than the key.
+  # A comment written at the next key's indentation or shallower
+  # therefore belongs to that key, not to the job above it.
   #
   # The key is free text ahead of the line number in each row. A key
   # holding a tab or a line break splits into rows of its own choosing
@@ -419,11 +461,10 @@ for f in "${selected_files[@]}"; do
   # such a key is a finding naming it, read no further. The line field
   # is then held to ASCII digits before it is stored, since the range
   # arithmetic below would evaluate any other text (an array subscript
-  # in it runs a command). Every row's start ends the job before it,
-  # named or not: a key that prints as an empty name (empty or null)
-  # still opens a block, and skipping its row would stretch the previous
-  # job's range over a marker in that block. Such a job gets no range of
-  # its own, since an associative array cannot hold an empty key. The
+  # in it runs a command). A key that prints as an empty name (empty or
+  # null) is a finding and the file is read no further: the job list
+  # loop skips an empty name, so that job's allowlist would never be
+  # read, and an associative array cannot hold an empty key. The
   # ranges are computed from indexed arrays, so no key text sits inside
   # the arithmetic: bash 5.1 expands a command substitution held in an
   # associative subscript there.
@@ -443,6 +484,7 @@ for f in "${selected_files[@]}"; do
     continue
   fi
   bad_row=0
+  empty_key=0
   while IFS= read -r jline_row; do
     jline_name="${jline_row%%$'\t'*}"
     jline_num="${jline_row#*$'\t'}"
@@ -452,6 +494,12 @@ for f in "${selected_files[@]}"; do
     fi
     row_names+=("${jline_name}")
     row_starts+=("${jline_num}")
+    # An empty or null key prints as an empty name, which the job list
+    # loop below skips, so that job's allowlist would never be read.
+    if [[ -z ${jline_name} ]]; then
+      empty_key=1
+      break
+    fi
   done <<<"${job_line_rows}"
   # A flag, not a test of the row's text, which can be empty.
   if ((bad_row)); then
@@ -459,16 +507,85 @@ for f in "${selected_files[@]}"; do
     fail "${f}: a job line row is not a key and a line number: ${jline_row@Q}"
     continue
   fi
-  file_lines="$(wc -l <"${f}")"
+  if ((empty_key)); then
+    fail "${f}: a job key is empty or null, so that job's allowlist cannot be read"
+    continue
+  fi
+  # Keys that print as the same text (a literal `build:` twice, or `1`
+  # beside `"1"`) share one lookup and one range entry, so one job would
+  # shadow the other. Compared as text under LC_ALL=C: no key holds a
+  # tab or a line break at this point.
+  if ! dup_keys="$(printf '%s\n' "${row_names[@]}" | LC_ALL=C sort | LC_ALL=C uniq --repeated)"; then
+    fail "${f}: could not compare job keys (sort or uniq failed)"
+    continue
+  fi
+  if [[ -n ${dup_keys} ]]; then
+    fail "${f}: job key '${dup_keys%%$'\n'*}' is written more than once, so which job is read is ambiguous"
+    continue
+  fi
+  # yq counts a carriage return as a line break, this read splits on
+  # `\n` alone, so every job line after a lone CR is off, and a block
+  # would be bounded from the wrong line. A CR ending a CRLF line break
+  # is the last character of its line; any CR with a character after it
+  # is a lone one. grep exits 1 for no match and 2 for an error.
+  cr_status=0
+  LC_ALL=C grep --quiet --extended-regexp $'\r.' "${f}" || cr_status=$?
+  if ((cr_status > 1)); then
+    fail "${f}: could not search the file for carriage returns"
+    continue
+  fi
+  if ((cr_status == 0)); then
+    fail "${f}: the file holds a carriage return that is not part of a CRLF line break, which yq counts as a line break and a line-by-line read does not"
+    continue
+  fi
+  mapfile -t file_text <"${f}"
+  file_lines="${#file_text[@]}"
+  # yq reports a line without the comment, blank and `---` lines before
+  # the first content line, so every job key is that many lines early.
+  lead_lines=0
+  while ((lead_lines < file_lines)) &&
+    [[ ${file_text[lead_lines]} =~ ^[[:space:]]*(#.*|---([[:space:]].*)?)?$ ]]; do
+    lead_lines=$((lead_lines + 1))
+  done
   for jidx in "${!row_names[@]}"; do
     jline_name="${row_names[jidx]}"
-    [[ -n ${jline_name} ]] || continue
-    JOB_START["${jline_name}"]="${row_starts[jidx]}"
-    if ((jidx + 1 < ${#row_starts[@]})); then
-      JOB_END["${jline_name}"]=$((row_starts[jidx + 1] - 1))
-    else
-      JOB_END["${jline_name}"]="${file_lines}"
+    jstart=$((row_starts[jidx] + lead_lines))
+    # The line must hold the key, as a plain, quoted or alias key before
+    # its colon: a line number that lands elsewhere would bound the block
+    # from the wrong place.
+    key_line="${file_text[jstart - 1]-}"
+    key_line="${key_line#"${key_line%%[![:space:]]*}"}"
+    key_found=0
+    for key_quote in '' '"' "'" '*'; do
+      if [[ ${key_line} == "${key_quote}${jline_name}"* ]]; then
+        key_rest="${key_line#"${key_quote}${jline_name}"}"
+        [[ ${key_rest} =~ ^[\"\']?[[:space:]]*: ]] && key_found=1
+      fi
+    done
+    if ((! key_found)); then
+      fail "${f}: job key '${jline_name}' is not on line ${jstart}, where yq reports it, so its line number cannot be trusted to bound its block"
+      continue 2
     fi
+    # The key's own indentation, from its source line. A later line that
+    # is not a comment, indented no deeper than that, ends the block. A
+    # comment indented no deeper does not end it: it sits in the block
+    # only when deeper job content follows it, so the run of comments
+    # just above the next key belongs to that key.
+    key_lead="${file_text[jstart - 1]%%[![:space:]]*}"
+    jend="${jstart}"
+    for ((jl = jstart + 1; jl <= file_lines; jl++)); do
+      block_text="${file_text[jl - 1]}"
+      if [[ ${block_text} == *[![:space:]]* ]]; then
+        block_lead="${block_text%%[![:space:]]*}"
+        if ((${#block_lead} <= ${#key_lead})); then
+          [[ ${block_text:${#block_lead}:1} == '#' ]] || break
+          continue
+        fi
+      fi
+      jend="${jl}"
+    done
+    JOB_START["${jline_name}"]="${jstart}"
+    JOB_END["${jline_name}"]="${jend}"
   done
 
   while IFS= read -r job; do

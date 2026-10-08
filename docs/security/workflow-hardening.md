@@ -758,7 +758,17 @@ An empty-reason marker is rejected when the job reaches no nix tooling, which is
 
 Detection deliberately does not follow callees: a job reaching nix indirectly through a `scripts/*.sh` invocation or a `just` recipe is invisible to both the `uses:` and `run:` arms and needs the marker instead. The reason a reviewer reads is what carries the justification in that case, not an approximate call-graph resolver — the same blind-spot tradeoff the [sigstore host-set rule](trust-model.md#egress-allowlist-matches-tool-inventory) (assertion 4 there) makes for cosign reached through a script.
 
-The marker is a YAML comment, gone once yq has parsed the document, so it is found by a raw-text scan bounded to the job's own line range — from its key's source line (read via yq's `line` builtin) to one line before the next job's key line, or to the end of the file for the last job in the document — rather than by any yq query.
+The marker is a YAML comment, gone once yq has parsed the document, so it is found by a raw-text scan bounded to the job's own block — from its key's source line (read via yq's `line` builtin) to the last line before the first line that is not a comment and is indented no deeper than the key, or to the end of the file, without the trailing comments indented no deeper than the key — rather than by any yq query. A marker comment written at key indentation or shallower, such as just above the next job's key, sits outside the block and exempts nothing in the job above it. A marker indented deeper than the key belongs to the job above it wherever it sits, and one after a shallower comment still inside the job is found.
+
+The scan reads text, not YAML comments, so a line of that shape inside a `run: |` script body also counts as a marker. That is a known limit.
+
+A job key that is empty or null is a finding, and that file is read no further: the job list prints such a key as an empty name and the main loop skips empty names, so that job's allowlist would never be read.
+
+Two job keys that print as the same text (a literal `build:` twice, or `1` beside `"1"`) are a finding too, naming the key and ending the read of that file: they share one lookup and one line range, so one job would shadow the other.
+
+A file holding a carriage return that does not end a CRLF line break is a finding too: yq counts it as a line break and the newline-separated read does not, so every job line after it is off and a block would be bounded from the wrong line.
+
+yq also reports each key's line without the comment, blank and `---` lines before the first content line, so that many lines are added back. The line must then hold the key as a plain, quoted or alias key before its colon. Any other line, as with an anchored, tagged or escaped key or a shift of another cause, is a finding naming the key, since a block bounded from the wrong line can credit one job's marker to another.
 
 Breadth is asserted the same way the notify-composite rule asserts it: the run reports how many jobs carry either host, and finding none on an unfiltered scan is a could-not-run, not a clean tree. `WORKFLOW_FILE_FILTER` and `LINT_ALLOW_EMPTY_SCAN=1` suppress that guard the same way they do for the notify rule.
 
