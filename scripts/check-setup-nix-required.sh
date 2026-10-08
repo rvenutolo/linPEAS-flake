@@ -15,6 +15,9 @@
 # HTTP 401 under runner-IP-pool contention. See
 # docs/security/workflow-hardening.md.
 #
+# A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
+# counted finding, and the file's jobs are not read.
+#
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
 # Exits 0 on full coverage, 1 on any drift, 2 on missing yq.
 
@@ -24,6 +27,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -64,9 +69,30 @@ filter_into selected_files 'workflow YAML' "${FILE_FILTER}" "${workflow_files[@]
 for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
 
+  # A refused job key is a finding, and the rows below name a job by its
+  # key, which such a key would split or hide. The read prints one line
+  # per document.
+  if ! odd_keys="$(first_odd_job_key "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  odd_key=''
+  while IFS= read -r line; do
+    if [[ -n ${line} ]]; then
+      odd_key="${line}"
+      break
+    fi
+  done <<<"${odd_keys}"
+  if [[ -n ${odd_key} ]]; then
+    odd_job_key_message "${f}" "${odd_key}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+
   # 1) Any direct Nix-installer action use is forbidden.
   # shellcheck disable=SC2016  # single quotes intentional: yq expression, no bash expansion wanted
-  if ! uses_rows="$(yq -r '
+  if ! uses_rows="$(yq -r "${YQ_MERGE_SPEC[@]}" '
     .jobs // {} | to_entries[] |
     .key as $job |
     (.value.steps // []) [] |
@@ -89,7 +115,7 @@ for f in "${selected_files[@]}"; do
 
   # 2) Every ./.github/actions/setup-nix caller must pass the exact token.
   # shellcheck disable=SC2016  # single quotes intentional: yq expression, no bash expansion wanted
-  if ! token_rows="$(yq -r '
+  if ! token_rows="$(yq -r "${YQ_MERGE_SPEC[@]}" '
     .jobs // {} | to_entries[] |
     .key as $job |
     (.value.steps // []) [] |

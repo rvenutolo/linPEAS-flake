@@ -19,8 +19,10 @@
 # exactly `error`; any other value or shape fails, and so does a
 # `with:` that is not a map. A job, its steps, a step, its `with:` and
 # the value written as aliases are read through them; `jobs:` too. A
-# job id that is not a scalar, is empty, or holds a tab, a line break
-# or a NUL is a finding, and that workflow's jobs are not read. The
+# job id that is not a scalar, is empty, holds a tab, a line break or a
+# NUL, or is a merge key (`<<`) is a finding, and that workflow's jobs
+# are not read. A merge list inside a job is read first mapping wins, as
+# the YAML merge specification says (`YQ_MERGE_SPEC`). The
 # value is compared whole, as JSON text, so one holding a line break
 # cannot end its row early.
 #
@@ -39,6 +41,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -49,10 +53,6 @@ if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
   exit 2
 fi
-
-# The `jobs:` node, read through an alias: `explode` handed only that
-# node resolves it in one pass, since an anchor cannot sit on an alias.
-readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0]'
 
 # @description Print a JSON string's text when it holds no escape or
 # quote, else the JSON string itself, so a plain value reads as written
@@ -77,13 +77,14 @@ for f in "${selected_files[@]}"; do
 
   # The steps are read below as tab-separated rows, and the job id is
   # the one field written as raw text, so an id that is not a scalar, is
-  # empty, or holds a tab, a line break or a NUL could forge, split or
-  # garble a row. GitHub Actions refuses such an id, so it is a finding
+  # empty, holds a tab, a line break or a NUL, or is a merge key could
+  # forge, split or garble a row, or hide the jobs it brings in. GitHub
+  # Actions refuses such an id, so it is a finding
   # and the workflow's jobs are not read. Each key is resolved through an
   # alias first, then tested as the text it renders to, whatever its
   # tag. The read prints, per document, the first such id's kind, and
   # its text as JSON (`-` for none).
-  if ! odd_ids="$(yq eval "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", id=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
+  if ! odd_ids="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | select(kind == "map") | keys[] | explode(.) | select(tag == "!!merge" or kind != "scalar" or (tostring | test("^$|[\t\n\x00]"))) | "kind=" + kind + ", id=" + (tostring | to_json(0))] | .[0] // "-"' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
@@ -96,7 +97,7 @@ for f in "${selected_files[@]}"; do
     fi
   done <<<"${odd_ids}"
   if [[ -n ${odd_id} ]]; then
-    printf '%s: jobs: holds a job id that is not a scalar, is empty, or holds a tab, a line break or a NUL, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
+    printf '%s: jobs: holds a job id that is not a scalar, is empty, holds a tab, a line break or a NUL, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
       "${f}" "${odd_id}" >&2
     failed=$((failed + 1))
     continue
@@ -126,7 +127,7 @@ for f in "${selected_files[@]}"; do
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
   # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
-  if ! rows="$(yq eval --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) as $k
+  if ! rows="$(yq eval --no-doc "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) as $k
     | .value | explode(.) | explode(.) | [.steps] | .[] | select(kind == "seq") | to_entries[]
     | select(.value | explode(.) | explode(.) | explode(.) | (.uses // "") | test("^actions/upload-artifact@"))
     | (.key | tostring) + "\t" + $k + "\t" + (.value | explode(.) | explode(.) | explode(.) |

@@ -1103,6 +1103,13 @@ through the success branch is pinned by hash, and a gated step is
 refused, so a change there stops this lint rather than silently changing
 what an arm means.
 
+A workflow whose `jobs:` holds a key GitHub Actions refuses (an empty
+one, one holding a line break or a tab, a non-scalar one, or a merge
+key) is a finding and its jobs are not read: the key would be listed as
+other names or as none, hiding a notify job. Every `yq` read of a
+workflow passes YQ_MERGE_SPEC, so a merge list (`<<: [*a, *b]`) inside a
+job is read first mapping wins, as the YAML merge specification says.
+
 Exit codes: 0 every marker matches its job's derived arms and every
 scanner notify job carries its markers, 1 a marker disagrees with the
 derived arms, names a job that is not a notify job, is malformed, sits on
@@ -1384,12 +1391,19 @@ kept: they are what the lint reads. A name in bold or italic with no code
 span is not read, and neither is a code span wrapped in its own emphasis
 markers, which stand between the span and the noun.
 
+A `jobs:` key GitHub Actions refuses (empty, holding a line break or a
+tab, not a scalar, or a merge key) is a finding naming the workflow and
+the key. Such a key is never a job name: a line-break key does not
+resolve as the two names it spells, and the jobs a merge key brings in
+resolve as the jobs they are.
+
 Exit codes:
 
 ```text
   0  every name claimed in prose resolves to something the sentence's own
       claim noun admits
-  1  ghost or mislabel name(s) found (details printed to stderr)
+  1  ghost or mislabel name(s) found, or a workflow with a job key
+      GitHub Actions refuses (details printed to stderr)
   2  the check could not run: a required tool is missing, a temp file
       cannot be created, a missing or empty name source, a producer that
       lists or reads the scanned files failed, an empty scan set, or a

@@ -79,6 +79,13 @@
 # refused, so a change there stops this lint rather than silently changing
 # what an arm means.
 #
+# A workflow whose `jobs:` holds a key GitHub Actions refuses (an empty
+# one, one holding a line break or a tab, a non-scalar one, or a merge
+# key) is a finding and its jobs are not read: the key would be listed as
+# other names or as none, hiding a notify job. Every `yq` read of a
+# workflow passes YQ_MERGE_SPEC, so a merge list (`<<: [*a, *b]`) inside a
+# job is read first mapping wins, as the YAML merge specification says.
+#
 # Exit codes: 0 every marker matches its job's derived arms and every
 # scanner notify job carries its markers, 1 a marker disagrees with the
 # derived arms, names a job that is not a notify job, is malformed, sits on
@@ -108,6 +115,8 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 require_tool git
 require_tool yq
@@ -179,7 +188,7 @@ function check_composite() {
 # @stdout tab-separated records
 function notify_jobs() {
   # shellcheck disable=SC2016 # $job, $j and $n are yq variables
-  yq -r '
+  yq -r "${YQ_MERGE_SPEC[@]}" '
     .jobs // {} | to_entries | .[] | .key as $job | .value as $j
     | ($j.needs | explode(.) | explode(.) | [.] | flatten) as $n
     | ($j.steps // [])[]
@@ -203,7 +212,7 @@ function steps_before_notify() {
   # notify step while yq is still writing the steps after it gets yq
   # killed by SIGPIPE, which pipefail turns into a failed read.
   local uses step
-  uses="$(JOB="$2" yq -r '
+  uses="$(JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" '
     .jobs[strenv(JOB)].steps // [] | .[] | (.uses // "-") | tostring
   ' "$1")" || return
   while IFS= read -r step; do
@@ -234,7 +243,7 @@ readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == 
 # @arg $1 workflow path
 # @exitcode yq's status when it fails
 function on_shape() {
-  yq -r "${ON_NODE}"' | kind + " " + tag' "$1"
+  yq -r "${YQ_MERGE_SPEC[@]}" "${ON_NODE}"' | kind + " " + tag' "$1"
 }
 
 # @description Print the events a workflow runs on, one per line: its
@@ -245,9 +254,9 @@ function on_shape() {
 # @exitcode yq's status when it fails
 function workflow_events() {
   case "$2" in
-  'scalar !!str') yq -r "${ON_NODE}" "$1" ;;
-  'seq '*) yq -r "${ON_NODE}"' | .[]' "$1" ;;
-  'map '*) yq -r "${ON_NODE}"' | keys | .[]' "$1" ;;
+  'scalar !!str') yq -r "${YQ_MERGE_SPEC[@]}" "${ON_NODE}" "$1" ;;
+  'seq '*) yq -r "${YQ_MERGE_SPEC[@]}" "${ON_NODE}"' | .[]' "$1" ;;
+  'map '*) yq -r "${YQ_MERGE_SPEC[@]}" "${ON_NODE}"' | keys | .[]' "$1" ;;
   esac
 }
 
@@ -255,7 +264,7 @@ function workflow_events() {
 # @arg $1 workflow path
 # @arg $2 job id
 function notify_body() {
-  JOB="$2" yq -r '
+  JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" '
     .jobs[strenv(JOB)].steps[]
     | select((.uses // "") | test("^\\./\\.github/actions/notify-workflow-result$"))
     | .with.body // ""
@@ -268,7 +277,7 @@ function notify_body() {
 # @arg $2 job id
 # @stdout true or false
 function declares_has_finding() {
-  JOB="$2" yq -r '.jobs[strenv(JOB)].outputs // {} | keys | map(downcase) | any_c(. == "has-finding")' "$1"
+  JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" '.jobs[strenv(JOB)].outputs // {} | keys | map(downcase) | any_c(. == "has-finding")' "$1"
 }
 
 # The gate evaluator. It tokenizes the `if:` expression once, then
@@ -687,10 +696,28 @@ function main() {
 
   # Every notify job, keyed "<workflow file>/<job>", with its raw fields.
   local -A job_fields=() job_block=() derived=() required=()
+  local -i found=0
   local wf base rec uses job needs gate result_in step_if key step
   local -r field=$'[^\t]+'
   for wf in "${workflows[@]}"; do
     base="${wf##*/}"
+    # A job key the job list cannot carry would be read as other names or
+    # as none, hiding a notify job, so it is a finding and the file's jobs
+    # are not read.
+    local odd_keys odd_key=''
+    odd_keys="$(first_odd_job_key "${wf}")" ||
+      die2 "cannot read the notify jobs of ${WORKFLOWS_REL}/${base}: yq exited $?"
+    while IFS= read -r rec; do
+      if [[ -n ${rec} ]]; then
+        odd_key="${rec}"
+        break
+      fi
+    done <<<"${odd_keys}"
+    if [[ -n ${odd_key} ]]; then
+      odd_job_key_message "${WORKFLOWS_REL}/${base}" "${odd_key}" >&2
+      found=1
+      continue
+    fi
     local listing
     listing="$(notify_jobs "${wf}")" ||
       die2 "cannot read the notify jobs of ${WORKFLOWS_REL}/${base}: yq exited $?"
@@ -780,7 +807,7 @@ function main() {
     ARMS="${derived["${key}"]}"
   }
 
-  local -i found=0 body_markers=0 doc_markers=0 unterminated=0
+  local -i body_markers=0 doc_markers=0 unterminated=0
   local -A body_seen=() doc_seen=()
   local tag line mwf mjob mtoks cw key want tally rc_out tmp ARMS=''
   tmp="$(make_temp)" || die2 'cannot create a temporary file'

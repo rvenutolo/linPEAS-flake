@@ -60,6 +60,12 @@
 # a workflow whose job keys `yq` could not read for the reverse check.
 # Nothing was cross-checked in that case, so it must not borrow the
 # drift code.
+#
+# A `jobs:` key that GitHub Actions refuses (empty, holding a line break
+# or a tab, not a scalar, or a merge key) in ci.yml or in any other
+# workflow is a drift entry naming the file and the key: the job lists
+# are read a name per line, so such a key would read as other names or
+# as none, and a merge key brings in jobs that are never listed.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -69,6 +75,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_CI=".github/workflows/ci.yml"
 readonly DEFAULT_CATEGORIES="docs/_data/ci-check-categories.yml"
@@ -147,13 +155,25 @@ trap 'rm --force -- "${ci_jobs_file}" "${cat_keys_file}"' EXIT
 # parse is a run that read no job list, not a run that read one and found
 # a job missing from the summary. Left bare, yq's own 1 reaches the caller
 # as that second reading.
-if ! yq eval '.jobs | keys | .[]' "${CI_FILE}" | sort --unique >"${ci_jobs_file}"; then
+if ! yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[]' "${CI_FILE}" | sort --unique >"${ci_jobs_file}"; then
   printf 'cannot read job keys from %s\n' "${CI_FILE}" >&2
   exit 2
 fi
 if ! yq eval 'keys | .[]' "${CATEGORIES_FILE}" | sort --unique >"${cat_keys_file}"; then
   printf 'cannot read category keys from %s\n' "${CATEGORIES_FILE}" >&2
   exit 2
+fi
+
+# Refused job keys are collected here, one finding line each, and
+# printed with the other drift below so that a run that could not read
+# an input prints no finding.
+declare -a odd_key_findings=()
+if ! ci_odd_key="$(first_odd_job_key "${CI_FILE}")"; then
+  printf 'cannot read job keys from %s\n' "${CI_FILE}" >&2
+  exit 2
+fi
+if [[ -n ${ci_odd_key} ]]; then
+  odd_key_findings+=("$(odd_job_key_message "${CI_FILE}" "${ci_odd_key}")")
 fi
 
 # The job set the reverse check below holds every category entry against:
@@ -178,11 +198,20 @@ for f in "${workflow_files[@]}"; do
   [[ -f ${f} ]] || continue
   # The cost of `explode` is a stated limit: docs/development/linting.md,
   # section "YAML aliases in workflow reads".
-  workflow_jobs="$(yq eval '(.jobs // {}) | explode(.) | keys | .[]' "${f}")" || {
+  workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | keys | .[]' "${f}")" || {
     printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
     exit 2
   }
   all_jobs+="${workflow_jobs}"$'\n'
+  # ci.yml is in this directory too and has been checked above.
+  [[ ${f} -ef ${CI_FILE} ]] && continue
+  workflow_odd_key="$(first_odd_job_key "${f}")" || {
+    printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
+    exit 2
+  }
+  if [[ -n ${workflow_odd_key} ]]; then
+    odd_key_findings+=("$(odd_job_key_message "${f}" "${workflow_odd_key}")")
+  fi
 done
 sort --unique >"${all_jobs_file}" <<<"${all_jobs}"
 shopt -u nullglob
@@ -284,6 +313,11 @@ fi
 basenames_rows="$(yq eval '.[] | .[]' "${LINT_GROUPS_FILE}")" || die_manifest_unread
 
 failed=0
+
+for finding in ${odd_key_findings[@]+"${odd_key_findings[@]}"}; do
+  printf '%s\n' "${finding}" >&2
+  failed=$((failed + 1))
+done
 
 # Forward: ci.yml job not in categories AND not exempt = fail.
 while IFS= read -r job; do
