@@ -457,6 +457,26 @@ expect_exact 'ci.yml merge list holding a scalar is the only finding' \
 expect_exact 'ci.yml multi-document scalar merge keeps the first document jobs' \
   $'jobs:\n  ma:\n    runs-on: ubuntu-latest\n---\ns: &s 5\njobs:\n  <<: *s\n  mz:\n    runs-on: ubuntu-latest\n' $'ma: A\nmz: B\n' \
   "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"${ONE_ENTRY}"
+# A document with no job map after the refused one adds no names and does
+# not fail the read of the others.
+expect_exact 'ci.yml scalar merge key keeps its jobs beside a later non-map jobs' \
+  $'s: &s 5\njobs:\n  <<: *s\n  zn:\n    runs-on: ubuntu-latest\n---\njobs: 5\n' $'zn: A\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"${ONE_ENTRY}"
+# A key YAML types as an int is listed as its text.
+expect_exact 'ci.yml scalar merge key keeps its jobs beside an int key' \
+  $'s: &s 5\njobs:\n  <<: *s\n  1:\n    runs-on: ubuntu-latest\n  zi:\n    runs-on: ubuntu-latest\n' $'zi: A\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"${ONE_ENTRY}"
+# The merge key, a key that is not a scalar and the separator between
+# documents are not job names, so a category entry spelling one still
+# matches no job.
+expect_exact 'ci.yml scalar merge key lists only real job names' \
+  $'jobs:\n  ma:\n    runs-on: ubuntu-latest\n---\ns: &s 5\njobs:\n  <<: *s\n  ? []\n  : {runs-on: ubuntu-latest}\n  zq:\n    runs-on: ubuntu-latest\n' $'zq: A\nma: B\n\'<<\': C\n\'[]\': D\n\'---\': E\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"DIR/categories.yml: category entry --- does not match any job in .github/workflows/"$'\n'"DIR/categories.yml: category entry \\<\\< does not match any job in .github/workflows/"$'\n'"DIR/categories.yml: category entry \\[\\] does not match any job in .github/workflows/"$'\n''4 ci.yml / categories drift entry/entries'
+# The literal keys are listed one a line too: a key holding a line break
+# is not two names there either.
+expect_exact 'ci.yml scalar merge key lists a line-break key as no name' \
+  $'s: &s 5\njobs:\n  <<: *s\n  zk:\n    runs-on: ubuntu-latest\n  "ak\\nbk":\n    runs-on: ubuntu-latest\n' $'zk: A\nak: B\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"DIR/categories.yml: category entry ak does not match any job in .github/workflows/"$'\n''2 ci.yml / categories drift entry/entries'
 # A refused file's other names are listed one key a line: a key holding a
 # line break is not two names, so a category entry spelling half of it
 # still matches no job.

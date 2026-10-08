@@ -427,6 +427,38 @@ function main() {
     failures=$((failures + 1))
   fi
   rm --force -- "${odd_root}/solo/lit-multidoc.yml"
+  # A later document with no job map, or a job key YAML types as an int,
+  # does not fail the literal read of the refused file's other jobs.
+  printf 'The %szn%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 's: &s 5\njobs:\n  <<: *s\n  zn:\n    runs-on: ubuntu-latest\n---\njobs: 5\n' >"${odd_root}/solo/lit-nonmap-doc.yml"
+  run_scenario 'job-key-scalar-merge-key-beside-non-map-document-keeps-literal-jobs' 1 \
+    "${odd_root}/solo/lit-nonmap-doc.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: zn' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the literal job zn is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${odd_root}/solo/lit-nonmap-doc.yml"
+  printf 'The %szi%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 's: &s 5\njobs:\n  <<: *s\n  1:\n    runs-on: ubuntu-latest\n  zi:\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/lit-int-key.yml"
+  run_scenario 'job-key-scalar-merge-key-beside-int-key-keeps-literal-jobs' 1 \
+    "${odd_root}/solo/lit-int-key.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'ghost: zi' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the literal job zi is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${odd_root}/solo/lit-int-key.yml"
+  # The literal keys are listed one a line: a key holding a line break is
+  # not two names, so a sentence naming half of it is still a ghost.
+  printf 'The %sqx%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 's: &s 5\njobs:\n  <<: *s\n  "qx\\nrx":\n    runs-on: ubuntu-latest\n' >"${odd_root}/solo/lit-line-break.yml"
+  run_scenario 'job-key-scalar-merge-key-line-break-key-is-no-literal-name' 1 \
+    "${odd_root}/solo/lit-line-break.yml: ${odd_refused} (first: \"<<\")" '' \
+    "${odd_root}/solo" "${odd_root}"
+  also_expect 'docs/x.md:1: ghost: qx'
+  rm --force -- "${odd_root}/solo/lit-line-break.yml"
+  printf 'The %sma%s job runs.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
   # Every workflow refused still reports the refusal, not an empty name set.
   printf 'on: push\njobs:\n  ? [a, b]\n  : {runs-on: x}\n' >"${odd_root}/solo/only-seq-key.yml"
   run_scenario 'job-key-sole-workflow-all-refused-is-refused' 1 \
