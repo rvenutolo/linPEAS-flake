@@ -1808,7 +1808,7 @@ docs/\_data/ci-check-categories.yml map.
 
 **Options:**
 
-- `--check` — exit 1 if the doc would change; exit 2 if an input file is missing, if ci.yml has needs: references to non-existent jobs, if the category map is neither one map nor empty, or if a tool fails to read them
+- `--check` — exit 1 if the doc would change; exit 2 if an input file is missing, if ci.yml has needs: references to non-existent jobs, if ci.yml holds a job key the job list cannot carry (see scripts/lib/job-keys.sh), if the category map is neither one map nor empty, or if a tool fails to read them
 
 ### scripts/refresh-ci-summary.sh
 
