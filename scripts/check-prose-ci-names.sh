@@ -111,9 +111,12 @@ readonly HARNESS_RUNNER="${REPO_ROOT}/scripts/run-harness-group.sh"
 #              listed; a key holding a line break, a tab or nothing is not
 #              listed, since a line cannot carry it, and nor is a key that
 #              is not a scalar. A scalar key YAML types as an int, a bool or
-#              null is listed as its text.
+#              null is listed as its text. A file whose jobs carry a
+#              refused key reports its finding through odd_job_key_findings
+#              and lists what it can resolve: a merge key that is not a
+#              mapping cannot be resolved, so that file lists nothing.
 function job_names() {
-  local f
+  local f odd
   local -a workflow_files=()
   glob_into workflow_files 'workflow YAML' \
     "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
@@ -121,9 +124,16 @@ function job_names() {
   # same way a file does.
   for f in "${workflow_files[@]}"; do
     [[ -f ${f} ]] || continue
+    odd="$(first_odd_job_key "${f}")" || return 1
     # A workflow with no `jobs:` block is a real shape (a reusable
     # fragment), so an empty key list is not a failure; an unparsable file
     # is, and yq exits non-zero for it.
+    if [[ -n ${odd} ]]; then
+      # The refusal is already a finding; a read that fails here is the
+      # refused file's own shape, not a missing precondition.
+      yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null || true
+      continue
+    fi
     yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" || return 1
   done
 }
@@ -266,7 +276,9 @@ function main() {
   # A name source that resolves to nothing cannot be distinguished from a
   # tree where every claim happens to be clean, so an empty one is a
   # precondition failure rather than a pass.
-  [[ -n ${jobs_out} ]] || {
+  # A tree whose every workflow is refused lists no job by design, and its
+  # findings are the verdict.
+  [[ -n ${jobs_out} || -n ${odd_out} ]] || {
     printf 'prose-ci-names: no workflow job names under %s\n' "${WORKFLOWS_DIR}" >&2
     exit 2
   }

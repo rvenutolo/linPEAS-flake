@@ -157,10 +157,6 @@ trap 'rm --force -- "${ci_jobs_file}" "${cat_keys_file}"' EXIT
 # parse is a run that read no job list, not a run that read one and found
 # a job missing from the summary. Left bare, yq's own 1 reaches the caller
 # as that second reading.
-if ! yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[]' "${CI_FILE}" | sort --unique >"${ci_jobs_file}"; then
-  printf 'cannot read job keys from %s\n' "${CI_FILE}" >&2
-  exit 2
-fi
 if ! yq eval 'keys | .[]' "${CATEGORIES_FILE}" | sort --unique >"${cat_keys_file}"; then
   printf 'cannot read category keys from %s\n' "${CATEGORIES_FILE}" >&2
   exit 2
@@ -178,11 +174,20 @@ fi
 if [[ -n ${ci_odd_key} ]]; then
   odd_key_findings+=("$(odd_job_key_message "${CI_FILE}" "${ci_odd_key}")")
   # The refusal is the file's one finding: its job list is not read, so
-  # the forward and EXEMPT checks, which hold that list against the map,
-  # would only repeat the refusal as the names the key spells. The reverse
-  # check reads every workflow's resolved jobs and stays meaningful.
-  : >"${ci_jobs_file}"
+  # the forward check and the EXEMPT entries' membership test, which hold
+  # that list against the map, would only repeat the refusal as the names
+  # the key spells. The reverse check reads every workflow's resolved jobs
+  # and stays meaningful, as does the EXEMPT test against the category map.
   ci_jobs_unread=1
+fi
+# A refused file's job list is not read: a merge key holding something that
+# is not a mapping cannot be resolved, and the keys of a file that has
+# another would only repeat the refusal.
+if ((! ci_jobs_unread)); then
+  if ! yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[]' "${CI_FILE}" | sort --unique >"${ci_jobs_file}"; then
+    printf 'cannot read job keys from %s\n' "${CI_FILE}" >&2
+    exit 2
+  fi
 fi
 
 # The job set the reverse check below holds every category entry against:
@@ -205,22 +210,31 @@ glob_into workflow_files 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_D
 all_jobs=''
 for f in "${workflow_files[@]}"; do
   [[ -f ${f} ]] || continue
-  # The cost of `explode` is a stated limit: docs/development/linting.md,
-  # section "YAML aliases in workflow reads".
-  workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | keys | .[]' "${f}")" || {
-    printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
-    exit 2
-  }
-  all_jobs+="${workflow_jobs}"$'\n'
-  # ci.yml is in this directory too and has been checked above.
-  [[ ${f} -ef ${CI_FILE} ]] && continue
-  workflow_odd_key="$(first_odd_job_key "${f}")" || {
-    printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
-    exit 2
-  }
-  if [[ -n ${workflow_odd_key} ]]; then
-    odd_key_findings+=("$(odd_job_key_message "${f}" "${workflow_odd_key}")")
+  if [[ ${f} -ef ${CI_FILE} ]]; then
+    # ci.yml's refusal was found above.
+    workflow_odd_key="${ci_odd_key}"
+  else
+    workflow_odd_key="$(first_odd_job_key "${f}")" || {
+      printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
+      exit 2
+    }
+    if [[ -n ${workflow_odd_key} ]]; then
+      odd_key_findings+=("$(odd_job_key_message "${f}" "${workflow_odd_key}")")
+    fi
   fi
+  if [[ -n ${workflow_odd_key} ]]; then
+    # The refusal is the finding; a read that fails is the refused file's
+    # own shape (a merge key that is not a mapping), so it lists no job.
+    workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | keys | .[]' "${f}" 2>/dev/null)" || workflow_jobs=''
+  else
+    # The cost of `explode` is a stated limit: docs/development/linting.md,
+    # section "YAML aliases in workflow reads".
+    workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | keys | .[]' "${f}")" || {
+      printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
+      exit 2
+    }
+  fi
+  all_jobs+="${workflow_jobs}"$'\n'
 done
 sort --unique >"${all_jobs_file}" <<<"${all_jobs}"
 shopt -u nullglob
@@ -346,8 +360,7 @@ done <"${ci_jobs_file}"
 # valid while covering no job, so the lint would stay green with an
 # exemption that exempts nothing.
 for e in ${EXEMPT[@]+"${EXEMPT[@]}"}; do
-  ((ci_jobs_unread)) && break
-  if ! grep --quiet --fixed-strings --line-regexp -- "${e}" "${ci_jobs_file}"; then
+  if ((! ci_jobs_unread)) && ! grep --quiet --fixed-strings --line-regexp -- "${e}" "${ci_jobs_file}"; then
     printf 'EXEMPT entry %q is not a job in %s\n' "${e}" "${CI_FILE}" >&2
     failed=$((failed + 1))
     continue
