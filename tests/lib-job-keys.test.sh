@@ -51,9 +51,17 @@ expect_out block-sequence $'jobs:\n  ? - a\n    - b\n  : {y: 1}\n' "${ODD}" '"- 
 expect_out merge-key $'x: &b\n  j: {a: 1}\njobs:\n  <<: *b\n' "${ODD}" '"<<"'
 expect_out aliased-jobs $'x: &b\n  "a\\nb": {a: 1}\njobs: *b\n' "${ODD}" '"a\nb"'
 expect_out first-of-several $'jobs:\n  "": {x: 1}\n  "a\\nb": {x: 1}\n' "${ODD}" '""'
+expect_out flow-sequence-key $'jobs:\n  ? [a, b]\n  : {y: 1}\n' "${ODD}" '"[a, b]"'
+expect_out flow-map-key $'jobs:\n  ? {a: 1}\n  : {y: 1}\n' "${ODD}" '"{a: 1}"'
+expect_out nul $'jobs:\n  "a\\0b": {x: 1}\n' "${ODD}" '"a\u0000b"'
+expect_out aliased-key $'x: &k "a\\nb"\njobs:\n  *k : {x: 1}\n' "${ODD}" '"a\nb"'
+expect_out jobs-scalar $'jobs: hello\n' "${ODD}" ''
 expect_out carriable $'jobs:\n  ok: {a: 1}\n  other-job_2: {a: 1}\n' "${ODD}" ''
 expect_out jobs-not-a-map $'jobs: [1, 2]\n' "${ODD}" ''
 expect_out no-jobs $'on: push\n' "${ODD}" ''
+# `jobs:` read through an alias is expanded once, and a merge list inside it
+# must not make `yq` warn.
+expect_out aliased-jobs-merge-list $'p: &P\n  permissions: {contents: write}\nq: &Q\n  permissions: {contents: read}\nx: &b\n  a:\n    <<: [*P, *Q]\njobs: *b\n' "${ODD}" ''
 
 # A merge list is read first mapping wins, silently.
 readonly PQ=$'p: &P\n  permissions: {contents: write}\nq: &Q\n  permissions: {contents: read}\n'

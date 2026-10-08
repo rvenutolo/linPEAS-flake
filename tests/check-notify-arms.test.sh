@@ -1182,6 +1182,177 @@ jobs:
     esac
   done
 
+  # Every other `yq` read of a workflow takes the merge order too. Each
+  # scenario merges two mappings that disagree in the field the read
+  # returns, the first one being what the lint must use, so reading the
+  # last one changes the verdict (a pass becomes a finding or a failed
+  # read). `yq` also warns on stderr when it explodes a merge without the
+  # flag, which the `on:` scenarios check for.
+  local spares
+  # merge-list-outputs: the job's `outputs` comes from the first mapping.
+  fresh_root
+  for spares in 1 2 3; do odd_workflow "spare-m${spares}.yml" 'jobs: {}'; done
+  cat >"${ROOT}/.github/workflows/mergeout.yml" <<'EOF'
+name: mergeout
+on: push
+x-p: &p
+  outputs:
+    has-finding: ${{ steps.c.outputs.has-finding }}
+x-q: &q
+  outputs:
+    other: ${{ steps.c.outputs.other }}
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    <<: [*p, *q]
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    if: always() && needs.a.result == 'failure' && needs.a.outputs.has-finding == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.a.result }}
+          label: mergeout
+          title: mergeout
+          body: mergeout
+EOF
+  printf 'A failed run <!-- notify-arms: mergeout.yml/j = finding -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario merge-list-outputs-first-mapping-passes 0 '' 'scanned 10 workflow(s)'
+
+  # merge-list-steps: the step before the notify step is the first mapping.
+  fresh_root
+  for spares in 1 2 3 4; do odd_workflow "spare-m${spares}.yml" 'jobs: {}'; done
+  cat >"${ROOT}/.github/workflows/mergesteps.yml" <<'EOF'
+name: mergesteps
+on: push
+x-ok: &ok
+  uses: actions/checkout@v4
+x-bad: &bad
+  uses: unmodelled/action@v1
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    if: always() && needs.a.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - <<: [*ok, *bad]
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.a.result }}
+          label: mergesteps
+          title: mergesteps
+          body: mergesteps
+EOF
+  printf 'A failed run <!-- notify-arms: mergesteps.yml/j = failure -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario merge-list-steps-first-mapping-passes 0 '' 'scanned 11 workflow(s)'
+
+  # merge-list-body: the notify step's body is the first mapping's, whose
+  # marker matches the gate; the second mapping's marker does not.
+  fresh_root
+  for spares in 1 2 3 4 5; do odd_workflow "spare-m${spares}.yml" 'jobs: {}'; done
+  cat >"${ROOT}/.github/workflows/mergebody.yml" <<'EOF'
+name: mergebody
+on: push
+x-b1: &b1
+  body: "mergebody <!-- notify-arms: mergebody.yml/j = failure -->"
+x-b2: &b2
+  body: "mergebody <!-- notify-arms: mergebody.yml/j = cancelled -->"
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    if: always() && needs.a.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.a.result }}
+          label: mergebody
+          title: mergebody
+          <<: [*b1, *b2]
+EOF
+  run_scenario merge-list-body-first-mapping-passes 0 '' 'scanned 12 workflow(s)'
+
+  # merge-key-on: an `on:` map brought in by a merge key is read without
+  # `yq` warning about the merge order.
+  fresh_root
+  for spares in 1 2 3 4 5 6; do odd_workflow "spare-m${spares}.yml" 'jobs: {}'; done
+  cat >"${ROOT}/.github/workflows/mergeon.yml" <<'EOF'
+name: mergeon
+x-on: &events
+  push:
+    branches: [main]
+on:
+  <<: *events
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    if: always() && needs.a.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.a.result }}
+          label: mergeon
+          title: mergeon
+          body: mergeon
+EOF
+  printf 'A failed run <!-- notify-arms: mergeon.yml/j = failure -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario merge-key-on-map-passes 0 '' 'scanned 13 workflow(s)'
+  if grep --fixed-strings --quiet -- 'WARN' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — yq warned about the merge order\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+
+  # merge-key-on-seq: a mapping inside an `on:` list that holds a merge
+  # key is read without the warning either.
+  fresh_root
+  for spares in 1 2 3 4 5 6 7; do odd_workflow "spare-m${spares}.yml" 'jobs: {}'; done
+  cat >"${ROOT}/.github/workflows/mergeseq.yml" <<'EOF'
+name: mergeseq
+x-on: &events
+  push: true
+on:
+  - pull_request
+  - <<: *events
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  j:
+    needs: a
+    if: always() && needs.a.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.a.result }}
+          label: mergeseq
+          title: mergeseq
+          body: mergeseq
+EOF
+  printf 'A failed run <!-- notify-arms: mergeseq.yml/j = failure -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario merge-key-on-list-passes 0 '' 'scanned 14 workflow(s)'
+  if grep --fixed-strings --quiet -- 'WARN' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — yq warned about the merge order\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+
   harness_assert_verify
   if ((failures)); then
     printf '%d scenario(s) failed\n' "${failures}" >&2

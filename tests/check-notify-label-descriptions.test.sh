@@ -132,7 +132,43 @@ function main() {
     printf 'jobs:\n  <<: *base\n'
   } >"${root}/merge-under-jobs/a.yml"
   run_scenario 'a merge key under jobs: is refused' "${root}/merge-under-jobs" 1 \
-    'which GitHub Actions refuses'
+    "notify-label-descriptions lint: ${root}/merge-under-jobs/a.yml: jobs: holds a job key"
+
+  # yq's own error text stays out of the output: the lint's line is the
+  # whole report for a workflow it could not read.
+  mkdir -p "${root}/unparsable-only"
+  printf 'jobs: [\n  this is not: valid: yaml\n' >"${root}/unparsable-only/a.yml"
+  local only_out only_rc=0
+  only_out="$(WORKFLOWS_DIR_OVERRIDE="${root}/unparsable-only" "${SCRIPT}" 2>&1)" || only_rc=$?
+  if [[ ${only_rc} -ne 2 || ${only_out} != "notify-label-descriptions lint: ${root}/unparsable-only/a.yml could not be parsed" ]]; then
+    printf 'FAIL: an unparsable workflow reports one line — exit %d\n%s\n' "${only_rc}" "${only_out}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: an unparsable workflow reports one line (exit %d)\n' "${only_rc}"
+  fi
+
+  # A failing read of the job keys is a could-not-run of its own, even
+  # when the read of the steps would succeed. The shim fails only the
+  # read that prints keys as JSON.
+  local stub_dir real_yq
+  stub_dir="$(mktemp --directory)"
+  real_yq="$(command -v yq)"
+  cat >"${stub_dir}/yq" <<EOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  if [[ \${arg} == *'to_json(0)'* ]]; then
+    exit 9
+  fi
+done
+exec ${real_yq} "\$@"
+EOF
+  chmod +x -- "${stub_dir}/yq"
+  mkdir -p "${root}/key-read-fails"
+  write_caller "${root}/key-read-fails/a.yml" 'delta-drift' 'delta'
+  PATH="${stub_dir}:${PATH}" run_scenario 'a failing job-key read is a could-not-run' "${root}/key-read-fails" 2 \
+    "${root}/key-read-fails/a.yml could not be parsed"
+  rm --force -- "${stub_dir}/yq"
+  rmdir -- "${stub_dir}"
 
   # A scan set holding workflows but no notify caller means the composite
   # moved or was renamed. Scored clean, that is a lint reporting on a
@@ -156,7 +192,7 @@ EOF
   mkdir -p "${root}/unparsable"
   printf 'jobs: [\n  this is not: valid: yaml\n' >"${root}/unparsable/a.yml"
   run_scenario 'an unparsable workflow is a could-not-run' "${root}/unparsable" 2 \
-    'could not be parsed'
+    "${root}/unparsable/a.yml could not be parsed"
 
   # An empty scan root is the deliberate-fixture case the shared
   # enumeration helper gates behind LINT_ALLOW_EMPTY_SCAN.

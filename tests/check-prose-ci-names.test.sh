@@ -345,6 +345,39 @@ function main() {
     printf 'FAIL: %s — the merged job j is reported as a ghost\n' "${LAST_NAME}" >&2
     failures=$((failures + 1))
   fi
+  # A tab, a carriage return or a NUL in a key must not leave a readable
+  # name behind either: the name records are tab-split, and a NUL is
+  # dropped from the listing, so each would otherwise make the prose name
+  # `a` resolve.
+  printf 'The %sa%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  local odd_key odd_json
+  for odd_key in 'a\tb' 'a\rb' 'a\0'; do
+    odd_json="${odd_key}"
+    if [[ ${odd_key} == 'a\0' ]]; then odd_json='a\u0000'; fi
+    printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  "%s":\n    runs-on: ubuntu-latest\n' "${odd_key}" \
+      >"${odd_root}/workflows/ci.yml"
+    run_scenario "job-key-${odd_key//\\/}-is-refused" 1 \
+      "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"${odd_json}\")" '' \
+      "${odd_root}/workflows" "${odd_root}"
+    also_expect 'docs/x.md:1: ghost: a'
+  done
+  # A merge list inside a job is read first mapping wins, which also keeps
+  # `yq` from printing its warning about the default order.
+  printf 'Nothing here names a job.\n' >"${odd_root}/docs/x.md"
+  printf 'p: &p\n  runs-on: a\nq: &q\n  runs-on: b\njobs:\n  foo:\n    <<: [*p, *q]\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-merge-list-is-silent' 0 '' '' \
+    "${odd_root}/workflows" "${odd_root}"
+  if grep --fixed-strings --quiet -- 'WARN' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — yq warned about the merge order\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  # A directory named like a workflow matches the glob and is not read.
+  rm --force -- "${odd_root}/workflows/ci.yml"
+  printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n' >"${odd_root}/workflows/real.yml"
+  mkdir --parents "${odd_root}/workflows/dir.yml"
+  run_scenario 'job-key-directory-named-yml-is-skipped' 0 '' '' \
+    "${odd_root}/workflows" "${odd_root}"
   rm --recursive --force -- "${odd_root}"
 
   # A scan root git cannot enumerate must be loud. Reading the listing

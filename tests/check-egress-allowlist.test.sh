@@ -431,6 +431,52 @@ expect_text_has job-key-merge-key $'x: &base\n'"${CAFE_JOB}"$'jobs:\n  <<: *base
 readonly CAFE_MAP=$'p: &P\n  steps:\n    - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n      with:\n        egress-policy: block\n        allowed-endpoints: >\n          cafe.github.com:443\nq: &Q\n  steps:\n    - run: echo PAYLOAD_RAN\n'
 expect_text_has merge-list-first-wins "${CAFE_MAP}"$'jobs:\n  a:\n    <<: [*P, *Q]\n    runs-on: ubuntu-latest\n' "allowlists cafe.github.com"
 
+# The merge list is read first mapping wins in the reads of a job's
+# `uses:` and `run:` lists too: the first-listed mapping's steps decide
+# which hosts the job must allowlist, not the last-listed one's.
+readonly CAFE_HR=$'    - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n      with:\n        egress-policy: block\n        allowed-endpoints: >\n          cafe.github.com:443\n'
+readonly PLAIN_Q=$'q: &Q\n  steps:\n    - run: echo PAYLOAD_RAN\n'
+expect_text_has merge-list-first-wins-uses $'p: &P\n  steps:\n'"${CAFE_HR}"$'    - uses: aquasecurity/trivy-action@abc\n'"${PLAIN_Q}"$'jobs:\n  a:\n    <<: [*P, *Q]\n    runs-on: ubuntu-latest\n' \
+  "uses trivy-action but does not allowlist get.trivy.dev"
+expect_text_has merge-list-first-wins-runs $'p: &P\n  steps:\n'"${CAFE_HR}"$'    - run: echo PAYLOAD_RAN gh release upload x\n'"${PLAIN_Q}"$'jobs:\n  a:\n    <<: [*P, *Q]\n    runs-on: ubuntu-latest\n' \
+  "runs 'gh release upload' but does not allowlist uploads.github.com"
+
+# A merge key under `jobs:` ends the read of that file: a job beside it
+# adds no finding of its own, so the whole of stderr is the one finding.
+# @arg $1 scenario name  @arg $2 file text after `on:`  @arg $3 whole
+# stderr, with `@F@` for the file path  @arg $4 optional PATH prefix
+function expect_text_is() {
+  local -r name="$1" text="$2" want="$3" path_prefix="${4:-}"
+  local got_exit=0 got_stderr expected
+  printf 'name: %s\non:\n  workflow_dispatch: {}\n%s' "${name}" "${text}" >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(PATH="${path_prefix:+${path_prefix}:}${PATH}" WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  expected="${want//@F@/${key_dir}/wf/${name}.yml}"
+  if [[ ${got_exit} != 1 || ${got_stderr} != "${expected}" ]]; then
+    printf 'FAIL %s: exit %s, want 1 and stderr %q\n  stderr: %s\n' "${name}" "${got_exit}" "${expected}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly TRIVY_JOB="${CAFE_JOB/  j:/  k:}"$'      - uses: aquasecurity/trivy-action@abc\n'
+expect_text_is job-key-merge-key-hides-jobs $'x: &base\n'"${CAFE_JOB}"$'jobs:\n  <<: *base\n'"${TRIVY_JOB}" \
+  $'@F@: jobs: holds a merge key, which GitHub Actions refuses; its jobs are not read\n1 egress-allowlist violation(s)'
+
+# A failing read for merge keys is one finding, and no read follows it,
+# even when the later reads would succeed. The shim fails only the read
+# that selects the merge tag.
+merge_stub_yq="$(command -v yq)"
+mkdir -p "${key_dir}/stub-merge"
+# shellcheck disable=SC2016 # the lines are the stub's source text
+printf '%s\n' '#!/usr/bin/env bash' \
+  'for a in "$@"; do' \
+  '  if [[ ${a} == *"!!merge"* ]]; then exit 9; fi' \
+  'done' \
+  "exec ${merge_stub_yq@Q} \"\$@\"" >"${key_dir}/stub-merge/yq"
+chmod +x -- "${key_dir}/stub-merge/yq"
+expect_text_is job-key-merge-read-fails $'jobs:\n'"${CAFE_JOB}" \
+  $'@F@: could not evaluate workflow with yq (malformed?)\n1 egress-allowlist violation(s)' "${key_dir}/stub-merge"
+
 # The range itself, for a job that is not the last: a marker inside the
 # first job's block exempts it.
 # @arg $1 scenario name  @arg $2 the build job's marker line, or empty

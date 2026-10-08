@@ -362,6 +362,39 @@ expect_jobs 'other workflow merge key under jobs' \
   "${ONE_JOB}" $'foo: A\n' $'x: &j\n  qux:\n    runs-on: ubuntu-latest\njobs:\n  <<: *j\n' 1 \
   "DIR/other.yml: jobs: ${REFUSED} (first: \"<<\")"
 
+# ci.yml sits in the workflows directory too and is checked once: a
+# second pass over it would print its finding twice.
+once_dir="$(mktemp --directory)"
+printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n  "":\n    runs-on: ubuntu-latest\n' >"${once_dir}/ci.yml"
+printf 'foo: A\n' >"${once_dir}/categories.yml"
+once_stderr="$(WORKFLOWS_DIR_OVERRIDE="${once_dir}" CI_WORKFLOW_OVERRIDE="${once_dir}/ci.yml" \
+  CATEGORIES_FILE_OVERRIDE="${once_dir}/categories.yml" "${SCRIPT}" 2>&1 >/dev/null)" || true
+once_count="$(grep --count --fixed-strings -- "${once_dir}/ci.yml: jobs: ${REFUSED}" <<<"${once_stderr}")" || true
+rm --recursive --force -- "${once_dir}"
+if [[ ${once_count} != 1 ]]; then
+  printf 'FAIL ci.yml finding printed %s times, want 1\n  stderr: %s\n' "${once_count}" "${once_stderr}" >&2
+  exit 1
+fi
+printf 'OK   ci.yml finding printed once\n'
+
+# A merge list inside a job of another workflow is read first mapping
+# wins, which also keeps `yq` from printing its warning about the
+# default order.
+mergelist_dir="$(mktemp --directory)"
+printf '%s' "${ONE_JOB}" >"${mergelist_dir}/ci.yml"
+printf 'foo: A\nbar: B\n' >"${mergelist_dir}/categories.yml"
+printf 'p: &p\n  runs-on: a\nq: &q\n  runs-on: b\njobs:\n  bar:\n    <<: [*p, *q]\n' >"${mergelist_dir}/other.yml"
+mergelist_exit=0
+mergelist_stderr="$(WORKFLOWS_DIR_OVERRIDE="${mergelist_dir}" CI_WORKFLOW_OVERRIDE="${mergelist_dir}/ci.yml" \
+  CATEGORIES_FILE_OVERRIDE="${mergelist_dir}/categories.yml" "${SCRIPT}" 2>&1 >/dev/null)" || mergelist_exit=$?
+rm --recursive --force -- "${mergelist_dir}"
+if [[ ${mergelist_exit} != 0 || -n ${mergelist_stderr} ]]; then
+  printf 'FAIL job merge list: exit %s, want 0 and no output\n  stderr: %s\n' \
+    "${mergelist_exit}" "${mergelist_stderr}" >&2
+  exit 1
+fi
+printf 'OK   job merge list\n'
+
 missing_categories_exit=0
 missing_categories_stderr="$(env \
   "WORKFLOWS_DIR_OVERRIDE=${FIXTURES}/good" \

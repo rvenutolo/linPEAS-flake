@@ -164,5 +164,11 @@ expect_built 'a merge key under jobs: is refused' \
   'x-base: &base {mergekey: {steps: [{uses: actions/upload-artifact@abc}]}}\non: push\njobs:\n  <<: *base\n' 1 \
   "%W: ${ODD}kind=scalar, id=\"<<\")
 ${ONE}"
+expect_built 'a merge list inside a step with: is read first mapping wins: the first listed decides' \
+  'x-a: &A {if-no-files-found: warn}\nx-b: &B {if-no-files-found: error}\non: push\njobs:\n  ml:\n    steps:\n      - uses: actions/upload-artifact@abc\n        with: {<<: [*A, *B]}\n' 1 \
+  "%W: job ml step[0] actions/upload-artifact has ${BT}if-no-files-found: warn${BT}; must be ${BT}error${BT}
+${ONE}"
+expect_built 'a merge list inside a step with: is read first mapping wins: an error first passes' \
+  'x-a: &A {if-no-files-found: warn}\nx-b: &B {if-no-files-found: error}\non: push\njobs:\n  ml:\n    steps:\n      - uses: actions/upload-artifact@abc\n        with: {<<: [*B, *A]}\n' 0 ''
 
 printf 'all tests passed\n'

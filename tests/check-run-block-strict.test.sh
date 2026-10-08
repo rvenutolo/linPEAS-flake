@@ -207,4 +207,44 @@ expect_workflow job-key-empty $'jobs:\n  "":\n'"${WEAK_STEP}" 1 \
 expect_workflow job-key-merge-key $'x: &base\n  j:\n'"${WEAK_STEP}"$'jobs:\n  <<: *base\n' 1 \
   "@F@: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"<<\")${KEY_TAIL}"
 
+# The read that names an odd job key prints one line per document, and
+# the first document holding such a key is the one reported.
+readonly ODD_HEAD='jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
+expect_workflow odd-key-second-document \
+  $'jobs:\n  a:\n'"${STRICT_STEP}"$'---\njobs:\n  "a\\nb":\n'"${WEAK_STEP}" 1 \
+  "@F@: ${ODD_HEAD} (first: \"a\\nb\")${KEY_TAIL}"
+expect_workflow odd-key-first-document \
+  $'jobs:\n  "a\\nb":\n'"${WEAK_STEP}"$'---\njobs:\n  a:\n'"${STRICT_STEP}" 1 \
+  "@F@: ${ODD_HEAD} (first: \"a\\nb\")${KEY_TAIL}"
+expect_workflow odd-key-both-documents \
+  $'jobs:\n  "":\n'"${WEAK_STEP}"$'---\njobs:\n  "a\\nb":\n'"${WEAK_STEP}" 1 \
+  "@F@: ${ODD_HEAD} (first: \"\")${KEY_TAIL}"
+# A failing read of the odd job key is a counted finding, and the file is
+# read no further: its weak block is not reported.
+mkdir -- "${key_dir}/odd-stub"
+printf '#!/usr/bin/env bash\ncase "$*" in *"!!merge"*) exit 7 ;; esac\nexec %q "$@"\n' \
+  "$(command -v yq)" >"${key_dir}/odd-stub/yq"
+chmod +x -- "${key_dir}/odd-stub/yq"
+expect_workflow odd-key-unread $'jobs:\n  a:\n'"${WEAK_STEP}" 1 \
+  $'@F@: could not evaluate workflow or action with yq (malformed?)\n1 run: block(s) missing strict-mode prelude' "${key_dir}/odd-stub:${PATH}"
+
+# A merge list is read first mapping wins (the YAML merge spec), in the
+# job's steps and in a composite's. The second mapping's step is a
+# one-line command: read in its place, the weak block would go unseen
+# (rows) or be judged as `echo` (body).
+readonly WEAK_P=$'p: &P\n  steps:\n    - run: |\n        set -euo pipefail\n        echo PAYLOAD_RAN\nq: &Q\n  steps:\n    - run: echo PAYLOAD_RAN\n'
+expect_workflow merge-list-job-first-wins "${WEAK_P}"$'jobs:\n  a:\n    <<: [*P, *Q]\n' 1 "@F@: job a${weak_tail}"
+mkdir -- "${key_dir}/merge-list-composite"
+printf 'p: &P\n  steps:\n    - shell: bash\n      run: |\n        set -euo pipefail\n        echo PAYLOAD_RAN\nq: &Q\n  steps:\n    - shell: bash\n      run: echo PAYLOAD_RAN\nruns:\n  using: composite\n  <<: [*P, *Q]\n' \
+  >"${key_dir}/merge-list-composite/action.yml"
+merge_comp_exit=0
+merge_comp_err="$(ACTIONS_DIR_OVERRIDE="${key_dir}/merge-list-composite" "${SCRIPT}" 2>&1 >/dev/null)" || merge_comp_exit=$?
+printf -v merge_comp_want '%s: composite step[0] run: block must start with %q (got %q)\n1 run: block(s) missing strict-mode prelude' \
+  "${key_dir}/merge-list-composite/action.yml" 'set -Eeuo pipefail' 'set -euo pipefail'
+if [[ ${merge_comp_exit} != 1 || ${merge_comp_err} != "${merge_comp_want}" ]]; then
+  printf 'FAIL merge-list-composite-first-wins: exit %s, want 1\n  stderr: %s\n' "${merge_comp_exit}" "${merge_comp_err}" >&2
+  exit 1
+fi
+printf 'OK   merge-list-composite-first-wins\n'
+
 printf 'all tests passed\n'

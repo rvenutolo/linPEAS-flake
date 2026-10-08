@@ -172,4 +172,14 @@ readonly PQ=$'p: &P\n  permissions:\n    contents: write\nq: &Q\n  permissions:\
 expect_stderr_has merge-list-write-first.yml "${PQ}"$'jobs:\n  a:\n    <<: [*P, *Q]\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 'missing fork guard'
 expect_stderr_has merge-list-read-first.yml "${PQ}"$'jobs:\n  a:\n    <<: [*Q, *P]\n    steps:\n      - run: echo PAYLOAD_RAN\n' 0 ''
 
+# A refused job key ends the read of that workflow: the unguarded write
+# job beside it is not read, so the run holds this finding alone. A
+# failure of the read that names the key is a counted finding too, and
+# the workflow is read no further.
+readonly ODD_MSG='jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
+expect_body odd-key-ends-read.yml $'jobs:\n  "a\\nb":\n    permissions:\n      contents: read\n    steps:\n      - run: echo PAYLOAD_RAN\n'"${WRITE_BARE#jobs:$'\n'}" 1 \
+  "DIR/odd-key-ends-read.yml: ${ODD_MSG} (first: \"a\\nb\")${ONE_JOB}"
+expect_body odd-key-unread.yml "${WRITE_BARE}" 1 \
+  "DIR/odd-key-unread.yml: could not evaluate workflow with yq (malformed?)${ONE_JOB}" '!!merge'
+
 printf 'all tests passed\n'

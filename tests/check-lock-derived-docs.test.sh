@@ -487,6 +487,46 @@ EOF
   expect 'agree: a merge list whose first mapping is benign writes no lock' \
     "${work}/merge-benign-first" 0 ''
 
+  # (vi) The workflow-level env is a merge list too, and its lists are read
+  # first mapping wins: the first mapping names alpha's generator, which the
+  # lock-triggered hook backs, and beta's, which no hook backs; the second
+  # names alpha's alone. Read last mapping wins, the run would pass.
+  write_tree "${work}/env-merge-list" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  cat >"${work}/env-merge-list/.github/workflows/update-flake-lock.yml" <<'EOF'
+name: update-flake-lock
+on:
+  workflow_dispatch:
+permissions: {}
+x-first: &First
+  LOCK_DERIVED_GENERATORS: |
+    scripts/refresh-alpha.sh
+    scripts/refresh-beta.sh
+  COMMITTABLE_PATHS: |
+    flake.lock
+    docs/reference/alpha.md
+    docs/reference/beta.md
+    docs/reference/gamma.md
+x-second: &Second
+  LOCK_DERIVED_GENERATORS: |
+    scripts/refresh-alpha.sh
+  COMMITTABLE_PATHS: |
+    flake.lock
+    docs/reference/alpha.md
+env:
+  <<: [*First, *Second]
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          nix flake update
+EOF
+  expect 'bad: an env merge list is read first mapping wins' \
+    "${work}/env-merge-list" 1 \
+    'scripts/refresh-beta.sh is in LOCK_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml, but no lock-triggered hook runs it'
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

@@ -139,7 +139,7 @@ function main() {
   # ignores nothing — a finding about content the lint never read.
   expect 'tooling: an unparsable workflow is a could-not-run' \
     "${DECLARING_SCRIPTS}" "${work}/bad-malformed.yml" 2 \
-    'could not evaluate'
+    'bad-malformed.yml with yq (malformed?)'
 
   # (j) TOOLING: the workflow parses and runs the size-label action, but
   # the step carries no ignore list. Nothing to compare against, so no
@@ -271,6 +271,15 @@ EOF
   # shellcheck disable=SC2059
   printf 'name: a\non:\n  workflow_dispatch: {}\np: &P\n  steps:\n    - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7\n      env:\n        IGNORED: "docs/alpha.md\\nCHANGELOG.md"\nq: &Q\n  steps:\n    - run: echo PAYLOAD_RAN\njobs:\n  size:\n    <<: [*P, *Q]\n' >"${work}/merge-list.yml"
   expect 'merge list: the first mapping wins' "${DECLARING_SCRIPTS}" "${work}/merge-list.yml" 0 ''
+
+  # A failure of the read that names an odd job key ends the run (exit 2)
+  # before the jobs are listed. The stub fails only that read.
+  mkdir -- "${work}/odd-stub"
+  printf '#!/usr/bin/env bash\ncase "$*" in *"!!merge"*) exit 7 ;; esac\nexec %q "$@"\n' \
+    "$(command -v yq)" >"${work}/odd-stub/yq"
+  chmod +x -- "${work}/odd-stub/yq"
+  PATH="${work}/odd-stub:${PATH}" expect 'odd job key read fails' "${DECLARING_SCRIPTS}" "${work}/key-twice.yml" 2 '' '' \
+    "check-size-label-ignores.sh: could not evaluate ${work}/key-twice.yml with yq (malformed?)"
 
   # (m) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' \
