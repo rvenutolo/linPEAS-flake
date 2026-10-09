@@ -2915,15 +2915,17 @@ and ignored files are not.
 
 **Exit codes:**
 
-- `2` — the enumeration, the copy or the commit failed
+- `2` — the enumeration or the commit failed; a tracked file that exists but cannot be read fails the copy with the exit status of `tar`
 
 #### reexec_in_scratch_tree()
 
 Re-run the calling harness inside a scratch copy of the work
 tree it was started from, then exit with the copy run's status. Returns
 without doing anything when the caller is already that copy run. The
-copy is removed on every exit path of the parent: bash runs the EXIT trap
-when the parent is ended by SIGTERM.
+copy is removed on every exit path of the parent, and a SIGTERM, SIGINT
+or SIGHUP to the parent is forwarded to the copy run, which is waited
+for before the copy is removed. SIGKILL cannot be forwarded and leaves
+the copy and its run behind.
 Call it after the harness's own preamble and before any statement that
 writes.
 

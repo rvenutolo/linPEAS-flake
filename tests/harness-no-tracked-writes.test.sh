@@ -12,10 +12,14 @@
 #     is the parent's, that an exported `GIT_DIR` does not point the copy
 #     back at the source, and that the copy is removed on success and on
 #     failure.
+#   - `snapshot-*`: the change detector alone, on a constructed tree: it
+#     must see a new or deleted file, a same-content rewrite, a chmod
+#     round trip, a retargeted symlink, a directory mode change and a new
+#     empty directory, and must not see a write under `.git` or no change.
 #   - `no-writes-*`: every `tests/refresh-*.test.sh` harness and
 #     `tests/check-doc-anchors.test.sh`, each run from a fresh copy of the
-#     tree with the (size, mode, ctime) of every file outside `.git`
-#     recorded before and after. A write, a chmod, a rename or a restored
+#     tree with the (type, link target, size, mode, ctime) of every entry
+#     outside `.git` recorded before and after. A write, a chmod, a rename or a restored
 #     backup all move the ctime, so a run that rewrote a doc and put it back
 #     is a finding as much as one that left it drifted.
 set -Eeuo pipefail
@@ -42,13 +46,15 @@ function fail() {
   failures=$((failures + 1))
 }
 
-# @description Write the (path, ctime, size, mode) of every file under a
-# tree, outside `.git`, one record per line, sorted.
+# @description Write the (path, type, link target, ctime, size, mode) of
+# every entry under a tree, outside `.git`, one record per line, sorted.
+# Directories and symbolic links are entries too: a retargeted link or a
+# new empty directory is a change.
 # @arg $1 tree  @arg $2 output file
 function snapshot() {
   local -a records=()
   enumerate_into records 'snapshot of the copy' \
-    find "$1" -path "$1/.git" -prune -o -type f -printf '%p\t%C@\t%s\t%m\0'
+    find "$1" -path "$1/.git" -prune -o -printf '%p\t%y\t%l\t%C@\t%s\t%m\0'
   printf '%s\n' "${records[@]}" | LC_ALL=C sort >"$2"
 }
 
@@ -61,6 +67,7 @@ mkdir --parents -- "${PROBE_REPO}/scripts/lib" "${PROBE_REPO}/tests"
 cp -- "${REPO_ROOT}"/scripts/lib/{scratch-tree,enumerate,repo,temp}.sh "${PROBE_REPO}/scripts/lib/"
 printf 'original\n' >"${PROBE_REPO}/tracked.txt"
 printf 'doomed\n' >"${PROBE_REPO}/gone.txt"
+printf 'secret\n' >"${PROBE_REPO}/secret.txt"
 # The probe records where it ran, what it saw, and then overwrites a tracked
 # file the way a generator would.
 cat >"${PROBE_REPO}/tests/probe.test.sh" <<'PROBE'
@@ -77,8 +84,15 @@ if [[ -e gone.txt ]]; then printf 'gone-present\n' >>"${PROBE_OUT}"; fi
 printf 'args=%s,%s\n' "$1" "$2" >>"${PROBE_OUT}"
 printf 'overwritten\n' >tracked.txt
 if [[ -n ${PROBE_SLEEP:-} ]]; then
+  printf '%s\n' "$$" >"${PROBE_OUT}.pid"
   : >"${PROBE_OUT}.started"
-  sleep 3
+  if [[ -n ${PROBE_TRAP:-} ]]; then
+    trap 'sleep 1; : >"${PROBE_OUT}.cleaned"; exit 143' TERM
+    sleep 3 &
+    wait $!
+  else
+    sleep 3
+  fi
 fi
 if [[ -n ${PROBE_LOCK:-} ]]; then
   mkdir locked
@@ -195,35 +209,77 @@ expect_line scratch-tree-runs-from-subdirectory "${report}" 'probe reached its b
 expect_line scratch-tree-runs-from-subdirectory "${report}" 'ran in the source tree: no'
 probe_cwd="${PROBE_REPO}"
 
-# A harness stopped by SIGTERM while its copy run is in flight still removes
-# the copy and reports the signal's status.
-signal_name=scratch-tree-removes-copy-on-signal
-signal_tmp="${work}/${signal_name}.tmp"
-mkdir --parents -- "${signal_tmp}"
-: >"${work}/${signal_name}.probe-out"
-(
-  cd -- "${PROBE_REPO}"
-  exec env --unset=SCRATCH_TREE_ACTIVE "TMPDIR=${signal_tmp}" \
-    "PROBE_OUT=${work}/${signal_name}.probe-out" PROBE_SLEEP=1 \
-    bash "${PROBE_REPO}/tests/probe.test.sh" one two >/dev/null 2>&1
-) &
-signal_pid=$!
-for _ in $(seq 1 100); do
-  [[ -e ${work}/${signal_name}.probe-out.started ]] && break
-  sleep 0.2
-done
-kill -TERM "${signal_pid}"
-signal_rc=0
-wait "${signal_pid}" || signal_rc=$?
-declare -a signal_left=()
-LINT_ALLOW_EMPTY_SCAN=1 enumerate_into signal_left 'leftover scratch dirs' \
-  find "${signal_tmp}" -mindepth 1 -print0
-{
-  printf '%s: exit status %d\n' "${signal_name}" "${signal_rc}"
-  printf '%s: scratch dirs left behind: %d\n' "${signal_name}" "${#signal_left[@]}"
-} >"${work}/${signal_name}.report"
-expect_line "${signal_name}" "${work}/${signal_name}.report" 'exit status 143'
-expect_line "${signal_name}" "${work}/${signal_name}.report" 'scratch dirs left behind: 0'
+# @description Start the probe, send its parent SIGTERM while the copy run
+# is in flight, and report what the parent left behind.
+# @arg $1 scenario name  @arg $2.. extra `env` assignments for the run
+function run_signal_case() {
+  local -r name="$1"
+  shift
+  local -r tmp="${work}/${name}.tmp" out="${work}/${name}.probe-out"
+  mkdir --parents -- "${tmp}"
+  : >"${out}"
+  (
+    cd -- "${PROBE_REPO}"
+    exec env --unset=SCRATCH_TREE_ACTIVE "TMPDIR=${tmp}" "PROBE_OUT=${out}" \
+      PROBE_SLEEP=1 "$@" \
+      bash "${PROBE_REPO}/tests/probe.test.sh" one two >/dev/null 2>&1
+  ) &
+  local -r pid=$!
+  local _
+  for _ in $(seq 1 100); do
+    [[ -e ${out}.started ]] && break
+    sleep 0.2
+  done
+  kill -TERM "${pid}"
+  local rc=0
+  wait "${pid}" || rc=$?
+  local -a left=()
+  LINT_ALLOW_EMPTY_SCAN=1 enumerate_into left 'leftover scratch dirs' \
+    find "${tmp}" -mindepth 1 -print0
+  local alive=no cleaned=no
+  if kill -0 "$(cat -- "${out}.pid")" 2>/dev/null; then alive=yes; fi
+  if [[ -e ${out}.cleaned ]]; then cleaned=yes; fi
+  {
+    printf '%s: exit status %d\n' "${name}" "${rc}"
+    printf '%s: scratch dirs left behind: %d\n' "${name}" "${#left[@]}"
+    printf '%s: copy run still alive after the parent exited: %s\n' "${name}" "${alive}"
+    printf '%s: copy run finished its cleanup before the parent exited: %s\n' "${name}" "${cleaned}"
+  } >"${work}/${name}.report"
+}
+
+# A harness stopped by SIGTERM while its copy run is in flight forwards the
+# signal, removes the copy and reports the signal's status.
+run_signal_case scratch-tree-removes-copy-on-signal
+signal_report="${work}/scratch-tree-removes-copy-on-signal.report"
+expect_line scratch-tree-removes-copy-on-signal "${signal_report}" 'exit status 143'
+expect_line scratch-tree-removes-copy-on-signal "${signal_report}" 'scratch dirs left behind: 0'
+expect_line scratch-tree-removes-copy-on-signal "${signal_report}" 'copy run still alive after the parent exited: no'
+
+# The parent waits for a copy run that needs time to clean up after SIGTERM,
+# so the copy is not removed under it.
+run_signal_case scratch-tree-waits-for-slow-cleanup PROBE_TRAP=1
+signal_report="${work}/scratch-tree-waits-for-slow-cleanup.report"
+expect_line scratch-tree-waits-for-slow-cleanup "${signal_report}" 'copy run finished its cleanup before the parent exited: yes'
+expect_line scratch-tree-waits-for-slow-cleanup "${signal_report}" 'scratch dirs left behind: 0'
+
+mkdir --parents -- "${PROBE_REPO}/reltmp"
+report="$(run_probe scratch-tree-accepts-relative-tmpdir TMPDIR=reltmp)"
+expect_line scratch-tree-accepts-relative-tmpdir "${report}" 'exit status 0'
+expect_line scratch-tree-accepts-relative-tmpdir "${report}" 'probe reached its body: yes'
+
+report="$(run_probe scratch-tree-ignores-inherited-marker SCRATCH_TREE_ACTIVE=/nonexistent)"
+expect_line scratch-tree-ignores-inherited-marker "${report}" 'probe reached its body: yes'
+expect_line scratch-tree-ignores-inherited-marker "${report}" 'ran in the source tree: no'
+
+chmod 000 -- "${PROBE_REPO}/secret.txt"
+if [[ -r ${PROBE_REPO}/secret.txt ]]; then
+  pass 'scratch-tree-fails-on-unreadable-file — skipped, the file is readable at mode 000 (running as root)'
+else
+  report="$(run_probe scratch-tree-fails-on-unreadable-file)"
+  expect_line scratch-tree-fails-on-unreadable-file "${report}" 'exit status 2'
+  expect_line scratch-tree-fails-on-unreadable-file "${report}" 'probe reached its body: no'
+fi
+chmod 644 -- "${PROBE_REPO}/secret.txt"
 
 printf 'edited\n' >"${PROBE_REPO}/tracked.txt"
 rm -- "${PROBE_REPO}/gone.txt"
@@ -234,6 +290,55 @@ if grep --quiet --fixed-strings -- 'gone-present' "${report}"; then
 else
   pass 'scratch-tree-carries-uncommitted-state — a deleted tracked file stays out of the copy'
 fi
+
+# ---------------------------------------------------------------------------
+# snapshot-*: the change detector
+# ---------------------------------------------------------------------------
+
+# @description Build a small tree, snapshot it, apply one change, snapshot
+# again, and assert whether the two snapshots differ.
+# @arg $1 scenario name  @arg $2 expected: yes (differ) or no (equal)
+# @arg $3 change: a function name from `apply_change`
+function snapshot_case() {
+  local -r name="$1" want="$2" change="$3"
+  local -r tree="${work}/${name}/tree"
+  mkdir --parents -- "${tree}/d" "${tree}/.git"
+  printf 'a\n' >"${tree}/a"
+  ln -s a "${tree}/link"
+  snapshot "${tree}" "${work}/${name}.before"
+  apply_change "${change}" "${tree}"
+  snapshot "${tree}" "${work}/${name}.after"
+  local differ=no
+  cmp --silent -- "${work}/${name}.before" "${work}/${name}.after" || differ=yes
+  printf '%s: snapshot changed: %s\n' "${name}" "${differ}" >"${work}/${name}.report"
+  expect_line "${name}" "${work}/${name}.report" "snapshot changed: ${want}"
+}
+
+# @description Apply one named change to a snapshot tree.
+function apply_change() {
+  local -r tree="$2"
+  case "$1" in
+  none) : ;;
+  git-write) printf 'x\n' >"${tree}/.git/index" ;;
+  new-file) printf 'b\n' >"${tree}/b" ;;
+  delete-file) rm -- "${tree}/a" ;;
+  rewrite-same-content) cp -- "${tree}/a" "${tree}/a.tmp" && cp -- "${tree}/a.tmp" "${tree}/a" && rm -- "${tree}/a.tmp" ;;
+  chmod-roundtrip) chmod 000 -- "${tree}/a" && chmod 644 -- "${tree}/a" ;;
+  retarget-symlink) ln -sfn elsewhere "${tree}/link" ;;
+  chmod-directory) chmod 700 -- "${tree}/d" ;;
+  new-empty-directory) mkdir -- "${tree}/newdir" ;;
+  esac
+}
+
+snapshot_case snapshot-stable-without-change no none
+snapshot_case snapshot-ignores-git-writes no git-write
+snapshot_case snapshot-detects-new-file yes new-file
+snapshot_case snapshot-detects-deleted-file yes delete-file
+snapshot_case snapshot-detects-same-content-rewrite yes rewrite-same-content
+snapshot_case snapshot-detects-chmod-roundtrip yes chmod-roundtrip
+snapshot_case snapshot-detects-retargeted-symlink yes retarget-symlink
+snapshot_case snapshot-detects-directory-mode yes chmod-directory
+snapshot_case snapshot-detects-new-empty-directory yes new-empty-directory
 
 # ---------------------------------------------------------------------------
 # no-writes-*: the harnesses that used to write tracked files

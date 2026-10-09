@@ -84,7 +84,8 @@ resolves to the copy and a killed run leaves the checkout as it was.
 Uncommitted edits to tracked files reach the copy; untracked files do not.
 `tests/harness-no-tracked-writes.test.sh` runs every
 `tests/refresh-*.test.sh` harness and `tests/check-doc-anchors.test.sh`
-from a fresh copy and fails when any file outside `.git` changes, so a new
+from a fresh copy and fails when any entry outside `.git` changes (file, symlink or directory,
+by type, target, size, mode or ctime), so a new
 `refresh-*` harness that skips the call is caught.
 
 A harness with a single script subject then binds it, and one that reads
