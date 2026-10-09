@@ -89,9 +89,9 @@ check 'tag-spellings' "${F3} YAML"$'\n'"${F3}"$'\n'"${F3}{.Sh .x}"$'\n'"${F3}" \
 1 c=0 read=1 lang=[sh] text=[]
 3 c=0 read=1 lang=[sh] text=[]"
 
-check 'backtick-in-backtick-info-is-prose' "${F3}a${BT}b"$'\n'"plain" \
+check 'backtick-in-backtick-info-is-prose' "${F3}a${BT}b"$'\n'"${F3}zsh" \
   "0 c=0 read=0 lang=[] text=[]
-0 c=0 read=0 lang=[] text=[]"
+1 c=0 read=0 lang=[zsh] text=[]"
 
 check 'blockquote-fence-strips-markers' "> ${F3}sh"$'\n'"> > cmd"$'\n'"> ${F3}" \
   "1 c=0 read=1 lang=[sh] text=[]
@@ -115,6 +115,54 @@ check 'list-marker-opener' "- ${F3}sh"$'\n'"  cmd"$'\n'"  ${F3}" \
 check 'list-marker-line-inside-fence-is-content' "${F3}sh"$'\n'"- ${F3}" \
   "1 c=0 read=1 lang=[sh] text=[]
 2 c=0 read=1 lang=[sh] text=[- ${F3}]"
+
+check 'two-backticks-are-prose' "${BT}${BT}sh"$'\n'"x"$'\n'"y"$'\n'"z" \
+  "0 c=0 read=0 lang=[] text=[]
+0 c=0 read=0 lang=[] text=[]
+0 c=0 read=0 lang=[] text=[]
+0 c=0 read=0 lang=[] text=[]"
+
+check 'text-and-console-tags-read' "${F3}text"$'\n'"${F3}"$'\n'"${F3}console"$'\n'"${F3}" \
+  "1 c=0 read=1 lang=[text] text=[]
+3 c=0 read=1 lang=[text] text=[]
+1 c=0 read=1 lang=[console] text=[]
+3 c=0 read=1 lang=[console] text=[]"
+
+check 'shell-tag-reads' "${F3}shell"$'\n'"${F3}" \
+  "1 c=0 read=1 lang=[shell] text=[]
+3 c=0 read=1 lang=[shell] text=[]"
+
+check 'tilde-info-may-hold-a-backtick' "~~~a${BT}b" \
+  "1 c=0 read=0 lang=[a${BT}b] text=[]"
+
+check 'implicit-close-reopens-at-new-depth' \
+  "> > ${F3}sh"$'\n'"> ${F3}sh"$'\n'"z"$'\n'"y" \
+  "1 c=0 read=1 lang=[sh] text=[]
+1 c=1 read=1 lang=[sh] text=[]
+0 c=1 read=1 lang=[sh] text=[]
+0 c=0 read=1 lang=[sh] text=[]"
+
+# @description The opening line's number, as `md_start` reports it.
+# @arg $1 scenario  @arg $2 document  @arg $3 expected line number
+function check_start() {
+  local -r name="$1" doc="$2" want="$3"
+  local got out_file
+  out_file="$(mktemp)"
+  got="$(awk "${MD_FENCE_AWK}"'
+    BEGIN { md_in = 0 }
+    { if (md_step($0) == 1) { print "start=" md_start } }
+  ' <<<"${doc}")"
+  printf '%s\n' "${got}" >"${out_file}"
+  harness_assert_record "${name}" "start=${want}" "${out_file}"
+  if [[ ${got} == "start=${want}" ]]; then
+    pass "${name}"
+  else
+    fail "${name}: got ${got@Q}, want start=${want}"
+  fi
+  rm --force -- "${out_file}"
+}
+
+check_start 'start-is-the-opening-line' "a"$'\n'"b"$'\n'"${F3}sh"$'\n'"c" 3
 
 harness_assert_verify || failures=$((failures + 1))
 

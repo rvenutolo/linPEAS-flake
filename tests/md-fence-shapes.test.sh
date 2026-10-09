@@ -73,20 +73,23 @@ function run_lint() {
 
 # @description A shape that must be READ: the lint exits 1 and names the
 # scenario's own file.
-# @arg $1 shape name  @arg $2 body
+# The Docker Hub lint also names the line the fence opens on.
+# @arg $1 shape name  @arg $2 body  @arg $3 opening line (default 1)
 function expect_read() {
-  local -r shape="$1" body="$2"
-  local lint file err_file rc
+  local -r shape="$1" body="$2" start="${3:-1}"
+  local lint file err_file rc want=""
   for lint in "${LINTS[@]}"; do
     file="${work}/${lint#check-}.${shape}.md"
     err_file="${work}/${lint#check-}.${shape}.err"
     write_md "${file}" "${lint}" "${body}"
     rc="$(run_lint "${lint}" "${err_file}" "${file}")"
-    harness_assert_record "read:${lint#check-}:${shape}" "${file##*/}" "${err_file}"
-    if [[ ${rc} == 1 ]] && grep --fixed-strings --quiet -- "${file##*/}" "${err_file}"; then
+    want="${file##*/}"
+    if [[ ${lint} == check-dockerhub-token-scope-split ]]; then want="${file##*/}:${start}:"; fi
+    harness_assert_record "read:${lint#check-}:${shape}" "${want}" "${err_file}"
+    if [[ ${rc} == 1 ]] && grep --fixed-strings --quiet -- "${want}" "${err_file}"; then
       pass "read:${lint#check-}:${shape}"
     else
-      fail "read:${lint#check-}:${shape}: exit ${rc}, want 1 naming ${file##*/}"
+      fail "read:${lint#check-}:${shape}: exit ${rc}, want 1 naming ${want}"
       cat -- "${err_file}" >&2
     fi
   done
@@ -132,6 +135,9 @@ expect_read 'tag-attribute-braces' "${F3}{.sh}"$'\n''@C'$'\n'"${F3}"
 expect_read 'tag-after-space' "${F3} sh"$'\n''@C'$'\n'"${F3}"
 expect_read 'short-closer-stays-open' "${F4}sh"$'\n'"${F3}"$'\n''@C'$'\n'"${F4}"
 expect_read 'other-marker-stays-open' "~~~sh"$'\n'"${F3}"$'\n''@C'$'\n'"~~~"
+expect_read 'unterminated' "${F3}sh"$'\n''@C'
+expect_read 'blockquote-unclosed-then-plain' "> ${F3}sh"$'\n''> @C'$'\n'$'\n''plain'
+expect_read 'fence-after-prose' 'prose'$'\n'$'\n'"${F3}sh"$'\n''@C'$'\n'"${F3}" 3
 
 # Shapes that carry the same command in a fence of another language, or
 # outside any fence, and must not be read.
@@ -141,6 +147,82 @@ expect_unread 'wrapped-fence' "${F4}yaml"$'\n'"${F3}sh"$'\n'"inner"$'\n'"${F3}"$
 expect_unread 'blockquote-yaml' "> ${F3}yaml"$'\n''> @C'$'\n'"> ${F3}"
 expect_unread 'blockquote-ends-fence' "> ${F3}sh"$'\n''> echo hi'$'\n'$'\n''@C'
 expect_unread 'prose-outside-fence' "${F3}sh"$'\n''echo hi'$'\n'"${F3}"$'\n'$'\n''@C'
+expect_unread 'command-in-info-string' "${F3}sh @C"$'\n'"${F3}"
+
+# @description Run the digest-pin lint over a body that must come back clean.
+# A blockquoted continuation line keeps its `>` only when the reader fails
+# to strip it, and that token reads as an unpinned source.
+# @arg $1 shape name  @arg $2 body
+function expect_digest_clean() {
+  local -r shape="$1" body="$2"
+  local file err_file rc
+  file="${work}/digest-clean.${shape}.md"
+  err_file="${work}/digest-clean.${shape}.err"
+  printf '%s\n' "${body}" >"${file}"
+  rc="$(run_lint check-manifest-digest-pinned "${err_file}" "${file}")"
+  if [[ ${rc} == 0 && ! -s ${err_file} ]]; then
+    pass "digest-clean:${shape}"
+  else
+    fail "digest-clean:${shape}: exit ${rc}, want 0 and no output"
+    cat -- "${err_file}" >&2
+  fi
+}
+
+DIGEST="sha256:$(printf 'a%.0s' {1..64})"
+readonly DIGEST
+# A backslash, spelled by code point so no quoting shape has to hold it.
+readonly BACKSLASH=$'\x5c'
+expect_digest_clean 'blockquote-continuation' "> ${F3}sh"$'\n'"> docker buildx imagetools create --tag r/x:latest ${BACKSLASH}"$'\n'"> r/x@${DIGEST}"$'\n'"> ${F3}"
+
+# @description The Docker Hub lint over fences in one file: each fence's
+# state starts fresh. A fence the lint must flag names its file and line.
+# A file it must leave clean rides with a plain violating file, so the run
+# is proven to have read Markdown: the lint must name the control and not
+# the file.
+# @arg $1 shape name  @arg $2 want exit (0 clean, 1 flagged)  @arg $3 body
+function expect_dockerhub() {
+  local -r shape="$1" want_rc="$2" body="$3"
+  local -r lint=check-dockerhub-token-scope-split
+  local file control err_file rc ok=0
+  file="${work}/dockerhub-state.${shape}.md"
+  control="${work}/dockerhub-state.${shape}.control.md"
+  err_file="${work}/dockerhub-state.${shape}.err"
+  printf '%s\n' "${body}" >"${file}"
+  write_md "${control}" "${lint}" "${F3}sh"$'\n''@C'$'\n'"${F3}"
+  if [[ ${want_rc} == 1 ]]; then
+    rc="$(run_lint "${lint}" "${err_file}" "${file}")"
+    harness_assert_record "dockerhub-state:${shape}" "${file##*/}" "${err_file}"
+    if [[ ${rc} == 1 ]] && grep --fixed-strings --quiet -- "${file##*/}" "${err_file}"; then ok=1; fi
+  else
+    rc="$(run_lint "${lint}" "${err_file}" "${file}"$'\n'"${control}")"
+    harness_assert_record "dockerhub-state:${shape}" "${control##*/}" "${err_file}"
+    if [[ ${rc} == 1 ]] && grep --fixed-strings --quiet -- "${control##*/}" "${err_file}" &&
+      ! grep --fixed-strings --quiet -- "${file##*/}" "${err_file}"; then ok=1; fi
+  fi
+  if ((ok)); then
+    pass "dockerhub-state:${shape}"
+  else
+    fail "dockerhub-state:${shape}: exit ${rc}, want a verdict of ${want_rc} for ${file##*/}"
+    cat -- "${err_file}" >&2
+  fi
+}
+
+# shellcheck disable=SC2016
+readonly DEL='curl --request DELETE https://hub.docker.com/v2/x --header "Authorization: Bearer $DOCKERHUB_TOKEN_DELETE"'
+# shellcheck disable=SC2016
+readonly GET_RW='curl https://hub.docker.com/v2/x --header "Authorization: Bearer $DOCKERHUB_TOKEN_RW"'
+# shellcheck disable=SC2016
+readonly GET_DEL='curl https://hub.docker.com/v2/x --header "Authorization: Bearer $DOCKERHUB_TOKEN_DELETE"'
+readonly DEL_BARE='curl --request DELETE https://hub.docker.com/v2/x'
+readonly DEL_OTHER='curl --request DELETE https://example.com/v2/x'
+
+expect_dockerhub 'delete-seen-does-not-leak' 0 "${F3}sh"$'\n'"${DEL}"$'\n'"${F3}"$'\n'"${F3}sh"$'\n'"${GET_RW}"$'\n'"${F3}"
+expect_dockerhub 'rw-seen-does-not-leak' 0 "${F3}sh"$'\n'"${GET_RW}"$'\n'"${F3}"$'\n'"${F3}sh"$'\n'"${DEL}"$'\n'"${F3}"
+expect_dockerhub 'token-seen-does-not-leak' 0 "${F3}sh"$'\n'"${GET_DEL}"$'\n'"${F3}"$'\n'"${F3}sh"$'\n'"${DEL_OTHER}"$'\n'"${F3}"
+expect_dockerhub 'hub-seen-does-not-leak' 0 "${F3}sh"$'\n'"curl https://hub.docker.com/v2/x"$'\n'"${F3}"$'\n'"${F3}sh"$'\n'"${DEL_OTHER}"$'\n'"${F3}"
+expect_dockerhub 'delete-token-seen-does-not-leak' 1 "${F3}sh"$'\n'"${GET_DEL}"$'\n'"${F3}"$'\n'"${F3}sh"$'\n'"${DEL_BARE}"$'\n'"${F3}"
+expect_dockerhub 'unclosed-fence-is-judged-at-end' 1 "${F3}sh"$'\n'"${DEL_BARE}"
+expect_dockerhub 'blockquote-end-judges-the-fence' 1 "> ${F3}sh"$'\n'"> ${DEL_BARE}"$'\n'$'\n''plain'
 
 harness_assert_verify || failures=$((failures + 1))
 
