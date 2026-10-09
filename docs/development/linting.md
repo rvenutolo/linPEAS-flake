@@ -603,9 +603,11 @@ the aliases a node holds and leaves those inside the copies, so a `jobs:`
 written as an alias, or merging in a map, can still hold a key written as
 an alias after it; the second pass resolves that. A job key is a
 scalar, so a key alias stands for a scalar and no third level exists: a
-merge chain of any depth resolves in the same two passes. A merge key
-that is still present under `jobs:` after the passes, whether written
-inline or brought in through an alias, is a refused key.
+merge chain of any depth resolves in the same two passes, provided the
+read passes `--yaml-fix-merge-anchor-to-spec` (`YQ_MERGE_SPEC`), which
+every `jobs:` read does. A lint that refuses a job key counts a merge
+key still present under `jobs:`, whether written inline or brought in
+through an alias, as a refused key.
 
 ## Text from files in bash arithmetic
 

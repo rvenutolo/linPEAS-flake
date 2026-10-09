@@ -157,7 +157,7 @@ function job_ids_at() {
     }
     # The cost of `explode` is a stated limit: docs/development/linting.md,
     # section "YAML aliases in workflow reads".
-    ids="$(yq '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | keys | .[]' "${blob_file}")" || {
+    ids="$(yq "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | keys | .[]' "${blob_file}")" || {
       status=$?
       rm --force -- "${blob_file}"
       log_err "cannot read job ids from ${path} at ${ref}: yq exited ${status}"
