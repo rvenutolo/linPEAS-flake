@@ -40,6 +40,7 @@ work="$(mktemp --directory)"
 trap 'rm --recursive --force -- "${work}"' EXIT
 
 probe_cwd=''
+probe_cmd=()
 function pass() { printf 'PASS: %s\n' "$1"; }
 function fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -132,7 +133,7 @@ function run_probe() {
   (
     cd -- "${probe_cwd}"
     env --unset=SCRATCH_TREE_ACTIVE "TMPDIR=${tmp}" "PROBE_OUT=${out}" "$@" \
-      bash "${PROBE_REPO}/tests/probe.test.sh" one two >/dev/null 2>"${work}/${name}.err"
+      "${probe_cmd[@]}" >/dev/null 2>"${work}/${name}.err"
   ) || rc=$?
   local -a left=()
   LINT_ALLOW_EMPTY_SCAN=1 enumerate_into left 'leftover scratch dirs' \
@@ -183,6 +184,7 @@ function expect_line() {
 }
 
 probe_cwd="${PROBE_REPO}"
+probe_cmd=(bash "${PROBE_REPO}/tests/probe.test.sh" one two)
 report="$(run_probe scratch-tree-redirects-writes)"
 expect_line scratch-tree-redirects-writes "${report}" 'probe reached its body: yes'
 expect_line scratch-tree-redirects-writes "${report}" 'ran in the source tree: no'
@@ -339,6 +341,18 @@ expect_line scratch-tree-signal-during-staging "${signal_report}" 'copy director
 expect_line scratch-tree-signal-during-staging "${signal_report}" 'staging subprocess still running after the parent exited: no'
 expect_line scratch-tree-signal-during-staging "${signal_report}" 'scratch dirs left behind: 0'
 expect_line scratch-tree-signal-during-staging "${signal_report}" 'probe body ran: no'
+
+# Under job control the copy run's launcher would fork and exit at once. A
+# pseudo-terminal from `script` lets `bash -m` really enable it.
+if command -v script >/dev/null 2>&1; then
+  probe_cmd=(script -qec "bash -m '${PROBE_REPO}/tests/probe.test.sh' one two" /dev/null)
+  report="$(run_probe scratch-tree-works-under-job-control)"
+  expect_line scratch-tree-works-under-job-control "${report}" 'probe reached its body: yes'
+  expect_line scratch-tree-works-under-job-control "${report}" 'exit status 0'
+  probe_cmd=(bash "${PROBE_REPO}/tests/probe.test.sh" one two)
+else
+  pass 'scratch-tree-works-under-job-control — skipped, script is not on PATH'
+fi
 
 mkdir --parents -- "${PROBE_REPO}/reltmp"
 report="$(run_probe scratch-tree-accepts-relative-tmpdir TMPDIR=reltmp)"

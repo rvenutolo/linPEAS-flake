@@ -136,7 +136,11 @@ function reexec_in_scratch_tree() {
   fi
   # A background job, so the trap runs while the copy run is in progress:
   # bash defers a trap until a foreground command ends. A background job
-  # ignores SIGINT, which is why the handler sends TERM.
+  # ignores SIGINT, which is why the handler sends TERM. Job control is off
+  # for the launch: under it the subshell is a group leader, `setsid` forks
+  # and exits at once, `$!` names that exited wrapper, and the parent would
+  # report success and remove the copy under the run.
+  set +m
   (
     cd -- "${dest}" || exit 2
     exec setsid env --unset=GIT_DIR --unset=GIT_WORK_TREE --unset=GIT_INDEX_FILE \
