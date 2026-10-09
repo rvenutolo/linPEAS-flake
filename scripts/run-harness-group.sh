@@ -61,6 +61,8 @@ readonly -a HARNESSES=(
   'lib-locale-gap|lib-locale-gap.test.sh|'
   'lib-ascii-match|lib-ascii-match.test.sh|'
   'lib-job-keys|lib-job-keys.test.sh|'
+  'lib-md-fence|lib-md-fence.test.sh|'
+  'md-fence-shapes|md-fence-shapes.test.sh|'
   'glob-scan-breadth|glob-scan-breadth.test.sh|'
   'repo-root-guard|repo-root-guard.test.sh|'
   'site-no-bytecode|site-no-bytecode.test.sh|'

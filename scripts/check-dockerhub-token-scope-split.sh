@@ -28,10 +28,13 @@
 # Token names are matched over the whole fence, not the delete line: a
 # real snippet assigns its credential many lines above the request.
 #
-# In Markdown, a line that starts, after indentation, with three
-# backticks toggles a fence; the fence is read when the text directly
-# after those backticks, up to the first whitespace, is empty or one of
-# sh/bash/shell/console/text.
+# In Markdown, fences are read by scripts/lib/md-fence.sh: a run of three
+# or more backticks or tildes opens a fence after any indentation,
+# blockquote markers and list marker, and a run of the same character at
+# least as long, at the same blockquote depth, closes it. A fence is read
+# when the first word of its info string, lower-cased and without
+# attribute braces or a leading dot, is empty or one of
+# sh/bash/shell/console/text. The reader's limits are stated in that file.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
 # harness can point at a temp dir, PATHS_OVERRIDE (newline-separated file
@@ -48,6 +51,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "${_lib_dir}/lib/awk-path.sh"
+# shellcheck source=scripts/lib/md-fence.sh
+source "${_lib_dir}/lib/md-fence.sh"
 
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
@@ -165,7 +170,7 @@ fi
 # @arg $1 markdown file path
 function scan_fences() {
   local -r file="$1"
-  awk '
+  awk "${MD_FENCE_AWK}"'
     function verdict() {
       fences++
       if (!eligible) { return }
@@ -179,37 +184,30 @@ function scan_fences() {
         printf "V\t%d\tnames no DOCKERHUB_TOKEN_DELETE\n", start
       }
     }
-    /^[[:space:]]*```/ {
-      if (in_fence) {
-        verdict()
-        in_fence = 0
-        eligible = 0
-      } else {
-        lang = $0
-        sub(/^[[:space:]]*```/, "", lang)
-        sub(/[[:space:]].*$/, "", lang)
-        eligible = (lang == "" || lang == "sh" || lang == "bash" \
-          || lang == "shell" || lang == "console" || lang == "text")
-        in_fence = 1
-        start = NR
+    {
+      r = md_step($0)
+      if (md_closed) { verdict() }
+      if (r == 3) { verdict(); next }
+      if (r == 1) {
+        eligible = md_read
+        start = md_start
         delete_seen = 0
         delete_token_seen = 0
         rw_seen = 0
         token_seen = 0
         hub_seen = 0
+        next
       }
-      next
-    }
-    !in_fence || !eligible { next }
-    {
-      if ($0 ~ /(--request[[:space:]=]+DELETE|-X[[:space:]]*DELETE)/) { delete_seen = 1 }
-      if (index($0, "hub.docker.com")) { hub_seen = 1 }
-      if (index($0, "DOCKERHUB_TOKEN_DELETE")) { delete_token_seen = 1 }
-      if (index($0, "DOCKERHUB_TOKEN_RW")) { rw_seen = 1 }
-      if ($0 ~ /DOCKERHUB_TOKEN/) { token_seen = 1 }
+      if (r != 2 || !eligible) { next }
+      line = md_text
+      if (line ~ /(--request[[:space:]=]+DELETE|-X[[:space:]]*DELETE)/) { delete_seen = 1 }
+      if (index(line, "hub.docker.com")) { hub_seen = 1 }
+      if (index(line, "DOCKERHUB_TOKEN_DELETE")) { delete_token_seen = 1 }
+      if (index(line, "DOCKERHUB_TOKEN_RW")) { rw_seen = 1 }
+      if (line ~ /DOCKERHUB_TOKEN/) { token_seen = 1 }
     }
     END {
-      if (in_fence) { verdict() }
+      if (md_in) { verdict() }
       printf "C\t%d\t%d\t%d\n", fences, shell_fences, hub_deletes
     }
   ' "$(awk_path "${file}")"
