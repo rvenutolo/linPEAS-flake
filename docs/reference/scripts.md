@@ -2876,6 +2876,76 @@ rules, so a set `GIT_DIR` or `GIT_WORK_TREE` decides the answer.
 
 - the work tree's top-level path
 
+### scripts/lib/scratch-tree.sh
+
+Run a harness against a scratch copy of the work tree. A
+harness that exercises a generator against the real docs would otherwise
+rewrite tracked files in the operator's checkout, replacing an uncommitted
+edit inside a generated block, and a run killed between the write and its
+restore leaves the doc drifted. The harness calls `reexec_in_scratch_tree`
+right after its preamble: the first run copies the tree, re-runs the same
+harness inside the copy with `SCRATCH_TREE_ACTIVE` set, removes the copy
+and exits with the child's status; the child's call returns at once, and
+its `git rev-parse --show-toplevel` then resolves to the copy. Source
+after `set -Eeuo pipefail`.
+
+#### \_scratch_git()
+
+Run git with the repository-selecting variables removed. A
+hook or a linked worktree exports `GIT_DIR`, `GIT_WORK_TREE` or
+`GIT_INDEX_FILE`, and any of them would point `git -C <dir>` back at the
+repository the copy exists to protect.
+
+**Args:**
+
+- `$@` — git arguments
+
+#### stage_scratch_tree()
+
+Copy the tracked files, as they are on disk, into a new
+directory and commit them there, so the copy is a work tree of its own.
+A tracked file deleted in the source is left out of the copy and out of
+its index. Uncommitted edits to tracked files are carried over; untracked
+and ignored files are not.
+
+**Args:**
+
+- `$1` — source work tree
+- `$2` — destination directory, which must exist and be empty
+
+**Exit codes:**
+
+- `2` — the enumeration or the commit failed; a tracked file that exists but cannot be read fails the copy with the exit status of `tar`
+
+#### \_scratch_tree_forward()
+
+Signal handler of `reexec_in_scratch_tree`: send TERM to the
+process group of every background job and record that a signal arrived.
+The copy run is a session leader, so its group holds everything the
+harness started.
+
+#### reexec_in_scratch_tree()
+
+Re-run the calling harness inside a scratch copy of the work
+tree it was started from, then exit with the copy run's status. Returns
+without doing anything when the caller is already that copy run. The
+copy is removed on every exit path of the parent. The copy run is a
+session leader, and a SIGTERM, SIGINT or SIGHUP to the parent reaches
+its whole process group, which is waited for before the copy is removed;
+a signal that arrives while the copy is still being built ends the parent
+with status 143 once the build step in flight returns. SIGKILL cannot be
+forwarded and leaves the copy and its run behind.
+Call it after the harness's own preamble and before any statement that
+writes.
+
+**Args:**
+
+- `$@` — the harness's own arguments, passed through unchanged
+
+**Exit codes:**
+
+- `2` — the harness is not inside the work tree, `setsid` is missing, or the copy failed
+
 ### scripts/lib/temp.sh
 
 Guarded temp-file creation. Source after `set -Eeuo pipefail`.

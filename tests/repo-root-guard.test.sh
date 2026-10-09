@@ -161,6 +161,9 @@ callers=0
 for f in "${repo_scripts[@]}"; do
   rel="${f#"${REPO_ROOT}/scripts/"}"
   [[ ${rel} == lib/repo.sh ]] && continue
+  # A library has no entry point to run from outside a work tree; its own
+  # could-not-run path is a scenario of tests/harness-no-tracked-writes.test.sh.
+  [[ ${rel} == lib/scratch-tree.sh ]] && continue
   # A call is a command substitution or a command at the start of a line,
   # outside a whole-line comment; a lint naming the helper in a message, a
   # pattern or a comment is not a caller.

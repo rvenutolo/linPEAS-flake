@@ -8,6 +8,11 @@ IFS=$'\n\t'
 
 repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
+# The harness rewrites generated docs and fixture modes, so it runs in a
+# scratch copy of the tree and leaves this checkout untouched.
+# shellcheck source=scripts/lib/scratch-tree.sh
+source "${REPO_ROOT}/scripts/lib/scratch-tree.sh"
+reexec_in_scratch_tree "$@"
 readonly SCRIPT="${REPO_ROOT}/scripts/refresh-just-recipes.sh"
 readonly DOC="${REPO_ROOT}/README.md"
 readonly DOC2="${REPO_ROOT}/docs/reference/just-recipes.md"

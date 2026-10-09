@@ -73,6 +73,21 @@ shebang, the `set` line, the strict IFS line, or a readonly `REPO_ROOT`
 derived from `git rev-parse --show-toplevel`, and accepts both
 spellings above.
 
+A harness that rewrites a tracked file (a generated doc run against the
+live tree, a fixture whose mode it flips) runs in a scratch copy of the
+tree, never in the checkout it was started from. Right after the readonly
+`REPO_ROOT` it sources `scripts/lib/scratch-tree.sh` and calls
+`reexec_in_scratch_tree "$@"`: the first run copies the tracked files into
+a throwaway repository, re-runs the same harness there and removes the
+copy when it ends, so every `git rev-parse --show-toplevel` below the call
+resolves to the copy and a killed run leaves the checkout as it was.
+Uncommitted edits to tracked files reach the copy; untracked files do not.
+`tests/harness-no-tracked-writes.test.sh` runs every
+`tests/refresh-*.test.sh` harness and `tests/check-doc-anchors.test.sh`
+from a fresh copy and fails when any entry outside `.git` changes (file, symlink or directory,
+by type, target, size, mode or ctime), so a new
+`refresh-*` harness that skips the call is caught.
+
 A harness with a single script subject then binds it, and one that reads
 a committed fixture tree binds that:
 
