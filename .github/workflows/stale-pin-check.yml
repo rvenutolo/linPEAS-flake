@@ -1,11 +1,11 @@
 name: stale-pin-check
 
-# Daily watchdog: catches the silent-regression case where
-# `update-linpeas` runs green but the pin doesn't advance for an
-# extended window (network blip, API quota, GitHub App installation
-# revoked, etc.). The cron itself can't see "we stopped bumping"
-# because it would need to run AFTER `update-linpeas` and correlate
-# state.
+# Daily watchdog: catches a pin that stops advancing for an extended
+# window, whatever the cause (a failing `update-linpeas` run, a bump PR
+# that never merges, a disabled schedule). It reads only the pin and
+# upstream's latest release, never `update-linpeas` run results, so the
+# `update-linpeas` cron itself can't see "we stopped bumping" and this
+# check can't say why.
 #
 # Logic: read the timestamp prefix of `pin.version` (peass-ng tags use
 # `YYYYMMDD-<sha>`). If we are >14d behind that date AND the upstream
@@ -182,17 +182,27 @@ jobs:
 
             Reason values and what they mean:
 
-            - `stall-detected` — `update-linpeas` is reporting green runs but
-              has not advanced the pin for over 14 days while upstream has moved.
-              Investigate:
-              - `update-linpeas.yml` recent run logs (action may be silently
-                exiting 0 without bumping)
-              - `linpeas-flake-bumper` GitHub App installation intact
-                (`BUMP_APP_PRIVATE_KEY` not rotated, App not uninstalled)
-              - Asset-URL prefix check rejecting upstream (peass-ng moved host)
-              - Upstream `.digest` field absent (`bump-linpeas.sh` exits 1 on
-                that, which fails the `update-linpeas.yml` run; look for
-                `has no .digest field` in that run's log)
+            - `stall-detected` — the pin is more than 14 days old and
+              upstream's latest release is a different tag. The check reads
+              only `linpeas-pin.json` and that release; it does not read
+              `update-linpeas` runs. List them
+              (`gh run list --workflow update-linpeas.yml`) and sort by what
+              they show:
+              - Runs are red. The run log names the cause:
+                - release fetch or asset download failed (`bump-linpeas.sh`
+                  exits 2)
+                - asset-URL prefix check rejecting upstream (peass-ng moved
+                  host)
+                - upstream `.digest` field absent (`bump-linpeas.sh` exits 1;
+                  look for `has no .digest field`)
+                - `linpeas-flake-bumper` GitHub App installation broken
+                  (`BUMP_APP_PRIVATE_KEY` not rotated, App not uninstalled)
+                - a closed (declined) bump PR for the same version
+              - Runs are green but the pin did not move: a bump PR is open
+                with auto-merge waiting on a required check or a branch
+                update.
+              - No recent runs: the workflow is disabled or its schedule is
+                not firing.
             - `upstream-api-failure` — the `gh api
               repos/peass-ng/PEASS-ng/releases/latest` call failed or returned
               empty. Likely a transient GitHub API issue or rate-limit
