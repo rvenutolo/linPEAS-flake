@@ -137,6 +137,9 @@ expect_read 'short-closer-stays-open' "${F4}sh"$'\n'"${F3}"$'\n''@C'$'\n'"${F4}"
 expect_read 'other-marker-stays-open' "~~~sh"$'\n'"${F3}"$'\n''@C'$'\n'"~~~"
 expect_read 'crlf-tagged' "${F3}bash"$'\r\n''@C'$'\r\n'"${F3}"$'\r'
 expect_read 'crlf-untagged' "${F3}"$'\r\n''@C'$'\r\n'"${F3}"$'\r'
+expect_read 'formfeed-after-tag' "${F3}sh"$'\f\n''@C'$'\n'"${F3}"
+expect_read 'formfeed-indent' $'\f'"${F3}sh"$'\n''@C'$'\n'$'\f'"${F3}"
+expect_read 'doubled-carriage-return' "${F3}sh"$'\r\r\n''@C'$'\r\r\n'"${F3}"$'\r\r'
 expect_read 'unterminated' "${F3}sh"$'\n''@C'
 expect_read 'blockquote-unclosed-then-plain' "> ${F3}sh"$'\n''> @C'$'\n'$'\n''plain'
 expect_read 'fence-after-prose' 'prose'$'\n'$'\n'"${F3}sh"$'\n''@C'$'\n'"${F3}" 3

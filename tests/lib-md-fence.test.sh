@@ -148,6 +148,12 @@ check 'crlf-lines-classify-like-lf' "${F3}bash"$'\r\n'"cmd"$'\r\n'"${F3}"$'\r\n'
 3 c=0 read=1 lang=[bash] text=[]
 0 c=0 read=1 lang=[bash] text=[]"
 
+check 'whitespace-kinds-around-fences' $'\f'"${F3}zsh"$'\v'$'\n'"cmd"$'\r\r\n'"${F3}"$'\f'$'\n'"after" \
+  "1 c=0 read=0 lang=[zsh] text=[]
+2 c=0 read=0 lang=[zsh] text=[cmd]
+3 c=0 read=0 lang=[zsh] text=[]
+0 c=0 read=0 lang=[zsh] text=[]"
+
 # @description The opening line's number, as `md_start` reports it.
 # @arg $1 scenario  @arg $2 document  @arg $3 expected line number
 function check_start() {
