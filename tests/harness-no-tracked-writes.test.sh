@@ -75,6 +75,11 @@ printf 'saw=%s\n' "$(cat tracked.txt)" >>"${PROBE_OUT}"
 if [[ -e gone.txt ]]; then printf 'gone-present\n' >>"${PROBE_OUT}"; fi
 printf 'args=%s,%s\n' "$1" "$2" >>"${PROBE_OUT}"
 printf 'overwritten\n' >tracked.txt
+if [[ -n ${PROBE_LOCK:-} ]]; then
+  mkdir locked
+  touch locked/file
+  chmod 500 locked
+fi
 exit "${PROBE_EXIT:-0}"
 PROBE
 chmod +x -- "${PROBE_REPO}/tests/probe.test.sh"
@@ -113,8 +118,13 @@ function run_probe() {
   if grep --quiet --fixed-strings --line-regexp -- "root=${PROBE_REPO}" "${out}"; then
     ran_in_source=yes
   fi
+  local cleanup_warning=no
+  if grep --quiet --fixed-strings -- 'could not remove the scratch copy' "${work}/${name}.err"; then
+    cleanup_warning=yes
+  fi
   {
     printf 'harness-assert-outcome: exit=%d\n' "${rc}"
+    printf '%s: cleanup warning printed: %s\n' "${name}" "${cleanup_warning}"
     printf '%s: exit status %d\n' "${name}" "${rc}"
     printf '%s: ran in the source tree: %s\n' "${name}" "${ran_in_source}"
     printf '%s: source tracked.txt after the run: %s\n' "${name}" "${source_now}"
@@ -160,6 +170,11 @@ expect_line scratch-tree-removes-copy-on-failure "${report}" 'scratch dirs left 
 report="$(run_probe scratch-tree-ignores-exported-git-dir "GIT_DIR=${PROBE_REPO}/.git" "GIT_WORK_TREE=${PROBE_REPO}")"
 expect_line scratch-tree-ignores-exported-git-dir "${report}" 'ran in the source tree: no'
 expect_line scratch-tree-ignores-exported-git-dir "${report}" 'source tracked.txt after the run: original'
+
+report="$(run_probe scratch-tree-keeps-verdict-when-cleanup-fails PROBE_LOCK=1)"
+expect_line scratch-tree-keeps-verdict-when-cleanup-fails "${report}" 'exit status 0'
+expect_line scratch-tree-keeps-verdict-when-cleanup-fails "${report}" 'cleanup warning printed: yes'
+chmod --recursive u+w -- "${work}/scratch-tree-keeps-verdict-when-cleanup-fails.tmp"
 
 printf 'edited\n' >"${PROBE_REPO}/tracked.txt"
 rm -- "${PROBE_REPO}/gone.txt"

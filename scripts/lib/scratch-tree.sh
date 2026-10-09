@@ -28,7 +28,8 @@ function _scratch_git() {
   env --unset=GIT_DIR --unset=GIT_WORK_TREE --unset=GIT_INDEX_FILE \
     --unset=GIT_COMMON_DIR --unset=GIT_OBJECT_DIRECTORY \
     git -c user.name=scratch -c user.email=scratch@invalid \
-    -c commit.gpgsign=false -c core.hooksPath=/dev/null "$@"
+    -c commit.gpgsign=false -c core.hooksPath=/dev/null \
+    -c gc.auto=0 -c maintenance.auto=false "$@"
 }
 
 # @description Copy the tracked files, as they are on disk, into a new
@@ -50,6 +51,10 @@ function stage_scratch_tree() {
       --create |
     tar --directory="${dest}" --extract --same-permissions
   _scratch_git -C "${dest}" init --quiet
+  # Later git commands in the copy would otherwise start a detached
+  # maintenance run that writes into .git while the copy is being removed.
+  _scratch_git -C "${dest}" config gc.auto 0
+  _scratch_git -C "${dest}" config maintenance.auto false
   printf '%s\0' "${tracked[@]}" |
     _scratch_git -C "${dest}" update-index --add --remove -z --stdin
   _scratch_git -C "${dest}" commit --quiet --no-verify --message scratch
@@ -76,7 +81,10 @@ function reexec_in_scratch_tree() {
     exit 2
   fi
   dest="$(make_temp --directory)"
-  trap 'rm --recursive --force -- "${dest}"' EXIT
+  # A copy that cannot be removed is reported but does not replace the
+  # harness's verdict: under errexit a failing `rm` in the trap would turn
+  # a passing run into exit 1.
+  trap 'rm --recursive --force -- "${dest}" || printf "%s: could not remove the scratch copy %s\n" "${0##*/}" "${dest}" >&2' EXIT
   trap 'exit 143' TERM
   trap 'exit 130' INT
   stage_scratch_tree "${src}" "${dest}"
