@@ -214,7 +214,8 @@ Surfacing "open bump PR" state on the dashboard is deliberately not implemented 
     returned empty.
 - `reason=upstream-tag-malformed` — the API succeeded but upstream
     published a tag outside the canonical shape.
-- `reason=stall-detected` — API succeeded but local pin is stale.
+- `reason=stall-detected` — the API call succeeded, the pin is older than the
+    staleness threshold, and upstream's latest release is a different tag.
 - `unknown` — the `check` job produced no `reason` output (an unhandled
     error, an earlier step failing, or a cancelled run); the body renders it
     as the default rather than emitting it.
