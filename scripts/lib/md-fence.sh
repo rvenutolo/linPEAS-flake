@@ -29,8 +29,10 @@
 # the tag, not as empty), `md_start` is the line number, and `md_read` is 1
 # when that tag is empty or one of sh/bash/shell/console/text.
 #
-# A trailing carriage return is dropped before classification, so a file
-# with CRLF line endings reads as the same fences.
+# Trailing carriage returns are dropped before classification, so a file
+# with CRLF line endings reads as the same fences, and indentation, the
+# gap before a tag and trailing text count any `[[:space:]]` as blank, as
+# a line toggle on `[[:space:]]` did.
 #
 # Indentation is uncapped and a list item ending does not close a fence
 # opened on its marker line; a fence the Markdown renderer would end
@@ -41,33 +43,33 @@
 # shellcheck disable=SC2034,SC2016
 readonly MD_FENCE_AWK='
 function md_step(line,    t, q, u, ch, n, rest, info, w, again) {
-  sub(/\r$/, "", line)
+  sub(/\r+$/, "", line)
   md_closed = 0
   md_text = line
   t = line
   q = 0
   if (md_in) {
-    while (q < md_depth && t ~ /^[ \t]*>/) { sub(/^[ \t]*>[ ]?/, "", t); q++ }
+    while (q < md_depth && t ~ /^[[:space:]]*>/) { sub(/^[[:space:]]*>[ ]?/, "", t); q++ }
     if (q < md_depth) { md_in = 0; md_closed = 1; t = line; q = 0 }
   }
   if (!md_in) {
     again = 1
     while (again) {
       again = 0
-      if (t ~ /^[ \t]*>/) { sub(/^[ \t]*>[ ]?/, "", t); q++; again = 1 }
-      else if (t ~ /^[ \t]*([-*+]|[0-9]+[.)])[ \t]+/) {
-        sub(/^[ \t]*([-*+]|[0-9]+[.)])[ \t]+/, "", t); again = 1
+      if (t ~ /^[[:space:]]*>/) { sub(/^[[:space:]]*>[ ]?/, "", t); q++; again = 1 }
+      else if (t ~ /^[[:space:]]*([-*+]|[0-9]+[.)])[[:space:]]+/) {
+        sub(/^[[:space:]]*([-*+]|[0-9]+[.)])[[:space:]]+/, "", t); again = 1
       }
     }
   }
   u = t
-  sub(/^[ \t]*/, "", u)
+  sub(/^[[:space:]]*/, "", u)
   ch = substr(u, 1, 1)
   n = 0
   if (ch == "`" || ch == "~") { while (substr(u, n + 1, 1) == ch) n++ }
   rest = substr(u, n + 1)
   if (md_in) {
-    if (n >= 3 && ch == md_ch && n >= md_len && rest ~ /^[ \t]*$/) {
+    if (n >= 3 && ch == md_ch && n >= md_len && rest ~ /^[[:space:]]*$/) {
       md_in = 0
       return 3
     }
@@ -82,8 +84,8 @@ function md_step(line,    t, q, u, ch, n, rest, info, w, again) {
     md_start = NR
     info = rest
     gsub(/[{}]/, " ", info)
-    sub(/^[ \t]+/, "", info)
-    sub(/[ \t].*$/, "", info)
+    sub(/^[[:space:]]+/, "", info)
+    sub(/[[:space:]].*$/, "", info)
     sub(/^[.]/, "", info)
     md_lang = tolower(info)
     md_read = (md_lang == "" || md_lang == "sh" || md_lang == "bash" \
