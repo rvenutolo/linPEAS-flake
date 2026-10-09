@@ -25,6 +25,16 @@ readonly YQ_MERGE_SPEC=(--yaml-fix-merge-anchor-to-spec)
 # node resolves it in one pass, since an anchor cannot sit on an alias.
 readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0]'
 
+# Two `explode` passes read the job keys of a `jobs:` node. One pass
+# replaces the aliases the node holds with what they stand for and leaves
+# the aliases inside those copies, so a `jobs:` written as an alias, or
+# one that merges in a map, still holds a key written as an alias after
+# it. A second pass resolves those. A job key is a scalar, so a key alias
+# stands for a scalar and no third level exists: a merge chain of any
+# depth resolves in the same two passes.
+# shellcheck disable=SC2034 # read by the scripts that source this library
+readonly RESOLVE_JOB_ALIASES='explode(.) | explode(.)'
+
 # @description Print the first job key the job list cannot carry, as a
 # JSON string, or nothing when every key is carriable. A key is refused
 # when it is a merge key, is not a scalar, is empty, or holds a tab, a
