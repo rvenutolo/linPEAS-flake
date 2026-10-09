@@ -605,9 +605,9 @@ an alias after it; the second pass resolves that. A job key is a
 scalar, so a key alias stands for a scalar and no third level exists: a
 merge chain of any depth resolves in the same two passes, provided the
 read passes `--yaml-fix-merge-anchor-to-spec` (`YQ_MERGE_SPEC`), as
-each read that uses `RESOLVE_JOB_ALIASES` does. A lint that refuses a job key counts a merge
-key still present under `jobs:`, whether written inline or brought in
-through an alias, as a refused key.
+each read that uses `RESOLVE_JOB_ALIASES` does. A lint that refuses a
+job key counts a merge key still present under `jobs:`, whether written
+inline or brought in through an alias, as a refused key.
 
 ## Text from files in bash arithmetic
 
