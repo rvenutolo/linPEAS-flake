@@ -6,6 +6,21 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261009-f2ced2fd] - 2026-10-09
+
+### Chores
+- Bump linpeas to 20261009-f2ced2fd ([#1252](https://github.com/rvenutolo/linPEAS-flake/pull/1252))
+- Update flake.lock ([#1251](https://github.com/rvenutolo/linPEAS-flake/pull/1251))
+- Update crate-ci/typos action to v1.50.3 ([#1248](https://github.com/rvenutolo/linPEAS-flake/pull/1248))
+
+### Fixes
+- Read Markdown fences by marker, depth and tag in the fenced-command lints ([#1250](https://github.com/rvenutolo/linPEAS-flake/pull/1250))
+- Run generator harnesses in a scratch copy of the tree ([#1249](https://github.com/rvenutolo/linPEAS-flake/pull/1249))
+- Keep Python bytecode out of the Pages site build ([#1247](https://github.com/rvenutolo/linPEAS-flake/pull/1247))
+- Read job keys and allowlist names the job lists cannot carry ([#1246](https://github.com/rvenutolo/linPEAS-flake/pull/1246))
+- Bound egress exempt markers to their own job block ([#1244](https://github.com/rvenutolo/linPEAS-flake/pull/1244))
+- Hold bash regex ranges to ASCII and lint new ones ([#1242](https://github.com/rvenutolo/linPEAS-flake/pull/1242))
+
 ## [20261006-4cf2d06d] - 2026-10-06
 
 ### Chores
