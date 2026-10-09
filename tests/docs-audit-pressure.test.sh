@@ -415,6 +415,17 @@ git -C "${SANDBOX}" commit --quiet -m 'ci: add workflows with aliased job keys'
 run_scenario 'aliased job keys inside an aliased jobs map are counted' 0 \
   --expect 'nested-key-job' --expect 'merged-key-job' --forbid '*k'
 
+# A merge chain three levels deep resolves to the keys it brings in, not to
+# the merge key: the read passes the flag that merges by the YAML
+# specification, as the other `jobs:` reads do. The jobs of the scenario
+# above are taken back out.
+git -C "${SANDBOX}" rm --quiet -- "${WF_DIR}/h.yml" "${WF_DIR}/i.yml"
+printf 'm0: &m0\n  chain-base-job:\n    runs-on: x\nm1: &m1\n  <<: *m0\n  chain-own-job:\n    runs-on: x\nm2: &m2\n  <<: *m1\njobs: *m2\n' >"${WF_DIR}/j.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add a workflow merging a chain of maps'
+run_scenario 'a merge chain under jobs is resolved to its keys' 0 \
+  --expect 'chain-base-job' --expect 'chain-own-job' --forbid '<<'
+
 # A workflow holding a NUL byte is one `yq` cannot read. The bytes git
 # prints must reach `yq` as they are: a shell variable drops the NUL and
 # hands `yq` a different, readable file.

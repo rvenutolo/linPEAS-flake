@@ -483,7 +483,6 @@ function main() {
     >"${odd_root}/workflows/ci.yml"
   run_scenario 'job-key-alias-in-aliased-jobs-resolves' 0 '' '' \
     "${odd_root}/workflows" "${odd_root}"
-  # A directory named like a workflow matches the glob and is not read.
   # Beside a refused key the names the file can still resolve are listed,
   # an aliased key among them, so the sentence below is not a ghost.
   printf 'The %slisted-key-job%s job runs on every PR.\nThe %sabsent-sibling%s job runs too.\n' \
@@ -499,6 +498,7 @@ function main() {
     failures=$((failures + 1))
   fi
   printf 'The %sfoo%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  # A directory named like a workflow matches the glob and is not read.
   rm --force -- "${odd_root}/workflows/ci.yml"
   printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n' >"${odd_root}/workflows/real.yml"
   mkdir --parents "${odd_root}/workflows/dir.yml"
