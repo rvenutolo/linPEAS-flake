@@ -368,6 +368,17 @@ expect_jobs 'other workflow merge key under jobs' \
   "${ONE_JOB}" $'foo: A\n' $'x: &j\n  qux:\n    runs-on: ubuntu-latest\njobs:\n  <<: *j\n' 1 \
   "DIR/other.yml: jobs: ${REFUSED} (first: \"<<\")"
 
+# A job key written as an alias inside an aliased `jobs:` map is the name
+# it stands for: the category entry naming it resolves, in ci.yml and in
+# any other workflow, and beside a refused key the names the file can
+# still resolve are not reported missing. A merge list holding a map with
+# an aliased key resolves the same way.
+expect_jobs 'ci.yml aliased job key inside an aliased jobs map' \
+  $'name: &k foo\nx: &j\n  *k :\n    runs-on: ubuntu-latest\njobs: *j\n' $'foo: A\n' '' 0 ''
+expect_jobs 'other workflow aliased job key inside an aliased jobs map' \
+  "${ONE_JOB}" $'foo: A\nnested-key-job: B\n' $'name: &k nested-key-job\nx: &j\n  *k :\n    runs-on: ubuntu-latest\njobs: *j\n' 0 ''
+expect_jobs 'other workflow aliased job key inside a merge list' \
+  "${ONE_JOB}" $'foo: A\nmerged-key-job: B\n' $'name: &k merged-key-job\na: &a\n  *k :\n    runs-on: ubuntu-latest\nb: &b\n  <<: [*a]\njobs: *b\n' 0 ''
 # A merge key whose value is not a mapping cannot be resolved; the refusal
 # is the verdict, not a could-not-read exit.
 expect_jobs 'ci.yml merge key holding a scalar' \
@@ -426,6 +437,9 @@ readonly ONE_ENTRY='1 ci.yml / categories drift entry/entries'
 expect_exact 'ci.yml merge key is one drift entry' \
   $'x: &j\n  baz:\n    runs-on: ubuntu-latest\njobs:\n  <<: *j\n  foo:\n    runs-on: ubuntu-latest\n' $'foo: A\nbaz: B\n' \
   "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"${ONE_ENTRY}"
+expect_exact 'ci.yml refused key beside an aliased job key inside an aliased jobs map' \
+  $'name: &k foo\nx: &j\n  *k :\n    runs-on: ubuntu-latest\n  "":\n    runs-on: ubuntu-latest\njobs: *j\n' $'foo: A\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"\")"$'\n'"${ONE_ENTRY}"
 expect_exact 'ci.yml line-break key is one drift entry' \
   $'jobs:\n  "a\\nb":\n    runs-on: ubuntu-latest\n' $'x: A\n' \
   "DIR/ci.yml: jobs: ${REFUSED} (first: \"a\\nb\")"$'\n'"DIR/categories.yml: category entry x does not match any job in .github/workflows/"$'\n''2 ci.yml / categories drift entry/entries'

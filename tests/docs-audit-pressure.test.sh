@@ -404,6 +404,17 @@ git -C "${SANDBOX}" commit --quiet -m 'ci: add a two-document and an aliased wor
 run_scenario 'later documents and aliased jobs are counted' 0 \
   --expect 'canary' --expect 'mirror' --expect 'sentinel'
 
+# A job id written as an alias inside an aliased `jobs:` map is the name it
+# stands for, also through a merge list. The jobs the scenario above
+# reports are taken back out, so each report names its own jobs.
+git -C "${SANDBOX}" rm --quiet -- "${WF_DIR}/d.yml" "${WF_DIR}/e.yml" "${WF_DIR}/g.yml"
+printf 'name: &k nested-key-job\nx: &j\n  *k :\n    runs-on: x\njobs: *j\n' >"${WF_DIR}/h.yml"
+printf 'name: &k merged-key-job\na: &a\n  *k :\n    runs-on: x\nb: &b\n  <<: [*a]\njobs: *b\n' >"${WF_DIR}/i.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add workflows with aliased job keys'
+run_scenario 'aliased job keys inside an aliased jobs map are counted' 0 \
+  --expect 'nested-key-job' --expect 'merged-key-job' --forbid '*k'
+
 # A workflow holding a NUL byte is one `yq` cannot read. The bytes git
 # prints must reach `yq` as they are: a shell variable drops the NUL and
 # hands `yq` a different, readable file.

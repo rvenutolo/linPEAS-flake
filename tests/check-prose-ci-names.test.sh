@@ -476,7 +476,15 @@ function main() {
     printf 'FAIL: %s — yq warned about the merge order\n' "${LAST_NAME}" >&2
     failures=$((failures + 1))
   fi
+  # A job key written as an alias inside an aliased `jobs:` map is the name
+  # it stands for, so a sentence naming that job is not a ghost.
+  printf 'The %srenamed-key-job%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'name: &k renamed-key-job\nx: &j\n  *k :\n    runs-on: ubuntu-latest\njobs: *j\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-alias-in-aliased-jobs-resolves' 0 '' '' \
+    "${odd_root}/workflows" "${odd_root}"
   # A directory named like a workflow matches the glob and is not read.
+  printf 'The %sfoo%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
   rm --force -- "${odd_root}/workflows/ci.yml"
   printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n' >"${odd_root}/workflows/real.yml"
   mkdir --parents "${odd_root}/workflows/dir.yml"
