@@ -484,6 +484,20 @@ function main() {
   run_scenario 'job-key-alias-in-aliased-jobs-resolves' 0 '' '' \
     "${odd_root}/workflows" "${odd_root}"
   # A directory named like a workflow matches the glob and is not read.
+  # Beside a refused key the names the file can still resolve are listed,
+  # an aliased key among them, so the sentence below is not a ghost.
+  printf 'The %slisted-key-job%s job runs on every PR.\nThe %sabsent-sibling%s job runs too.\n' \
+    "${bt}" "${bt}" "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'name: &k listed-key-job\nx: &j\n  *k :\n    runs-on: ubuntu-latest\n  "":\n    runs-on: ubuntu-latest\njobs: *j\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'job-key-alias-beside-a-refused-key-is-listed' 1 \
+    "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
+  also_expect 'docs/x.md:2: ghost: absent-sibling'
+  if grep --fixed-strings --quiet -- 'ghost: listed-key-job' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the aliased job listed-key-job is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
   printf 'The %sfoo%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
   rm --force -- "${odd_root}/workflows/ci.yml"
   printf 'jobs:\n  foo:\n    runs-on: ubuntu-latest\n' >"${odd_root}/workflows/real.yml"
