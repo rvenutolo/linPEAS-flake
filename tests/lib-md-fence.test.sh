@@ -142,6 +142,12 @@ check 'implicit-close-reopens-at-new-depth' \
 0 c=1 read=1 lang=[sh] text=[]
 0 c=0 read=1 lang=[sh] text=[]"
 
+check 'crlf-lines-classify-like-lf' "${F3}bash"$'\r\n'"cmd"$'\r\n'"${F3}"$'\r\n'"after"$'\r' \
+  "1 c=0 read=1 lang=[bash] text=[]
+2 c=0 read=1 lang=[bash] text=[cmd]
+3 c=0 read=1 lang=[bash] text=[]
+0 c=0 read=1 lang=[bash] text=[]"
+
 # @description The opening line's number, as `md_start` reports it.
 # @arg $1 scenario  @arg $2 document  @arg $3 expected line number
 function check_start() {

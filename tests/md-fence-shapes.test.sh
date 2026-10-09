@@ -135,6 +135,8 @@ expect_read 'tag-attribute-braces' "${F3}{.sh}"$'\n''@C'$'\n'"${F3}"
 expect_read 'tag-after-space' "${F3} sh"$'\n''@C'$'\n'"${F3}"
 expect_read 'short-closer-stays-open' "${F4}sh"$'\n'"${F3}"$'\n''@C'$'\n'"${F4}"
 expect_read 'other-marker-stays-open' "~~~sh"$'\n'"${F3}"$'\n''@C'$'\n'"~~~"
+expect_read 'crlf-tagged' "${F3}bash"$'\r\n''@C'$'\r\n'"${F3}"$'\r'
+expect_read 'crlf-untagged' "${F3}"$'\r\n''@C'$'\r\n'"${F3}"$'\r'
 expect_read 'unterminated' "${F3}sh"$'\n''@C'
 expect_read 'blockquote-unclosed-then-plain' "> ${F3}sh"$'\n''> @C'$'\n'$'\n''plain'
 expect_read 'fence-after-prose' 'prose'$'\n'$'\n'"${F3}sh"$'\n''@C'$'\n'"${F3}" 3
@@ -147,6 +149,7 @@ expect_unread 'wrapped-fence' "${F4}yaml"$'\n'"${F3}sh"$'\n'"inner"$'\n'"${F3}"$
 expect_unread 'blockquote-yaml' "> ${F3}yaml"$'\n''> @C'$'\n'"> ${F3}"
 expect_unread 'blockquote-ends-fence' "> ${F3}sh"$'\n''> echo hi'$'\n'$'\n''@C'
 expect_unread 'prose-outside-fence' "${F3}sh"$'\n''echo hi'$'\n'"${F3}"$'\n'$'\n''@C'
+expect_unread 'crlf-closed-fence-then-prose' "${F3}sh"$'\r\n''echo hi'$'\r\n'"${F3}"$'\r\n'$'\r\n''@C'
 expect_unread 'command-in-info-string' "${F3}sh @C"$'\n'"${F3}"
 
 # @description Run the digest-pin lint over a body that must come back clean.
