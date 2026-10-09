@@ -144,6 +144,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/inventory-action-pin-tags.test.sh`      | `scripts/inventory-action-pin-tags.sh`      | `tests/fixtures/inventory-action-pin-tags`   |
 | `tests/linpeas-pin-assert.test.sh`             | `nix/linpeas.nix`                           | —                                            |
 | `tests/mark-docs-audit.test.sh`                | `scripts/mark-docs-audit.sh`                | —                                            |
+| `tests/md-fence-shapes.test.sh`                | `scripts/check-manifest-digest-pinned.sh`   | —                                            |
 | `tests/octoscan-scan.test.sh`                  | `scripts/octoscan-scan.sh`                  | —                                            |
 | `tests/repo-root-guard.test.sh`                | `scripts/*.sh`                              | —                                            |
 | `tests/run-doc-freshness.test.sh`              | `scripts/run-doc-freshness.sh`              | —                                            |
