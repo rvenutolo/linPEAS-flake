@@ -64,6 +64,7 @@ readonly -a HARNESSES=(
   'glob-scan-breadth|glob-scan-breadth.test.sh|'
   'repo-root-guard|repo-root-guard.test.sh|'
   'site-no-bytecode|site-no-bytecode.test.sh|'
+  'harness-no-tracked-writes|harness-no-tracked-writes.test.sh|'
   'harness-assert|lib-harness-assert.test.sh|'
   # Harnesses with no bespoke CI job, lint-group, or refresh-* glob home run
   # here test-only. Any paired enforce script runs in its own workflow or
