@@ -86,7 +86,11 @@ printf 'overwritten\n' >tracked.txt
 if [[ -n ${PROBE_SLEEP:-} ]]; then
   printf '%s\n' "$$" >"${PROBE_OUT}.pid"
   : >"${PROBE_OUT}.started"
-  if [[ -n ${PROBE_TRAP:-} ]]; then
+  if [[ -n ${PROBE_GRAND:-} ]]; then
+    sleep 30 &
+    printf '%s\n' "$!" >"${PROBE_OUT}.gpid"
+    wait $!
+  elif [[ -n ${PROBE_TRAP:-} ]]; then
     trap 'sleep 1; : >"${PROBE_OUT}.cleaned"; exit 143' TERM
     sleep 3 &
     wait $!
@@ -236,14 +240,19 @@ function run_signal_case() {
   local -a left=()
   LINT_ALLOW_EMPTY_SCAN=1 enumerate_into left 'leftover scratch dirs' \
     find "${tmp}" -mindepth 1 -print0
-  local alive=no cleaned=no
+  local alive=no cleaned=no sub=no
   if kill -0 "$(cat -- "${out}.pid")" 2>/dev/null; then alive=yes; fi
+  if [[ -e ${out}.gpid ]] && kill -0 "$(cat -- "${out}.gpid")" 2>/dev/null; then
+    sub=yes
+    kill -KILL "$(cat -- "${out}.gpid")" 2>/dev/null || true
+  fi
   if [[ -e ${out}.cleaned ]]; then cleaned=yes; fi
   {
     printf '%s: exit status %d\n' "${name}" "${rc}"
     printf '%s: scratch dirs left behind: %d\n' "${name}" "${#left[@]}"
     printf '%s: copy run still alive after the parent exited: %s\n' "${name}" "${alive}"
     printf '%s: copy run finished its cleanup before the parent exited: %s\n' "${name}" "${cleaned}"
+    printf '%s: harness subprocess still alive after the parent exited: %s\n' "${name}" "${sub}"
   } >"${work}/${name}.report"
 }
 
@@ -261,6 +270,75 @@ run_signal_case scratch-tree-waits-for-slow-cleanup PROBE_TRAP=1
 signal_report="${work}/scratch-tree-waits-for-slow-cleanup.report"
 expect_line scratch-tree-waits-for-slow-cleanup "${signal_report}" 'copy run finished its cleanup before the parent exited: yes'
 expect_line scratch-tree-waits-for-slow-cleanup "${signal_report}" 'scratch dirs left behind: 0'
+
+# The signal reaches what the copy run started, not only the copy run.
+run_signal_case scratch-tree-signals-the-whole-group PROBE_GRAND=1
+signal_report="${work}/scratch-tree-signals-the-whole-group.report"
+expect_line scratch-tree-signals-the-whole-group "${signal_report}" 'harness subprocess still alive after the parent exited: no'
+expect_line scratch-tree-signals-the-whole-group "${signal_report}" 'exit status 143'
+
+# @description Send SIGTERM while the copy is still being built. A `git` shim
+# that waits half a second per call keeps the build step running long enough
+# to signal it; the shim records the pid of each call.
+function run_early_signal_case() {
+  local -r name="$1"
+  local -r tmp="${work}/${name}.tmp" out="${work}/${name}.probe-out" \
+    shim="${work}/${name}.shim" pids="${work}/${name}.shim-pids"
+  local real_git
+  real_git="$(command -v git)"
+  mkdir --parents -- "${tmp}" "${shim}"
+  : >"${out}"
+  : >"${pids}"
+  cat >"${shim}/git" <<'SHIM'
+#!/usr/bin/env bash
+printf '%s\n' "$$" >>"${SHIM_PIDS}"
+sleep 0.5
+exec "${REAL_GIT}" "$@"
+SHIM
+  chmod +x -- "${shim}/git"
+  (
+    cd -- "${PROBE_REPO}"
+    exec env --unset=SCRATCH_TREE_ACTIVE "TMPDIR=${tmp}" "PROBE_OUT=${out}" \
+      "PATH=${shim}:${PATH}" "SHIM_PIDS=${pids}" "REAL_GIT=${real_git}" \
+      PROBE_SLEEP=1 \
+      bash "${PROBE_REPO}/tests/probe.test.sh" one two >/dev/null 2>&1
+  ) &
+  local -r pid=$!
+  local _ staged=no
+  for _ in $(seq 1 200); do
+    if [[ -n $(find "${tmp}" -mindepth 1 -maxdepth 1 -print -quit) ]]; then
+      staged=yes
+      break
+    fi
+    sleep 0.05
+  done
+  kill -TERM "${pid}"
+  local rc=0
+  wait "${pid}" || rc=$?
+  local -a left=()
+  LINT_ALLOW_EMPTY_SCAN=1 enumerate_into left 'leftover scratch dirs' \
+    find "${tmp}" -mindepth 1 -print0
+  local running=no shim_pid
+  while IFS= read -r shim_pid; do
+    if [[ -n ${shim_pid} ]] && kill -0 "${shim_pid}" 2>/dev/null; then running=yes; fi
+  done <"${pids}"
+  local reached=no
+  if [[ -e ${out}.started ]]; then reached=yes; fi
+  {
+    printf '%s: copy directory existed when the signal was sent: %s\n' "${name}" "${staged}"
+    printf '%s: exit status %d\n' "${name}" "${rc}"
+    printf '%s: scratch dirs left behind: %d\n' "${name}" "${#left[@]}"
+    printf '%s: staging subprocess still running after the parent exited: %s\n' "${name}" "${running}"
+    printf '%s: probe body ran: %s\n' "${name}" "${reached}"
+  } >"${work}/${name}.report"
+}
+
+run_early_signal_case scratch-tree-signal-during-staging
+signal_report="${work}/scratch-tree-signal-during-staging.report"
+expect_line scratch-tree-signal-during-staging "${signal_report}" 'copy directory existed when the signal was sent: yes'
+expect_line scratch-tree-signal-during-staging "${signal_report}" 'staging subprocess still running after the parent exited: no'
+expect_line scratch-tree-signal-during-staging "${signal_report}" 'scratch dirs left behind: 0'
+expect_line scratch-tree-signal-during-staging "${signal_report}" 'probe body ran: no'
 
 mkdir --parents -- "${PROBE_REPO}/reltmp"
 report="$(run_probe scratch-tree-accepts-relative-tmpdir TMPDIR=reltmp)"

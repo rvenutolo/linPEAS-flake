@@ -2917,15 +2917,24 @@ and ignored files are not.
 
 - `2` — the enumeration or the commit failed; a tracked file that exists but cannot be read fails the copy with the exit status of `tar`
 
+#### \_scratch_tree_forward()
+
+Signal handler of `reexec_in_scratch_tree`: send TERM to the
+process group of every background job and record that a signal arrived.
+The copy run is a session leader, so its group holds everything the
+harness started.
+
 #### reexec_in_scratch_tree()
 
 Re-run the calling harness inside a scratch copy of the work
 tree it was started from, then exit with the copy run's status. Returns
 without doing anything when the caller is already that copy run. The
-copy is removed on every exit path of the parent, and a SIGTERM, SIGINT
-or SIGHUP to the parent is forwarded to the copy run, which is waited
-for before the copy is removed. SIGKILL cannot be forwarded and leaves
-the copy and its run behind.
+copy is removed on every exit path of the parent. The copy run is a
+session leader, and a SIGTERM, SIGINT or SIGHUP to the parent reaches
+its whole process group, which is waited for before the copy is removed;
+a signal that arrives while the copy is still being built ends the parent
+with status 143 once the build step in flight returns. SIGKILL cannot be
+forwarded and leaves the copy and its run behind.
 Call it after the harness's own preamble and before any statement that
 writes.
 
@@ -2935,7 +2944,7 @@ writes.
 
 **Exit codes:**
 
-- `2` — the harness is not inside the work tree, or the copy failed
+- `2` — the harness is not inside the work tree, `setsid` is missing, or the copy failed
 
 ### scripts/lib/temp.sh
 

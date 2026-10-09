@@ -70,17 +70,35 @@ function stage_scratch_tree() {
   _scratch_git -C "${dest}" commit --quiet --no-verify --message scratch
 }
 
+# Set by `_scratch_tree_forward`; read by `reexec_in_scratch_tree`.
+_scratch_tree_signalled=0
+
+# @description Signal handler of `reexec_in_scratch_tree`: send TERM to the
+# process group of every background job and record that a signal arrived.
+# The copy run is a session leader, so its group holds everything the
+# harness started.
+function _scratch_tree_forward() {
+  local pid
+  _scratch_tree_signalled=1
+  for pid in $(jobs -p); do
+    kill -TERM -- "-${pid}" 2>/dev/null || kill -TERM "${pid}" 2>/dev/null || true
+  done
+}
+
 # @description Re-run the calling harness inside a scratch copy of the work
 # tree it was started from, then exit with the copy run's status. Returns
 # without doing anything when the caller is already that copy run. The
-# copy is removed on every exit path of the parent, and a SIGTERM, SIGINT
-# or SIGHUP to the parent is forwarded to the copy run, which is waited
-# for before the copy is removed. SIGKILL cannot be forwarded and leaves
-# the copy and its run behind.
+# copy is removed on every exit path of the parent. The copy run is a
+# session leader, and a SIGTERM, SIGINT or SIGHUP to the parent reaches
+# its whole process group, which is waited for before the copy is removed;
+# a signal that arrives while the copy is still being built ends the parent
+# with status 143 once the build step in flight returns. SIGKILL cannot be
+# forwarded and leaves the copy and its run behind.
 # Call it after the harness's own preamble and before any statement that
 # writes.
 # @arg $@ the harness's own arguments, passed through unchanged
-# @exitcode 2 the harness is not inside the work tree, or the copy failed
+# @exitcode 2 the harness is not inside the work tree, `setsid` is missing,
+#   or the copy failed
 function reexec_in_scratch_tree() {
   local src script rel child rc=0
   src="$(repo_toplevel)"
@@ -89,35 +107,42 @@ function reexec_in_scratch_tree() {
   if [[ ${SCRATCH_TREE_ACTIVE:-} == "${src}" ]]; then
     return 0
   fi
+  if ! command -v setsid >/dev/null 2>&1; then
+    printf '%s: setsid is not on PATH, so the copy run cannot be signalled as a group\n' "${0##*/}" >&2
+    exit 2
+  fi
   script="$(realpath -- "$0")"
   rel="${script#"${src}/"}"
   if [[ ${rel} == "${script}" ]]; then
     printf '%s: %s is not inside the work tree %s\n' "${0##*/}" "${script}" "${src}" >&2
     exit 2
   fi
+  # Not a local: an errexit exit from inside `stage_scratch_tree` runs the
+  # EXIT trap after this function's locals are gone. A copy that cannot be
+  # removed is reported but does not replace the harness's verdict: under
+  # errexit a failing `rm` in the trap would turn a passing run into exit 1.
+  _scratch_tree_dest=''
+  _scratch_tree_signalled=0
+  trap '[[ -z ${_scratch_tree_dest} ]] || rm --recursive --force -- "${_scratch_tree_dest}" || printf "%s: could not remove the scratch copy %s\n" "${0##*/}" "${_scratch_tree_dest}" >&2' EXIT
+  trap _scratch_tree_forward TERM INT HUP
   # Absolute and physical: the copy run changes directory into it, and the
   # marker is compared with the path git reports.
-  # Not a local: an errexit exit from inside `stage_scratch_tree` runs the
-  # EXIT trap after this function's locals are gone.
   _scratch_tree_dest="$(make_temp --directory)"
   _scratch_tree_dest="$(realpath -- "${_scratch_tree_dest}")"
   local -r dest="${_scratch_tree_dest}"
-  # A copy that cannot be removed is reported but does not replace the
-  # harness's verdict: under errexit a failing `rm` in the trap would turn
-  # a passing run into exit 1.
-  trap 'rm --recursive --force -- "${_scratch_tree_dest}" || printf "%s: could not remove the scratch copy %s\n" "${0##*/}" "${_scratch_tree_dest}" >&2' EXIT
   stage_scratch_tree "${src}" "${dest}"
-  # The copy run is a background job so a signal to this process reaches it:
-  # bash defers a trap until a foreground command ends, and a parent that
-  # exited first would remove the copy under a run still writing into it.
-  # A background job ignores SIGINT, so both signals are forwarded as TERM.
+  if ((_scratch_tree_signalled)); then
+    exit 143
+  fi
+  # A background job, so the trap runs while the copy run is in progress:
+  # bash defers a trap until a foreground command ends. A background job
+  # ignores SIGINT, which is why the handler sends TERM.
   (
     cd -- "${dest}" || exit 2
-    exec env --unset=GIT_DIR --unset=GIT_WORK_TREE --unset=GIT_INDEX_FILE \
+    exec setsid env --unset=GIT_DIR --unset=GIT_WORK_TREE --unset=GIT_INDEX_FILE \
       "SCRATCH_TREE_ACTIVE=${dest}" bash "${dest}/${rel}" "$@"
   ) &
   child=$!
-  trap 'kill -TERM "${child}" 2>/dev/null || true' TERM INT HUP
   wait "${child}" || rc=$?
   while kill -0 "${child}" 2>/dev/null; do
     wait "${child}" || rc=$?
