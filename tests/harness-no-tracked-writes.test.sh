@@ -4,14 +4,17 @@
 # exercise a generator or flip a fixture's mode leave the checkout they were
 # started from untouched.
 #
-# Two groups of scenarios:
+# Three groups of scenarios:
 #   - `scratch-tree-*`: `reexec_in_scratch_tree` against a small throwaway
 #     repository and a probe harness written at run time. They require that
-#     the probe runs in a copy, that the source is not written, that an
-#     uncommitted edit is visible in the copy, that the child's exit status
-#     is the parent's, that an exported `GIT_DIR` does not point the copy
-#     back at the source, and that the copy is removed on success and on
-#     failure.
+#     the probe runs in a copy and the source is not written, that an
+#     uncommitted edit is visible in the copy and a deleted file is not,
+#     that arguments and the child's exit status pass through, that an
+#     exported `GIT_DIR`, an inherited `SCRATCH_TREE_ACTIVE`, a relative
+#     `TMPDIR`, a run from a subdirectory and job control do not break the
+#     re-exec, that an unreadable tracked file fails the copy, and that a
+#     SIGTERM during the build or during the copy run reaches the whole
+#     process group, waits for it and removes the copy.
 #   - `snapshot-*`: the change detector alone, on a constructed tree: it
 #     must see a new or deleted file, a same-content rewrite, a chmod
 #     round trip, a retargeted symlink, a directory mode change and a new
@@ -19,9 +22,10 @@
 #   - `no-writes-*`: every `tests/refresh-*.test.sh` harness and
 #     `tests/check-doc-anchors.test.sh`, each run from a fresh copy of the
 #     tree with the (type, link target, size, mode, ctime) of every entry
-#     outside `.git` recorded before and after. A write, a chmod, a rename or a restored
-#     backup all move the ctime, so a run that rewrote a doc and put it back
-#     is a finding as much as one that left it drifted.
+#     outside `.git` recorded before and after. A write, a chmod, a
+#     rename or a restored backup all move the ctime, so a run that
+#     rewrote a doc and put it back is a finding as much as one that left
+#     it drifted.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -464,7 +468,7 @@ snapshot_case snapshot-detects-directory-mode yes chmod-directory
 snapshot_case snapshot-detects-new-empty-directory yes new-empty-directory
 
 # ---------------------------------------------------------------------------
-# no-writes-*: the harnesses that used to write tracked files
+# no-writes-*: the harnesses that regenerate a doc or flip a fixture's mode
 # ---------------------------------------------------------------------------
 
 declare -a roster=()
