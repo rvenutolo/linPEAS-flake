@@ -29,10 +29,13 @@
 # command word followed by a bare `nixpkgs#` ref, with any subcommand and
 # any flags in between. A `/<rev>` between `nixpkgs` and `#` passes.
 #
-# In Markdown, a line that starts, after indentation, with three
-# backticks toggles a fence; the fence is read when the text directly
-# after those backticks, up to the first whitespace, is empty or one of
-# sh/bash/shell/console/text.
+# In Markdown, fences are read by scripts/lib/md-fence.sh: a run of three
+# or more backticks or tildes opens a fence after any indentation,
+# blockquote markers and list marker, and a run of the same character at
+# least as long, at the same blockquote depth, closes it. A fence is read
+# when the first word of its info string, lower-cased and without
+# attribute braces or a leading dot, is empty or one of
+# sh/bash/shell/console/text. The reader's limits are stated in that file.
 #
 # See docs/security/workflow-hardening.md.
 #
@@ -49,6 +52,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "${_lib_dir}/lib/awk-path.sh"
+# shellcheck source=scripts/lib/md-fence.sh
+source "${_lib_dir}/lib/md-fence.sh"
 
 # The bad pattern: a `nix` command word, then anything, then a bare
 # `nixpkgs#` ref standing on its own token boundary. The leading
@@ -97,29 +102,14 @@ for f in "${paths[@]}"; do
   # The capture is what makes awk's exit status reach this shell: fed
   # through a process substitution instead, a dead awk would hand the
   # loop an empty stream and the file would score as clean.
-  if ! hits="$(awk -v mode="${mode}" -v rx="${BAD_REGEX}" '
-    BEGIN { in_fence = 0; fence_lang = "" }
+  if ! hits="$(awk -v mode="${mode}" -v rx="${BAD_REGEX}" "${MD_FENCE_AWK}"'
+    BEGIN { md_in = 0 }
     {
       line = $0
       if (mode == "md") {
-        if (line ~ /^[[:space:]]*```/) {
-          if (in_fence) { in_fence = 0; fence_lang = "" }
-          else {
-            in_fence = 1
-            tmp = line
-            sub(/^[[:space:]]*```/, "", tmp)
-            sub(/[[:space:]].*$/, "", tmp)
-            fence_lang = tmp
-          }
-          next
-        }
-        if (!in_fence) next
-        if (fence_lang != "" \
-            && fence_lang != "sh" \
-            && fence_lang != "bash" \
-            && fence_lang != "shell" \
-            && fence_lang != "console" \
-            && fence_lang != "text") next
+        r = md_step(line)
+        if (r != 2 || !md_read) next
+        line = md_text
       }
       if (mode != "md" && line ~ /^[[:space:]]*#/) next
       if (mode != "md" && line ~ /^[[:space:]]*-?[[:space:]]*(name|description):/) next

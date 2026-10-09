@@ -367,10 +367,13 @@ alone would exempt a snippet that spells the host through a variable.
 Token names are matched over the whole fence, not the delete line: a
 real snippet assigns its credential many lines above the request.
 
-In Markdown, a line that starts, after indentation, with three
-backticks toggles a fence; the fence is read when the text directly
-after those backticks, up to the first whitespace, is empty or one of
-sh/bash/shell/console/text.
+In Markdown, fences are read by scripts/lib/md-fence.sh: a run of three
+or more backticks or tildes opens a fence after any indentation,
+blockquote markers and list marker, and a run of the same character at
+least as long, at the same blockquote depth, closes it. A fence is read
+when the first word of its info string, lower-cased and without
+attribute braces or a leading dot, is empty or one of
+sh/bash/shell/console/text. The reader's limits are stated in that file.
 
 Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
 harness can point at a temp dir, PATHS_OVERRIDE (newline-separated file
@@ -2707,6 +2710,12 @@ instead of to install jq.
 
 Install the shared ERR trap in the calling shell. Captures
 the real failing exit code before any command substitution clobbers $?.
+
+### scripts/lib/md-fence.sh
+
+One Markdown fence reader for the lints that read shell
+commands inside fences, as `awk` source to place ahead of the caller's
+program. Source after `set -Eeuo pipefail`.
 
 ### scripts/lib/payload.sh
 
