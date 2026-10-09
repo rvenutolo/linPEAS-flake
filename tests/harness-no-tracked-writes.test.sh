@@ -307,8 +307,11 @@ SHIM
   ) &
   local -r pid=$!
   local _ staged=no
+  local -a present=()
   for _ in $(seq 1 200); do
-    if [[ -n $(find "${tmp}" -mindepth 1 -maxdepth 1 -print -quit) ]]; then
+    LINT_ALLOW_EMPTY_SCAN=1 enumerate_into present 'scratch dirs under way' \
+      find "${tmp}" -mindepth 1 -maxdepth 1 -print0
+    if ((${#present[@]} > 0)); then
       staged=yes
       break
     fi
@@ -353,6 +356,34 @@ if command -v script >/dev/null 2>&1; then
 else
   pass 'scratch-tree-works-under-job-control — skipped, script is not on PATH'
 fi
+
+# The helper's work-tree lookup is a could-not-run: a script outside any work
+# tree that calls it exits 2 naming the missing tree.
+outside="${work}/outside"
+mkdir --parents -- "${outside}"
+cat >"${outside}/caller.sh" <<'CALLER'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+IFS=$'\n\t'
+source "${LIB_DIR}/scratch-tree.sh"
+reexec_in_scratch_tree
+CALLER
+outside_rc=0
+(
+  cd -- "${outside}"
+  env "GIT_CEILING_DIRECTORIES=${work}" "LIB_DIR=${PROBE_REPO}/scripts/lib" \
+    bash caller.sh </dev/null >/dev/null 2>"${work}/outside.err"
+) || outside_rc=$?
+{
+  printf 'scratch-tree-outside-a-work-tree: exit status %d\n' "${outside_rc}"
+  if grep --quiet --fixed-strings -- 'caller.sh: cannot resolve the git work tree' "${work}/outside.err"; then
+    printf 'scratch-tree-outside-a-work-tree: diagnostic names the missing work tree: yes\n'
+  else
+    printf 'scratch-tree-outside-a-work-tree: diagnostic names the missing work tree: no\n'
+  fi
+} >"${work}/outside.report"
+expect_line scratch-tree-outside-a-work-tree "${work}/outside.report" 'exit status 2'
+expect_line scratch-tree-outside-a-work-tree "${work}/outside.report" 'diagnostic names the missing work tree: yes'
 
 mkdir --parents -- "${PROBE_REPO}/reltmp"
 report="$(run_probe scratch-tree-accepts-relative-tmpdir TMPDIR=reltmp)"
