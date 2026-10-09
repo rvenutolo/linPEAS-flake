@@ -136,13 +136,13 @@ function job_names() {
       # refused file's own shape, not a missing precondition.
       # A read that fails (a merge key that is not a mapping) falls back to
       # the file's literal job keys, so the refusal is its only finding.
-      names="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
+      names="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
         names="$(yq eval "${YQ_MERGE_SPEC[@]}" --no-doc '(.jobs // {}) | select(kind == "map") | to_entries[] | .key | select(kind == "scalar" and tag != "!!merge") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
         names=''
       if [[ -n ${names} ]]; then printf '%s\n' "${names}"; fi
       continue
     fi
-    yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" || return 1
+    yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" || return 1
   done
 }
 

@@ -186,7 +186,7 @@ fi
 # is not a mapping cannot be resolved, and the keys of a file that has
 # another would only repeat the refusal.
 if ((! ci_jobs_unread)); then
-  if ! yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[]' "${CI_FILE}" | sort --unique >"${ci_jobs_file}"; then
+  if ! yq eval "${YQ_MERGE_SPEC[@]}" ".jobs | ${RESOLVE_JOB_ALIASES} | keys | .[]" "${CI_FILE}" | sort --unique >"${ci_jobs_file}"; then
     printf 'cannot read job keys from %s\n' "${CI_FILE}" >&2
     exit 2
   fi
@@ -205,8 +205,9 @@ glob_into workflow_files 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_D
 # they join the set, in this shell rather than in a pipeline's subshell,
 # where an exit would end that subshell alone and leave the redirect
 # writing a short job set. A workflow with no `jobs:` reads as no keys
-# through `// {}`, and `explode`, given `jobs:` alone, reads one written
-# as an alias as the map it names, so a failure here is a file whose job
+# through `// {}`, and `RESOLVE_JOB_ALIASES`, given `jobs:` alone, reads
+# one written as an alias, and a key written as an alias, as the names
+# they stand for, so a failure here is a file whose job
 # keys this run does not have: a category entry naming a job only that
 # file holds would be reported as matching nothing.
 all_jobs=''
@@ -230,13 +231,13 @@ for f in "${workflow_files[@]}"; do
     # line cannot carry is dropped from the list. A read that fails is the
     # refused file's own shape (a merge key that is not a mapping), and its
     # literal job keys stand for it.
-    workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | keys | .[] | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
+    workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | keys | .[] | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
       workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" --no-doc '(.jobs // {}) | select(kind == "map") | to_entries[] | .key | select(kind == "scalar" and tag != "!!merge") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
       workflow_jobs=''
   else
     # The cost of `explode` is a stated limit: docs/development/linting.md,
     # section "YAML aliases in workflow reads".
-    workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | explode(.) | keys | .[]' "${f}")" || {
+    workflow_jobs="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | keys | .[]' "${f}")" || {
       printf 'cannot read job keys from %s: yq exited %d\n' "${f}" "$?" >&2
       exit 2
     }

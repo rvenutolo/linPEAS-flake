@@ -597,6 +597,16 @@ a Go runtime dump, and the script treats the read as one that failed,
 by the exit contract its header states. Such a workflow is never passed;
 one that fits in memory is read in full.
 
+A workflow's job keys are read through two `explode` passes
+(`RESOLVE_JOB_ALIASES` in `scripts/lib/job-keys.sh`). One pass resolves
+the aliases a node holds and leaves those inside the copies, so a `jobs:`
+written as an alias, or merging in a map, can still hold a key written as
+an alias after it; the second pass resolves that. A job key is a
+scalar, so a key alias stands for a scalar and no third level exists: a
+merge chain of any depth resolves in the same two passes. A merge key
+that is still present under `jobs:` after the passes, whether written
+inline or brought in through an alias, is a refused key.
+
 ## Text from files in bash arithmetic
 
 Bash evaluates as an expression the text of an operand in contexts

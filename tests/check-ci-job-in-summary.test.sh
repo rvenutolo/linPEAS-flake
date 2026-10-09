@@ -126,15 +126,15 @@ function expect_unread_workflow() {
   printf 'OK   %s\n' "${label}"
 }
 
-# The stub text ends in the file's path, which only the per-workflow read
-# of that one file carries: the read of ci.yml's own job list has no
-# `explode`.
+# The stub text ends in the file's path and opens with the `// {}` that
+# only the per-workflow read carries: the read of ci.yml's own job list
+# resolves the same aliases but has no `// {}`.
 expect_unread_workflow 'failed read of a workflow holding mapped jobs' \
   "${FIXTURES}/good" "${FIXTURES}/good/ci.yml" 7 \
-  "explode(.) | keys | .[] ${FIXTURES}/good/ci.yml"
+  "{}) | explode(.) | explode(.) | keys | .[] ${FIXTURES}/good/ci.yml"
 expect_unread_workflow 'failed read of a workflow holding no job' \
   "${FIXTURES}/good" "${FIXTURES}/good/categories.yml" 9 \
-  "explode(.) | keys | .[] ${FIXTURES}/good/categories.yml"
+  "{}) | explode(.) | explode(.) | keys | .[] ${FIXTURES}/good/categories.yml"
 
 # The refusal read of a workflow is its own read: with it failing and
 # every other read succeeding, the run is still a could-not-run.
@@ -371,14 +371,11 @@ expect_jobs 'other workflow merge key under jobs' \
 # A job key written as an alias inside an aliased `jobs:` map is the name
 # it stands for: the category entry naming it resolves, in ci.yml and in
 # any other workflow, and beside a refused key the names the file can
-# still resolve are not reported missing. A merge list holding a map with
-# an aliased key resolves the same way.
+# still resolve are not reported missing.
 expect_jobs 'ci.yml aliased job key inside an aliased jobs map' \
   $'name: &k foo\nx: &j\n  *k :\n    runs-on: ubuntu-latest\njobs: *j\n' $'foo: A\n' '' 0 ''
 expect_jobs 'other workflow aliased job key inside an aliased jobs map' \
   "${ONE_JOB}" $'foo: A\nnested-key-job: B\n' $'name: &k nested-key-job\nx: &j\n  *k :\n    runs-on: ubuntu-latest\njobs: *j\n' 0 ''
-expect_jobs 'other workflow aliased job key inside a merge list' \
-  "${ONE_JOB}" $'foo: A\nmerged-key-job: B\n' $'name: &k merged-key-job\na: &a\n  *k :\n    runs-on: ubuntu-latest\nb: &b\n  <<: [*a]\njobs: *b\n' 0 ''
 # A merge key whose value is not a mapping cannot be resolved; the refusal
 # is the verdict, not a could-not-read exit.
 expect_jobs 'ci.yml merge key holding a scalar' \

@@ -42,6 +42,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 # shellcheck source=scripts/lib/log.sh
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/repo.sh
@@ -135,8 +137,9 @@ function job_ids_at() {
   # tested before its ids join the set. The file carries the bytes git
   # printed: a shell variable would drop a NUL and hand `yq` a workflow
   # that is not the one at the ref. A workflow with no `jobs:` reads as
-  # no ids through `// {}`, and `explode`, given `jobs:` alone, reads one
-  # written as an alias as the map it names, so a failure is a workflow
+  # no ids through `// {}`, and `RESOLVE_JOB_ALIASES`, given `jobs:` alone,
+  # reads one written as an alias, and a key written as an alias, as the
+  # names they stand for, so a failure is a workflow
   # whose job ids this run does not have. Dropping that workflow instead
   # leaves the set short by its jobs: at the audit point they are
   # reported as added since, at HEAD as removed.
@@ -154,7 +157,7 @@ function job_ids_at() {
     }
     # The cost of `explode` is a stated limit: docs/development/linting.md,
     # section "YAML aliases in workflow reads".
-    ids="$(yq '(.jobs // {}) | explode(.) | keys | .[]' "${blob_file}")" || {
+    ids="$(yq '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | keys | .[]' "${blob_file}")" || {
       status=$?
       rm --force -- "${blob_file}"
       log_err "cannot read job ids from ${path} at ${ref}: yq exited ${status}"
