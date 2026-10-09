@@ -31,8 +31,7 @@
 #
 # Trailing carriage returns are dropped before classification, so a file
 # with CRLF line endings reads as the same fences, and indentation, the
-# gap before a tag and trailing text count any `[[:space:]]` as blank, as
-# a line toggle on `[[:space:]]` did.
+# gap before a tag and trailing text count any `[[:space:]]` as blank.
 #
 # Indentation is uncapped and a list item ending does not close a fence
 # opened on its marker line; a fence the Markdown renderer would end
