@@ -2922,7 +2922,8 @@ and ignored files are not.
 Re-run the calling harness inside a scratch copy of the work
 tree it was started from, then exit with the copy run's status. Returns
 without doing anything when the caller is already that copy run. The
-copy is removed on every exit path of the parent, including a signal.
+copy is removed on every exit path of the parent: bash runs the EXIT trap
+when the parent is ended by SIGTERM.
 Call it after the harness's own preamble and before any statement that
 writes.
 

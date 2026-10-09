@@ -51,8 +51,9 @@ function stage_scratch_tree() {
       --create |
     tar --directory="${dest}" --extract --same-permissions
   _scratch_git -C "${dest}" init --quiet
-  # Later git commands in the copy would otherwise start a detached
-  # maintenance run that writes into .git while the copy is being removed.
+  # Automatic maintenance is off so no detached git process can still be
+  # writing into .git while the copy is removed: with it on, removal failed
+  # with "Directory not empty" in most runs of one harness.
   _scratch_git -C "${dest}" config gc.auto 0
   _scratch_git -C "${dest}" config maintenance.auto false
   printf '%s\0' "${tracked[@]}" |
@@ -63,7 +64,8 @@ function stage_scratch_tree() {
 # @description Re-run the calling harness inside a scratch copy of the work
 # tree it was started from, then exit with the copy run's status. Returns
 # without doing anything when the caller is already that copy run. The
-# copy is removed on every exit path of the parent, including a signal.
+# copy is removed on every exit path of the parent: bash runs the EXIT trap
+# when the parent is ended by SIGTERM.
 # Call it after the harness's own preamble and before any statement that
 # writes.
 # @arg $@ the harness's own arguments, passed through unchanged
@@ -85,8 +87,6 @@ function reexec_in_scratch_tree() {
   # harness's verdict: under errexit a failing `rm` in the trap would turn
   # a passing run into exit 1.
   trap 'rm --recursive --force -- "${dest}" || printf "%s: could not remove the scratch copy %s\n" "${0##*/}" "${dest}" >&2' EXIT
-  trap 'exit 143' TERM
-  trap 'exit 130' INT
   stage_scratch_tree "${src}" "${dest}"
   (
     cd -- "${dest}"

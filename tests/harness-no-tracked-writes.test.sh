@@ -35,6 +35,7 @@ recorded_scenario=
 work="$(mktemp --directory)"
 trap 'rm --recursive --force -- "${work}"' EXIT
 
+probe_cwd=''
 function pass() { printf 'PASS: %s\n' "$1"; }
 function fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -75,6 +76,10 @@ printf 'saw=%s\n' "$(cat tracked.txt)" >>"${PROBE_OUT}"
 if [[ -e gone.txt ]]; then printf 'gone-present\n' >>"${PROBE_OUT}"; fi
 printf 'args=%s,%s\n' "$1" "$2" >>"${PROBE_OUT}"
 printf 'overwritten\n' >tracked.txt
+if [[ -n ${PROBE_SLEEP:-} ]]; then
+  : >"${PROBE_OUT}.started"
+  sleep 3
+fi
 if [[ -n ${PROBE_LOCK:-} ]]; then
   mkdir locked
   touch locked/file
@@ -96,6 +101,7 @@ probe_git commit --quiet --no-verify --message probe
 # report whose every line starts with the scenario name, so an asserted
 # line can hold in one scenario only.
 # @arg $1 scenario name  @arg $2.. extra `env` assignments for the run
+# Runs from `probe_cwd`, which defaults to the probe repository's root.
 # Prints the report path.
 function run_probe() {
   local -r name="$1"
@@ -106,14 +112,17 @@ function run_probe() {
   : >"${out}"
   local rc=0
   (
-    cd -- "${PROBE_REPO}"
+    cd -- "${probe_cwd}"
     env --unset=SCRATCH_TREE_ACTIVE "TMPDIR=${tmp}" "PROBE_OUT=${out}" "$@" \
-      bash tests/probe.test.sh one two >/dev/null 2>"${work}/${name}.err"
+      bash "${PROBE_REPO}/tests/probe.test.sh" one two >/dev/null 2>"${work}/${name}.err"
   ) || rc=$?
   local -a left=()
   LINT_ALLOW_EMPTY_SCAN=1 enumerate_into left 'leftover scratch dirs' \
     find "${tmp}" -mindepth 1 -print0
-  local source_now ran_in_source=no
+  local source_now ran_in_source=no reached_body=no
+  if grep --quiet --extended-regexp -- '^root=' "${out}"; then
+    reached_body=yes
+  fi
   source_now="$(cat -- "${PROBE_REPO}/tracked.txt")"
   if grep --quiet --fixed-strings --line-regexp -- "root=${PROBE_REPO}" "${out}"; then
     ran_in_source=yes
@@ -126,6 +135,7 @@ function run_probe() {
     printf 'harness-assert-outcome: exit=%d\n' "${rc}"
     printf '%s: cleanup warning printed: %s\n' "${name}" "${cleanup_warning}"
     printf '%s: exit status %d\n' "${name}" "${rc}"
+    printf '%s: probe reached its body: %s\n' "${name}" "${reached_body}"
     printf '%s: ran in the source tree: %s\n' "${name}" "${ran_in_source}"
     printf '%s: source tracked.txt after the run: %s\n' "${name}" "${source_now}"
     printf '%s: scratch dirs left behind: %d\n' "${name}" "${#left[@]}"
@@ -154,7 +164,9 @@ function expect_line() {
   fi
 }
 
+probe_cwd="${PROBE_REPO}"
 report="$(run_probe scratch-tree-redirects-writes)"
+expect_line scratch-tree-redirects-writes "${report}" 'probe reached its body: yes'
 expect_line scratch-tree-redirects-writes "${report}" 'ran in the source tree: no'
 expect_line scratch-tree-redirects-writes "${report}" 'source tracked.txt after the run: original'
 
@@ -168,6 +180,7 @@ report="$(run_probe scratch-tree-removes-copy-on-failure PROBE_EXIT=7)"
 expect_line scratch-tree-removes-copy-on-failure "${report}" 'scratch dirs left behind: 0'
 
 report="$(run_probe scratch-tree-ignores-exported-git-dir "GIT_DIR=${PROBE_REPO}/.git" "GIT_WORK_TREE=${PROBE_REPO}")"
+expect_line scratch-tree-ignores-exported-git-dir "${report}" 'probe reached its body: yes'
 expect_line scratch-tree-ignores-exported-git-dir "${report}" 'ran in the source tree: no'
 expect_line scratch-tree-ignores-exported-git-dir "${report}" 'source tracked.txt after the run: original'
 
@@ -175,6 +188,42 @@ report="$(run_probe scratch-tree-keeps-verdict-when-cleanup-fails PROBE_LOCK=1)"
 expect_line scratch-tree-keeps-verdict-when-cleanup-fails "${report}" 'exit status 0'
 expect_line scratch-tree-keeps-verdict-when-cleanup-fails "${report}" 'cleanup warning printed: yes'
 chmod --recursive u+w -- "${work}/scratch-tree-keeps-verdict-when-cleanup-fails.tmp"
+
+probe_cwd="${PROBE_REPO}/tests"
+report="$(run_probe scratch-tree-runs-from-subdirectory)"
+expect_line scratch-tree-runs-from-subdirectory "${report}" 'probe reached its body: yes'
+expect_line scratch-tree-runs-from-subdirectory "${report}" 'ran in the source tree: no'
+probe_cwd="${PROBE_REPO}"
+
+# A harness stopped by SIGTERM while its copy run is in flight still removes
+# the copy and reports the signal's status.
+signal_name=scratch-tree-removes-copy-on-signal
+signal_tmp="${work}/${signal_name}.tmp"
+mkdir --parents -- "${signal_tmp}"
+: >"${work}/${signal_name}.probe-out"
+(
+  cd -- "${PROBE_REPO}"
+  exec env --unset=SCRATCH_TREE_ACTIVE "TMPDIR=${signal_tmp}" \
+    "PROBE_OUT=${work}/${signal_name}.probe-out" PROBE_SLEEP=1 \
+    bash "${PROBE_REPO}/tests/probe.test.sh" one two >/dev/null 2>&1
+) &
+signal_pid=$!
+for _ in $(seq 1 100); do
+  [[ -e ${work}/${signal_name}.probe-out.started ]] && break
+  sleep 0.2
+done
+kill -TERM "${signal_pid}"
+signal_rc=0
+wait "${signal_pid}" || signal_rc=$?
+declare -a signal_left=()
+LINT_ALLOW_EMPTY_SCAN=1 enumerate_into signal_left 'leftover scratch dirs' \
+  find "${signal_tmp}" -mindepth 1 -print0
+{
+  printf '%s: exit status %d\n' "${signal_name}" "${signal_rc}"
+  printf '%s: scratch dirs left behind: %d\n' "${signal_name}" "${#signal_left[@]}"
+} >"${work}/${signal_name}.report"
+expect_line "${signal_name}" "${work}/${signal_name}.report" 'exit status 143'
+expect_line "${signal_name}" "${work}/${signal_name}.report" 'scratch dirs left behind: 0'
 
 printf 'edited\n' >"${PROBE_REPO}/tracked.txt"
 rm -- "${PROBE_REPO}/gone.txt"
