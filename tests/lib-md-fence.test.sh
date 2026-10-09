@@ -154,6 +154,18 @@ check 'whitespace-kinds-around-fences' $'\f'"${F3}zsh"$'\v'$'\n'"cmd"$'\r\r\n'"$
 3 c=0 read=0 lang=[zsh] text=[]
 0 c=0 read=0 lang=[zsh] text=[]"
 
+check 'formfeed-before-tag' "${F3}"$'\f'"ksh" \
+  "1 c=0 read=0 lang=[ksh] text=[]"
+
+check 'formfeed-before-quote-marker' $'\f'"> ${F3}fish" \
+  "1 c=0 read=0 lang=[fish] text=[]"
+
+check 'formfeed-around-list-marker' $'\f'"- ${F3}dash" \
+  "1 c=0 read=0 lang=[dash] text=[]"
+
+check 'formfeed-after-list-marker' "-"$'\f'"${F3}csh" \
+  "1 c=0 read=0 lang=[csh] text=[]"
+
 # @description The opening line's number, as `md_start` reports it.
 # @arg $1 scenario  @arg $2 document  @arg $3 expected line number
 function check_start() {
