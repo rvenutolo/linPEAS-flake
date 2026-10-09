@@ -29,6 +29,9 @@
 # the tag, not as empty), `md_start` is the line number, and `md_read` is 1
 # when that tag is empty or one of sh/bash/shell/console/text.
 #
+# A trailing carriage return is dropped before classification, so a file
+# with CRLF line endings reads as the same fences.
+#
 # Indentation is uncapped and a list item ending does not close a fence
 # opened on its marker line; a fence the Markdown renderer would end
 # early stays open here until a matching closer. `sub` is used instead of
@@ -38,6 +41,7 @@
 # shellcheck disable=SC2034,SC2016
 readonly MD_FENCE_AWK='
 function md_step(line,    t, q, u, ch, n, rest, info, w, again) {
+  sub(/\r$/, "", line)
   md_closed = 0
   md_text = line
   t = line
