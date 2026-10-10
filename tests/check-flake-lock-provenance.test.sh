@@ -340,6 +340,8 @@ function main() {
   run_scenario 'decoy renamed root fails' 'head-decoy-root.lock' 1 'FAIL: root node id changed: root -> realroot'
   run_scenario 'head .root missing errors' 'head-root-missing.lock' 2 'head flake.lock: .root missing or not a string (got null)'
   run_scenario 'head .root non-string errors' 'head-root-nonstring.lock' 2 'head flake.lock: .root missing or not a string (got {"bogus":1})'
+  run_pair_scenario 'base .root missing errors' 'head-root-missing.lock' 'head-routine.lock' 2 'base flake.lock: .root missing or not a string (got null)'
+  run_pair_scenario 'base .root non-string errors' 'head-root-nonstring.lock' 'head-routine.lock' 2 'base flake.lock: .root missing or not a string (got {"bogus":1})'
   # Naming the entry point is what separates this from the plain routine
   # bump: the two resolve identically shaped graphs under different root ids.
   run_ancestry_scenario 'alt root id routine bump passes' 'base-alt-root.lock' 'head-alt-root-routine.lock' ahead 0 \
