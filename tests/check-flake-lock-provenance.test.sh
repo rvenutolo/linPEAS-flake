@@ -276,7 +276,14 @@ function main() {
     'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 1 added, 0 removed; flake.nix-corroborated moves: 0; ancestry probed: 0 verified, skipped: 0 corroborated, 0 non-github'
   run_scenario 'transitive node removed tolerated' 'head-transitive-removed.lock' 0 \
     'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 0 added, 1 removed; flake.nix-corroborated moves: 0; ancestry probed: 0 verified, skipped: 0 corroborated, 0 non-github'
-  run_scenario 'garbage head json errors' 'head-garbage.lock' 2 ''
+  run_scenario 'garbage head json errors' 'head-garbage.lock' 2 'head flake.lock: invalid JSON or .nodes not an object'
+  run_pair_scenario 'garbage base json errors' 'head-garbage.lock' 'head-routine.lock' 2 'base flake.lock: invalid JSON or .nodes not an object'
+  harness_assert_parity_exempt 'garbage head json errors' \
+    'head top level an array errors' \
+    'unparsable text and a top level that is no object are one finding with one message; they differ only in which branch of the shape program answers false'
+  harness_assert_parity_exempt 'garbage base json errors' \
+    'base top level an array errors' \
+    'unparsable text and a top level that is no object are one finding with one message; they differ only in which branch of the shape program answers false'
   run_scenario 'top-level rename same source' 'head-toplevel-renamed-same.lock' 0 \
     'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 1 added, 1 removed; flake.nix-corroborated moves: 0; ancestry probed: 0 verified, skipped: 0 corroborated, 0 non-github'
   run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 \
@@ -489,9 +496,9 @@ function main() {
   # shellcheck disable=SC2016 # jq program text, not a shell expansion
   run_jq_failure_scenario 'jq failure building the head flake.nix input map' base.lock head-routine.lock ahead '$ARGS.named' 2 \
     'jq failed (exit 7) building the input map of HEAD_FLAKE_NIX'
-  run_jq_failure_scenario 'jq failure testing the base nodes shape' base.lock head-routine.lock ahead '(try (.nodes | type == "object") catch false)' 1 \
+  run_jq_failure_scenario 'jq failure testing the base nodes shape' base.lock head-routine.lock ahead '(try (fromjson | .nodes | type == "object") catch false)' 1 \
     'jq failed (exit 7) testing the shape of base flake.lock .nodes'
-  run_jq_failure_scenario 'jq failure testing the head nodes shape' base.lock head-routine.lock ahead '(try (.nodes | type == "object") catch false)' 2 \
+  run_jq_failure_scenario 'jq failure testing the head nodes shape' base.lock head-routine.lock ahead '(try (fromjson | .nodes | type == "object") catch false)' 2 \
     'jq failed (exit 7) testing the shape of head flake.lock .nodes'
   # The root-type test reads a boolean, so a false answer (a malformed
   # root, covered by the broken-lock scenarios) and a failed jq are
