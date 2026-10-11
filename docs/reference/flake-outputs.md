@@ -25,13 +25,13 @@ the markers by hand.
 │   ├───aarch64-linux
 │   │   ├───devshell-renderer-python: derivation 'check-devshell-renderer-python'
 │   │   ├───formatting: derivation 'treefmt-check'
-│   │   ├───linpeas-build: derivation 'linpeas-20261010-26cb635b'
+│   │   ├───linpeas-build: derivation 'linpeas-20261011-219a9168'
 │   │   ├───lint-shell-tools: derivation 'check-lint-shell-tools'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   └───x86_64-linux
 │       ├───devshell-renderer-python: derivation 'check-devshell-renderer-python'
 │       ├───formatting: derivation 'treefmt-check'
-│       ├───linpeas-build: derivation 'linpeas-20261010-26cb635b'
+│       ├───linpeas-build: derivation 'linpeas-20261011-219a9168'
 │       ├───lint-shell-tools: derivation 'check-lint-shell-tools'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells
@@ -51,22 +51,22 @@ the markers by hand.
 └───packages
     ├───aarch64-linux
     │   ├───cosign: package 'cosign-3.1.3'
-    │   ├───default: package 'linpeas-20261010-26cb635b'
+    │   ├───default: package 'linpeas-20261011-219a9168'
     │   ├───diffoscopeMinimal: package 'diffoscope-332'
     │   ├───git-cliff: package 'git-cliff-2.14.2'
-    │   ├───linpeas: package 'linpeas-20261010-26cb635b'
+    │   ├───linpeas: package 'linpeas-20261011-219a9168'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
     │   ├───nix: package 'nix-2.34.8'
-    │   └───site: package 'linpeas-flake-site-20261010-26cb635b'
+    │   └───site: package 'linpeas-flake-site-20261011-219a9168'
     └───x86_64-linux
         ├───cosign: package 'cosign-3.1.3'
-        ├───default: package 'linpeas-20261010-26cb635b'
+        ├───default: package 'linpeas-20261011-219a9168'
         ├───diffoscopeMinimal: package 'diffoscope-332'
         ├───git-cliff: package 'git-cliff-2.14.2'
-        ├───linpeas: package 'linpeas-20261010-26cb635b'
+        ├───linpeas: package 'linpeas-20261011-219a9168'
         ├───linpeas-image: package 'linpeas.tar.gz'
         ├───nix: package 'nix-2.34.8'
-        └───site: package 'linpeas-flake-site-20261010-26cb635b'
+        └───site: package 'linpeas-flake-site-20261011-219a9168'
 ```
 
 <!-- END flake-show -->
