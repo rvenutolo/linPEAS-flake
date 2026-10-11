@@ -340,6 +340,11 @@ function main() {
   run_scenario 'decoy renamed root fails' 'head-decoy-root.lock' 1 'FAIL: root node id changed: root -> realroot'
   run_scenario 'head .root missing errors' 'head-root-missing.lock' 2 'head flake.lock: .root missing or not a string (got null)'
   run_scenario 'head .root non-string errors' 'head-root-nonstring.lock' 2 'head flake.lock: .root missing or not a string (got {"bogus":1})'
+  # Valid JSON that is no lock object (jq cannot index `.nodes` of an
+  # array) is a malformed lock, not a failed jq: the shape test answers
+  # false for it.
+  run_pair_scenario 'base top level an array errors' 'head-toplevel-array.lock' 'head-routine.lock' 2 'base flake.lock: invalid JSON or .nodes not an object'
+  run_scenario 'head top level an array errors' 'head-toplevel-array.lock' 2 'head flake.lock: invalid JSON or .nodes not an object'
   run_pair_scenario 'base .root missing errors' 'head-root-missing.lock' 'head-routine.lock' 2 'base flake.lock: .root missing or not a string (got null)'
   run_pair_scenario 'base .root non-string errors' 'head-root-nonstring.lock' 'head-routine.lock' 2 'base flake.lock: .root missing or not a string (got {"bogus":1})'
   # Naming the entry point is what separates this from the plain routine
@@ -484,6 +489,10 @@ function main() {
   # shellcheck disable=SC2016 # jq program text, not a shell expansion
   run_jq_failure_scenario 'jq failure building the head flake.nix input map' base.lock head-routine.lock ahead '$ARGS.named' 2 \
     'jq failed (exit 7) building the input map of HEAD_FLAKE_NIX'
+  run_jq_failure_scenario 'jq failure testing the base nodes shape' base.lock head-routine.lock ahead '(try (.nodes | type == "object") catch false)' 1 \
+    'jq failed (exit 7) testing the shape of base flake.lock .nodes'
+  run_jq_failure_scenario 'jq failure testing the head nodes shape' base.lock head-routine.lock ahead '(try (.nodes | type == "object") catch false)' 2 \
+    'jq failed (exit 7) testing the shape of head flake.lock .nodes'
   # The root-type test reads a boolean, so a false answer (a malformed
   # root, covered by the broken-lock scenarios) and a failed jq are
   # different findings.
