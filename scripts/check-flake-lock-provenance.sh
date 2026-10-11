@@ -330,9 +330,15 @@ readonly base_nix_json
 flake_inputs_into head_nix_json "${head_nix_text}" "${head_nix_source}"
 readonly head_nix_json
 
-printf '%s' "${base_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 ||
+# `try` turns a top level that is no object into a false answer, which is
+# the malformed-lock finding; a jq that fails outright is its own.
+base_nodes_is_object="$(jq_read 'testing the shape of base flake.lock .nodes' "${base_json}" \
+  --raw-output '(try (.nodes | type == "object") catch false)')"
+head_nodes_is_object="$(jq_read 'testing the shape of head flake.lock .nodes' "${head_json}" \
+  --raw-output '(try (.nodes | type == "object") catch false)')"
+[[ ${base_nodes_is_object} == true ]] ||
   die_op "base flake.lock: invalid JSON or .nodes not an object"
-printf '%s' "${head_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 ||
+[[ ${head_nodes_is_object} == true ]] ||
   die_op "head flake.lock: invalid JSON or .nodes not an object"
 
 # One compare-API call per probed node, run in the main shell — never
