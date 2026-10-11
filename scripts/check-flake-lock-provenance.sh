@@ -330,12 +330,13 @@ readonly base_nix_json
 flake_inputs_into head_nix_json "${head_nix_text}" "${head_nix_source}"
 readonly head_nix_json
 
-# `try` turns a top level that is no object into a false answer, which is
-# the malformed-lock finding; a jq that fails outright is its own.
+# The text is read raw and parsed inside the program, so unparsable JSON
+# and a top level that is no object both answer false, which is the
+# malformed-lock finding; a jq that fails outright is its own.
 base_nodes_is_object="$(jq_read 'testing the shape of base flake.lock .nodes' "${base_json}" \
-  --raw-output '(try (.nodes | type == "object") catch false)')"
+  --raw-input --slurp --raw-output '(try (fromjson | .nodes | type == "object") catch false)')"
 head_nodes_is_object="$(jq_read 'testing the shape of head flake.lock .nodes' "${head_json}" \
-  --raw-output '(try (.nodes | type == "object") catch false)')"
+  --raw-input --slurp --raw-output '(try (fromjson | .nodes | type == "object") catch false)')"
 [[ ${base_nodes_is_object} == true ]] ||
   die_op "base flake.lock: invalid JSON or .nodes not an object"
 [[ ${head_nodes_is_object} == true ]] ||
