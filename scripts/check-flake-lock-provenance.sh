@@ -188,8 +188,9 @@ function die_op() {
 # that fails ends the run under jq's own status, outside the documented
 # 0/1/2, and a capture in argument position does not end it at all and
 # scores the empty read as an answer. This ends the run under exit 2,
-# naming the read and jq's status; the caller assigns it on its own line
-# so the exit is the main shell's.
+# naming the read and jq's status. The caller assigns the result on its
+# own line: the exit happens in the substitution's subshell, and the
+# failed assignment then ends the main shell under the same status.
 # @arg $1 what is being read, for the message  @arg $2 JSON text
 # @arg $@ jq arguments
 function jq_read() {
