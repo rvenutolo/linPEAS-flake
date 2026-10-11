@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Fake jq for check-flake-lock-provenance tests. With JQ_FAIL_PROG unset
+# it runs the real jq, found on PATH past this directory. With it set, the
+# Nth call (JQ_FAIL_NTH, default 1; counted in the file JQ_FAIL_STATE)
+# whose argv holds an argument equal to JQ_FAIL_PROG exits 7 instead,
+# which is how a scenario makes one named read fail while every other
+# read in the run succeeds.
+set -Eeuo pipefail
+self_dir="${BASH_SOURCE[0]%/*}"
+if [[ -n ${JQ_FAIL_PROG:-} ]]; then
+  for arg in "$@"; do
+    if [[ ${arg} == "${JQ_FAIL_PROG}" ]]; then
+      seen=0
+      if [[ -s ${JQ_FAIL_STATE:?} ]]; then read -r seen <"${JQ_FAIL_STATE}"; fi
+      seen=$((seen + 1))
+      printf '%d\n' "${seen}" >"${JQ_FAIL_STATE}"
+      if ((seen == ${JQ_FAIL_NTH:-1})); then
+        printf 'jq stub: failing the read of %s\n' "${arg}" >&2
+        exit 7
+      fi
+    fi
+  done
+fi
+clean_path=''
+IFS=':' read -r -a path_entries <<<"${PATH}"
+for entry in "${path_entries[@]}"; do
+  [[ ${entry} == "${self_dir}" ]] && continue
+  clean_path+="${clean_path:+:}${entry}"
+done
+PATH="${clean_path}" exec jq "$@"

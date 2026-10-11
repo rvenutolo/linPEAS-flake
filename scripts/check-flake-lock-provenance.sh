@@ -147,7 +147,9 @@
 # fits). If the base lock cannot be resolved this script exits 2 (loud)
 # — it never silently passes.
 #
-# Exit: 0 pass, 1 provenance violation, 2 operational error.
+# Exit: 0 pass, 1 provenance violation, 2 operational error — including a
+# `jq` read that fails, which is reported with `jq`'s status but never exits
+# with it.
 #
 # Env overrides (test-only):
 #   BASE_LOCK_FILE — base flake.lock path (default: git show ${BASE_REF}:flake.lock)
@@ -180,6 +182,26 @@ readonly GH_API_VERSION_HEADER="X-GitHub-Api-Version: 2022-11-28"
 function die_op() {
   printf 'flake-lock-provenance: %s\n' "$1" >&2
   exit 2
+}
+
+# Prints one `jq` read of a JSON text. A bare `x="$(jq ...)"` capture
+# that fails ends the run under jq's own status, outside the documented
+# 0/1/2, and a capture in argument position does not end it at all and
+# scores the empty read as an answer. This ends the run under exit 2,
+# naming the read and jq's status. The caller assigns the result on its
+# own line: the exit happens in the substitution's subshell, and the
+# failed assignment then ends the main shell under the same status.
+# @arg $1 what is being read, for the message  @arg $2 JSON text
+# @arg $@ jq arguments
+function jq_read() {
+  local -r what="$1" json="$2"
+  shift 2
+  local out status=0
+  out="$(jq "$@" <<<"${json}")" || status=$?
+  if ((status != 0)); then
+    die_op "jq failed (exit ${status}) ${what}"
+  fi
+  printf '%s\n' "${out}"
 }
 
 # The base payload is either a fixture path (BASE_LOCK_FILE) or the
@@ -274,7 +296,11 @@ function flake_inputs_into() {
   if ((seen_inputs == 0)); then
     die_op "${source_name}: no top-level 'inputs = {' block found"
   fi
-  _out="$(jq -n "${args[@]}" '$ARGS.named')"
+  local status=0
+  _out="$(jq -n "${args[@]}" '$ARGS.named')" || status=$?
+  if ((status != 0)); then
+    die_op "jq failed (exit ${status}) building the input map of ${source_name}"
+  fi
 }
 
 # `flake.nix` is read on both sides for the same reason the lock is: a
@@ -305,9 +331,16 @@ readonly base_nix_json
 flake_inputs_into head_nix_json "${head_nix_text}" "${head_nix_source}"
 readonly head_nix_json
 
-printf '%s' "${base_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 ||
+# The text is read raw and parsed inside the program, so unparsable JSON
+# and a top level that is no object both answer false, which is the
+# malformed-lock finding; a jq that fails outright is its own.
+base_nodes_is_object="$(jq_read 'testing the shape of base flake.lock .nodes' "${base_json}" \
+  --raw-input --slurp --raw-output '(try (fromjson | .nodes | type == "object") catch false)')"
+head_nodes_is_object="$(jq_read 'testing the shape of head flake.lock .nodes' "${head_json}" \
+  --raw-input --slurp --raw-output '(try (fromjson | .nodes | type == "object") catch false)')"
+[[ ${base_nodes_is_object} == true ]] ||
   die_op "base flake.lock: invalid JSON or .nodes not an object"
-printf '%s' "${head_json}" | jq -e '.nodes | type == "object"' >/dev/null 2>&1 ||
+[[ ${head_nodes_is_object} == true ]] ||
   die_op "head flake.lock: invalid JSON or .nodes not an object"
 
 # One compare-API call per probed node, run in the main shell — never
@@ -362,9 +395,9 @@ function check_ancestry() {
     elif (.behind_by | type) != "number" then "behind_by: expected number, got \(.behind_by | type)"
     else empty end'
   local status ahead behind
-  status="$(jq --raw-output '.status' <<<"${body}")"
-  ahead="$(jq --raw-output '.ahead_by' <<<"${body}")"
-  behind="$(jq --raw-output '.behind_by' <<<"${body}")"
+  status="$(jq_read 'reading .status of the compare response' "${body}" --raw-output '.status')"
+  ahead="$(jq_read 'reading .ahead_by of the compare response' "${body}" --raw-output '.ahead_by')"
+  behind="$(jq_read 'reading .behind_by of the compare response' "${body}" --raw-output '.behind_by')"
   case "${status}" in
   ahead)
     printf 'note: ancestry verified: %s (%s/%s %s..%s: ahead by %s)\n' \
@@ -389,9 +422,14 @@ function root_display() {
   printf '%s' "$1" | jq -r '.root | @json' 2>/dev/null || printf 'null'
 }
 
-printf '%s' "${base_json}" | jq -e '(.root | type) == "string"' >/dev/null 2>&1 ||
+# A false answer is a malformed root; a failed jq is its own finding.
+base_root_is_string="$(jq_read 'testing the type of base flake.lock .root' "${base_json}" \
+  --raw-output '(.root | type) == "string"')"
+head_root_is_string="$(jq_read 'testing the type of head flake.lock .root' "${head_json}" \
+  --raw-output '(.root | type) == "string"')"
+[[ ${base_root_is_string} == true ]] ||
   die_op "base flake.lock: .root missing or not a string (got $(root_display "${base_json}"))"
-printf '%s' "${head_json}" | jq -e '(.root | type) == "string"' >/dev/null 2>&1 ||
+[[ ${head_root_is_string} == true ]] ||
   die_op "head flake.lock: .root missing or not a string (got $(root_display "${head_json}"))"
 
 # shellcheck disable=SC2016 # jq program literal; $base/$head are jq args, not shell
@@ -616,10 +654,10 @@ if ! result="$(jq -n \
   die_op "flake.lock comparison failed: $(cat -- "${jq_err_file}")"
 fi
 
-notes="$(printf '%s' "${result}" | jq -r '.notes[]')"
-fails="$(printf '%s' "${result}" | jq -r '.fails[]')"
-root_mismatch="$(printf '%s' "${result}" | jq -r '.root_mismatch')"
-summary="$(printf '%s' "${result}" | jq -r '.summary')"
+notes="$(jq_read 'reading .notes[] of the comparison result' "${result}" --raw-output '.notes[]')"
+fails="$(jq_read 'reading .fails[] of the comparison result' "${result}" --raw-output '.fails[]')"
+root_mismatch="$(jq_read 'reading .root_mismatch of the comparison result' "${result}" --raw-output '.root_mismatch')"
+summary="$(jq_read 'reading .summary of the comparison result' "${result}" --raw-output '.summary')"
 
 if [[ -n ${notes} ]]; then
   printf '%s\n' "${notes}" >&2
@@ -641,18 +679,20 @@ fi
 # Identity is clean. Now the ancestry probes — one API call per node in
 # the probe set, none at all when the set is empty (a bump that moved no
 # rev, or moved only corroborated or non-github ones).
-probe_lines="$(printf '%s' "${result}" | jq --compact-output '.probes[]')"
-probe_count="$(printf '%s' "${result}" | jq --raw-output '.probes | length')"
-unprobed_count="$(printf '%s' "${result}" | jq --raw-output '.unprobed')"
-corroborated_moves="$(printf '%s' "${result}" | jq --raw-output '.corroborated_moves')"
+probe_lines="$(jq_read 'reading .probes[] of the comparison result' "${result}" --compact-output '.probes[]')"
+probe_count="$(jq_read 'reading .probes | length of the comparison result' "${result}" --raw-output '.probes | length')"
+unprobed_count="$(jq_read 'reading .unprobed of the comparison result' "${result}" --raw-output '.unprobed')"
+corroborated_moves="$(jq_read 'reading .corroborated_moves of the comparison result' "${result}" --raw-output '.corroborated_moves')"
+# Each field is read on its own line, not inside the argument list: a
+# failed read there would hand check_ancestry an empty field.
 while IFS= read -r probe; do
   [[ -n ${probe} ]] || continue
-  check_ancestry \
-    "$(printf '%s' "${probe}" | jq --raw-output '.node')" \
-    "$(printf '%s' "${probe}" | jq --raw-output '.owner')" \
-    "$(printf '%s' "${probe}" | jq --raw-output '.repo')" \
-    "$(printf '%s' "${probe}" | jq --raw-output '.old')" \
-    "$(printf '%s' "${probe}" | jq --raw-output '.new')"
+  probe_node="$(jq_read 'reading .node of a probe' "${probe}" --raw-output '.node')"
+  probe_owner="$(jq_read 'reading .owner of a probe' "${probe}" --raw-output '.owner')"
+  probe_repo="$(jq_read 'reading .repo of a probe' "${probe}" --raw-output '.repo')"
+  probe_old="$(jq_read 'reading .old of a probe' "${probe}" --raw-output '.old')"
+  probe_new="$(jq_read 'reading .new of a probe' "${probe}" --raw-output '.new')"
+  check_ancestry "${probe_node}" "${probe_owner}" "${probe_repo}" "${probe_old}" "${probe_new}"
 done <<<"${probe_lines}"
 
 if ((${#ANCESTRY_FAILS[@]} > 0)); then

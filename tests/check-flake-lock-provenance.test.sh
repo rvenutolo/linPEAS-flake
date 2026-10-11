@@ -106,6 +106,22 @@ function run_ancestry_scenario() {
     run_pair_scenario "${name}" "${base}" "${head}" "${expected_exit}" "${expected_msg}"
 }
 
+# Runs a scenario in which one `jq` read fails while the rest of the run
+# succeeds, through the jq stub: the Nth call carrying an argument equal
+# to the program text exits 7. The lint must end under its own exit 2 and
+# name the read and jq's status, never exit with jq's status.
+# @arg $1 scenario name  @arg $2 base fixture  @arg $3 head fixture
+# @arg $4 gh stub mode  @arg $5 jq program text of the read to fail
+# @arg $6 which matching call to fail (1-based)  @arg $7 expected output substring
+function run_jq_failure_scenario() {
+  local -r name="$1" base="$2" head="$3" mode="$4" prog="$5" nth="$6" expected_msg="$7"
+  local state_file
+  state_file="$(mktemp)"
+  JQ_FAIL_PROG="${prog}" JQ_FAIL_NTH="${nth}" JQ_FAIL_STATE="${state_file}" \
+    run_ancestry_scenario "${name}" "${base}" "${head}" "${mode}" 2 "${expected_msg}"
+  rm --force -- "${state_file}"
+}
+
 # @arg $1 scenario name  @arg $2 head fixture basename  @arg $3 expected exit
 # @arg $4 expected stderr/stdout substring (empty skips)
 # Thin wrapper over run_pair_scenario anchored at the default base lock.
@@ -260,7 +276,14 @@ function main() {
     'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 3; transitive churn tolerated: 1 added, 0 removed; flake.nix-corroborated moves: 0; ancestry probed: 0 verified, skipped: 0 corroborated, 0 non-github'
   run_scenario 'transitive node removed tolerated' 'head-transitive-removed.lock' 0 \
     'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 0 added, 1 removed; flake.nix-corroborated moves: 0; ancestry probed: 0 verified, skipped: 0 corroborated, 0 non-github'
-  run_scenario 'garbage head json errors' 'head-garbage.lock' 2 ''
+  run_scenario 'garbage head json errors' 'head-garbage.lock' 2 'head flake.lock: invalid JSON or .nodes not an object'
+  run_pair_scenario 'garbage base json errors' 'head-garbage.lock' 'head-routine.lock' 2 'base flake.lock: invalid JSON or .nodes not an object'
+  harness_assert_parity_exempt 'garbage head json errors' \
+    'head top level an array errors' \
+    'unparsable text and a top level that is no object are one finding with one message; they differ only in which branch of the shape program answers false'
+  harness_assert_parity_exempt 'garbage base json errors' \
+    'base top level an array errors' \
+    'unparsable text and a top level that is no object are one finding with one message; they differ only in which branch of the shape program answers false'
   run_scenario 'top-level rename same source' 'head-toplevel-renamed-same.lock' 0 \
     'provenance OK: entry "root"; top-level inputs resolved: 2 (0 via follows, max depth 0); shared nodes compared: 2; transitive churn tolerated: 1 added, 1 removed; flake.nix-corroborated moves: 0; ancestry probed: 0 verified, skipped: 0 corroborated, 0 non-github'
   run_scenario 'top-level rename + repoint fails' 'head-toplevel-renamed-repoint.lock' 1 \
@@ -324,6 +347,13 @@ function main() {
   run_scenario 'decoy renamed root fails' 'head-decoy-root.lock' 1 'FAIL: root node id changed: root -> realroot'
   run_scenario 'head .root missing errors' 'head-root-missing.lock' 2 'head flake.lock: .root missing or not a string (got null)'
   run_scenario 'head .root non-string errors' 'head-root-nonstring.lock' 2 'head flake.lock: .root missing or not a string (got {"bogus":1})'
+  # Valid JSON that is no lock object (jq cannot index `.nodes` of an
+  # array) is a malformed lock, not a failed jq: the shape test answers
+  # false for it.
+  run_pair_scenario 'base top level an array errors' 'head-toplevel-array.lock' 'head-routine.lock' 2 'base flake.lock: invalid JSON or .nodes not an object'
+  run_scenario 'head top level an array errors' 'head-toplevel-array.lock' 2 'head flake.lock: invalid JSON or .nodes not an object'
+  run_pair_scenario 'base .root missing errors' 'head-root-missing.lock' 'head-routine.lock' 2 'base flake.lock: .root missing or not a string (got null)'
+  run_pair_scenario 'base .root non-string errors' 'head-root-nonstring.lock' 'head-routine.lock' 2 'base flake.lock: .root missing or not a string (got {"bogus":1})'
   # Naming the entry point is what separates this from the plain routine
   # bump: the two resolve identically shaped graphs under different root ids.
   run_ancestry_scenario 'alt root id routine bump passes' 'base-alt-root.lock' 'head-alt-root-routine.lock' ahead 0 \
@@ -423,6 +453,60 @@ function main() {
   # and not silently passed over.
   run_ancestry_scenario 'non-github rev move is named, not probed' 'base-mixed.lock' 'head-mixed-routine.lock' deny 0 \
     'note: ancestry not probed (non-github source, tolerated): delta (type=git)'
+
+  # A failing `jq` read ends the run under exit 2 naming the read and
+  # jq's status. The first four head a lock the lint must reject, so a
+  # read that dies silently would let a violation through unreported.
+  local -r repoint='head-alpha-beta-repoint.lock'
+  run_jq_failure_scenario 'jq failure the notes' base.lock "${repoint}" deny '.notes[]' 1 \
+    'jq failed (exit 7) reading .notes[] of the comparison result'
+  run_jq_failure_scenario 'jq failure the fails' base.lock "${repoint}" deny '.fails[]' 1 \
+    'jq failed (exit 7) reading .fails[] of the comparison result'
+  run_jq_failure_scenario 'jq failure the root mismatch flag' base.lock "${repoint}" deny '.root_mismatch' 1 \
+    'jq failed (exit 7) reading .root_mismatch of the comparison result'
+  run_jq_failure_scenario 'jq failure the summary' base.lock "${repoint}" deny '.summary' 1 \
+    'jq failed (exit 7) reading .summary of the comparison result'
+  run_jq_failure_scenario 'jq failure listing the probes' base.lock head-routine.lock ahead '.probes[]' 1 \
+    'jq failed (exit 7) reading .probes[] of the comparison result'
+  run_jq_failure_scenario 'jq failure counting the probes' base.lock head-routine.lock ahead '.probes | length' 1 \
+    'jq failed (exit 7) reading .probes | length of the comparison result'
+  run_jq_failure_scenario 'jq failure counting the unprobed nodes' base.lock head-routine.lock ahead '.unprobed' 1 \
+    'jq failed (exit 7) reading .unprobed of the comparison result'
+  run_jq_failure_scenario 'jq failure counting the corroborated moves' base.lock head-routine.lock ahead '.corroborated_moves' 1 \
+    'jq failed (exit 7) reading .corroborated_moves of the comparison result'
+  run_jq_failure_scenario 'jq failure reading a probe node' base.lock head-routine.lock ahead '.node' 1 \
+    'jq failed (exit 7) reading .node of a probe'
+  run_jq_failure_scenario 'jq failure reading a probe owner' base.lock head-routine.lock ahead '.owner' 1 \
+    'jq failed (exit 7) reading .owner of a probe'
+  run_jq_failure_scenario 'jq failure reading a probe repo' base.lock head-routine.lock ahead '.repo' 1 \
+    'jq failed (exit 7) reading .repo of a probe'
+  run_jq_failure_scenario 'jq failure reading a probe old rev' base.lock head-routine.lock ahead '.old' 1 \
+    'jq failed (exit 7) reading .old of a probe'
+  run_jq_failure_scenario 'jq failure reading a probe new rev' base.lock head-routine.lock ahead '.new' 1 \
+    'jq failed (exit 7) reading .new of a probe'
+  run_jq_failure_scenario 'jq failure reading the compare status' base.lock head-routine.lock ahead '.status' 1 \
+    'jq failed (exit 7) reading .status of the compare response'
+  run_jq_failure_scenario 'jq failure reading the compare ahead count' base.lock head-routine.lock ahead '.ahead_by' 1 \
+    'jq failed (exit 7) reading .ahead_by of the compare response'
+  run_jq_failure_scenario 'jq failure reading the compare behind count' base.lock head-routine.lock ahead '.behind_by' 1 \
+    'jq failed (exit 7) reading .behind_by of the compare response'
+  # shellcheck disable=SC2016 # jq program text, not a shell expansion
+  run_jq_failure_scenario 'jq failure building the base flake.nix input map' base.lock head-routine.lock ahead '$ARGS.named' 1 \
+    'jq failed (exit 7) building the input map of BASE_FLAKE_NIX'
+  # shellcheck disable=SC2016 # jq program text, not a shell expansion
+  run_jq_failure_scenario 'jq failure building the head flake.nix input map' base.lock head-routine.lock ahead '$ARGS.named' 2 \
+    'jq failed (exit 7) building the input map of HEAD_FLAKE_NIX'
+  run_jq_failure_scenario 'jq failure testing the base nodes shape' base.lock head-routine.lock ahead '(try (fromjson | .nodes | type == "object") catch false)' 1 \
+    'jq failed (exit 7) testing the shape of base flake.lock .nodes'
+  run_jq_failure_scenario 'jq failure testing the head nodes shape' base.lock head-routine.lock ahead '(try (fromjson | .nodes | type == "object") catch false)' 2 \
+    'jq failed (exit 7) testing the shape of head flake.lock .nodes'
+  # The root-type test reads a boolean, so a false answer (a malformed
+  # root, covered by the broken-lock scenarios) and a failed jq are
+  # different findings.
+  run_jq_failure_scenario 'jq failure testing the base root type' base.lock head-routine.lock ahead '(.root | type) == "string"' 1 \
+    'jq failed (exit 7) testing the type of base flake.lock .root'
+  run_jq_failure_scenario 'jq failure testing the head root type' base.lock head-routine.lock ahead '(.root | type) == "string"' 2 \
+    'jq failed (exit 7) testing the type of head flake.lock .root'
 
   require_locale_gap en_US.UTF-8 || exit 1
   run_en_us_scenario 'non-ASCII letter in a moved rev is a could-not-run under en_US.UTF-8' \
