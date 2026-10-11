@@ -570,6 +570,7 @@ expect_block block-marker-after-last-job-key-indent $'  # egress-nix-exempt: bel
 expect_block block-marker-last-in-block $'    # egress-nix-exempt: reaches nix through a script' exempt "${NEXT_JOB}"
 expect_block block-marker-after-blank-in-block $'\n    # egress-nix-exempt: reaches nix through a script\n' exempt "${NEXT_JOB}"
 expect_block block-marker-last-job-in-block $'    # egress-nix-exempt: reaches nix through a script' exempt ''
+expect_block block-marker-after-blank-last-job $'\n    # egress-nix-exempt: reaches nix through a script' exempt ''
 # A comment shallower than the key does not end the block while job
 # content follows it; the run of comments just above the next key does.
 expect_block block-column-0-comment-inside-job $'# commented-out step at column 0\n    # egress-nix-exempt: reaches nix through a script\n      - run: echo PAYLOAD_RAN' exempt "${NEXT_JOB}"
@@ -577,6 +578,64 @@ expect_block block-column-0-comment-before-next-key $'# note for the next job\n 
 # A marker indented deeper than the key belongs to the job above it, wherever
 # it sits in that block.
 expect_block block-deeper-marker-above-next-key $'    # egress-nix-exempt: reaches nix through a script' exempt "${NEXT_JOB}"
+expect_block block-marker-text-repeated-inside-later-job $'    # egress-nix-exempt: why' exempt "${NEXT_JOB}"$'\n      # egress-nix-exempt: why'
+
+# A marker is a YAML comment. A line of that shape inside a scalar (a
+# `run: |` body, a quoted scalar spanning lines) is script or string text and
+# exempts nothing; a real comment after such a scalar still does.
+# @arg $1 scenario name  @arg $2 the job's last step, from its `-` on
+# @arg $3 `exempt` when build must pass, else `finding`
+# @arg $4 text written after the next job, or empty
+function expect_scalar() {
+  local -r name="$1" step="$2" verdict="$3" after="${4-}"
+  local got_exit=0 got_stderr want_exit=0 want=''
+  [[ ${verdict} == finding ]] && want_exit=1
+  {
+    printf '%s\n' "name: ${name}" 'on:' '  workflow_dispatch: {}' 'jobs:' '  build:' \
+      '    runs-on: ubuntu-latest' '    steps:' \
+      '      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3' \
+      '        with:' '          egress-policy: block' '          allowed-endpoints: >' \
+      '            cache.nixos.org:443'
+    printf '%s\n' "${step}" "${NEXT_JOB}"
+    [[ -n ${after} ]] && printf '%s\n' "${after}"
+  } >"${key_dir}/wf/${name}.yml"
+  got_stderr="$(WORKFLOWS_DIR_OVERRIDE="${key_dir}/wf" WORKFLOW_FILE_FILTER="${name}.yml" \
+    "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  [[ ${verdict} == finding ]] && want="${key_dir}/wf/${name}.yml: job 'build' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ./.github/actions/setup-nix nor a run: nix invocation is detected, and no '# egress-nix-exempt: <reason>' marker justifies it"$'\n1 egress-allowlist violation(s)'
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+expect_scalar scalar-marker-in-literal-run-body $'      - run: |\n          echo PAYLOAD_RAN\n          # egress-nix-exempt: inside a script body' finding
+expect_scalar scalar-marker-in-folded-run-body $'      - run: >\n          echo PAYLOAD_RAN\n          # egress-nix-exempt: inside a folded body' finding
+expect_scalar scalar-marker-in-quoted-scalar $'      - name: "title\n          # egress-nix-exempt: inside a quoted scalar"\n        run: echo PAYLOAD_RAN' finding
+expect_scalar scalar-marker-in-single-quoted-scalar $'      - name: \'title\n          # egress-nix-exempt: inside a single-quoted scalar\'\n        run: echo PAYLOAD_RAN' finding
+expect_scalar scalar-marker-first-line-of-run-body $'      - name: title\n        run: |\n          # egress-nix-exempt: first body line\n          echo PAYLOAD_RAN' finding
+expect_scalar scalar-comment-after-literal-run-body $'      - run: |\n          echo PAYLOAD_RAN\n      # egress-nix-exempt: reaches nix through a script' exempt
+expect_scalar scalar-comment-before-literal-run-body $'      # egress-nix-exempt: reaches nix through a script\n      - run: |\n          echo PAYLOAD_RAN' exempt
+expect_scalar scalar-comment-beside-body-marker $'      # egress-nix-exempt: reaches nix through a script\n      - run: |\n          # egress-nix-exempt: inside a script body\n          echo PAYLOAD_RAN' exempt
+expect_scalar scalar-real-comment-after-body-marker $'      - run: |\n          # egress-nix-exempt: inside a script body\n          echo PAYLOAD_RAN\n      # egress-nix-exempt: reaches nix through a script' exempt
+expect_scalar scalar-first-real-marker-keeps-its-reason $'      # egress-nix-exempt: reaches nix through a script\n      - run: echo PAYLOAD_RAN\n      # egress-nix-exempt:' exempt
+expect_scalar scalar-same-line-comment-twin-of-body-marker $'      - name: title # egress-nix-exempt: inside a script body\n        run: |\n          # egress-nix-exempt: inside a script body\n          echo PAYLOAD_RAN' finding
+expect_scalar scalar-comment-with-wide-spacing $'      #     egress-nix-exempt: reaches nix through a script\n      - run: echo PAYLOAD_RAN' exempt
+expect_scalar scalar-comment-with-trailing-spaces $'      # egress-nix-exempt: reaches nix through a script   \n      - run: echo PAYLOAD_RAN' exempt
+expect_scalar scalar-body-marker-twin-above-next-job-column-0 $'      - run: |\n          # egress-nix-exempt: why\n# egress-nix-exempt: why' finding
+expect_scalar scalar-body-marker-twin-above-next-job-key-indent $'      - run: |\n          # egress-nix-exempt: why\n  # egress-nix-exempt: why' finding
+expect_scalar scalar-body-marker-twin-after-blank-column-0 $'      - run: |\n          # egress-nix-exempt: why\n\n# egress-nix-exempt: why' finding
+expect_scalar scalar-body-marker-twin-after-blank-key-indent $'      - run: |\n          # egress-nix-exempt: why\n\n  # egress-nix-exempt: why' finding
+expect_scalar scalar-comment-at-odd-indent-after-last-step $'      - run: echo PAYLOAD_RAN\n     # egress-nix-exempt: reaches nix through a script' exempt
+expect_scalar scalar-comment-at-odd-indent-before-last-step $'     # egress-nix-exempt: reaches nix through a script\n      - run: echo PAYLOAD_RAN' exempt
+expect_scalar scalar-body-marker-vouched-by-hash-space-hash-comment $'      # # egress-nix-exempt: why\n      - run: |\n          # egress-nix-exempt: why\n          echo PAYLOAD_RAN' finding
+expect_scalar scalar-real-marker-repeated-above-next-job $'      # egress-nix-exempt: why\n      - run: echo PAYLOAD_RAN\n  # egress-nix-exempt: why' finding
+expect_scalar scalar-body-marker-twin-ends-file-after-blank-column-0 $'      - run: |\n          # egress-nix-exempt: why' finding $'\n# egress-nix-exempt: why'
+expect_scalar scalar-body-marker-twin-ends-file-after-blank-key-indent $'      - run: |\n          # egress-nix-exempt: why' finding $'\n  # egress-nix-exempt: why'
+expect_scalar scalar-body-marker-twin-after-comment-run-with-blank $'      - run: |\n          # egress-nix-exempt: why\n  # note\n\n  # egress-nix-exempt: why' finding
+expect_scalar scalar-body-marker-twin-with-trailing-spaces $'      - run: |\n          # egress-nix-exempt: why\n# egress-nix-exempt: why   ' finding
+expect_scalar scalar-body-marker-twin-with-wide-spacing $'      - run: |\n          # egress-nix-exempt: why\n#     egress-nix-exempt: why' finding
+expect_scalar scalar-comment-without-space-after-hash $'      #egress-nix-exempt: reaches nix through a script\n      - run: echo PAYLOAD_RAN' exempt
+expect_scalar scalar-comment-with-tab-after-hash $'      #\tegress-nix-exempt: reaches nix through a script\n      - run: echo PAYLOAD_RAN' exempt
 
 # yq numbers lines by a lone carriage return, the lint reads by \n alone,
 # so every job line after one is off. Whether the shifted number lands past
