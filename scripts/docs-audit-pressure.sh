@@ -25,6 +25,12 @@
 # parsed from YAML — never commit subjects or other free text, which would
 # render as arbitrary markdown in the resulting issue.
 #
+# A workflow holding a job key the list cannot carry (an empty key, one
+# with a line break, a tab, a carriage return or a NUL, or one that is no
+# scalar) would be misread: omitted, or listed as other names. Such a
+# workflow is left out of the job lists at both refs and counted in one
+# line of the body; the commit count and the exit status are unaffected.
+#
 # Honors LINT_ALLOW_EMPTY_SCAN=1 to accept a ref whose workflows dir holds
 # no YAML.
 #
@@ -34,7 +40,7 @@
 #      including an audit-state file that is absent, carries no
 #      LAST_AUDIT_SHA=<40-hex> line, or names a commit this history does
 #      not contain, and a workflow at either ref that git cannot show or
-#      whose job ids `yq` cannot read
+#      whose job ids or job keys `yq` cannot read
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -105,11 +111,19 @@ function last_audit_ref() {
   printf '%s\n' "${sha}"
 }
 
-# @description Emit sorted job ids present at a given ref. Only ids matching
-#              JOB_ID_RE are emitted; the rest are counted by the caller.
+# @description Emit one `<workflow path><TAB><job id>` record per job id
+#              present at a given ref. The path is shell-quoted (`%q`), so
+#              it holds neither a tab nor a line break. A workflow holding a job key
+#              the list cannot carry (`first_unlistable_job_key`) emits one
+#              record with an empty id, which no job key can produce
+#              without being that kind of key, in place of its ids.
+#              The caller drops the workflow at both refs: left out at one
+#              ref alone, its jobs would read as added or removed.
+#              Only ids matching JOB_ID_RE are rendered; the caller filters
+#              the rest.
 # @arg $1 git ref
 # @exitcode 2 no workflow file at the ref, or one that git cannot show or
-#             whose job ids `yq` cannot read
+#             whose job ids or job keys `yq` cannot read
 function job_ids_at() {
   local -r ref="$1"
   local path
@@ -137,13 +151,14 @@ function job_ids_at() {
   # tested before its ids join the set. The file carries the bytes git
   # printed: a shell variable would drop a NUL and hand `yq` a workflow
   # that is not the one at the ref. A workflow with no `jobs:` reads as
-  # no ids through `// {}`, and `RESOLVE_JOB_ALIASES`, given `jobs:` alone,
-  # reads one written as an alias, and a key written as an alias, as the
-  # names they stand for, so a failure is a workflow
+  # no ids through `// {}`, a `jobs:` that is no map holds no keys (a
+  # sequence would list its indices), and `RESOLVE_JOB_ALIASES`, given
+  # `jobs:` alone, reads one written as an alias, and a key written as an
+  # alias, as the names they stand for, so a failure is a workflow
   # whose job ids this run does not have. Dropping that workflow instead
   # leaves the set short by its jobs: at the audit point they are
   # reported as added since, at HEAD as removed.
-  local blob_file ids status all_ids=''
+  local blob_file ids odd_key id record_path status all_ids=''
   # `make_temp` exits inside the substitution, which ends the
   # substitution alone: without the test, the loop would go on with no
   # file to write to and report a git read that never ran.
@@ -157,16 +172,62 @@ function job_ids_at() {
     }
     # The cost of `explode` is a stated limit: docs/development/linting.md,
     # section "YAML aliases in workflow reads".
-    ids="$(yq "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | keys | .[]' "${blob_file}")" || {
+    ids="$(yq "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | select(kind == "map") | keys | .[]' "${blob_file}")" || {
       status=$?
       rm --force -- "${blob_file}"
       log_err "cannot read job ids from ${path} at ${ref}: yq exited ${status}"
       return 2
     }
-    all_ids+="${ids}"$'\n'
+    odd_key="$(first_unlistable_job_key "${blob_file}")" || {
+      status=$?
+      rm --force -- "${blob_file}"
+      log_err "cannot read job keys from ${path} at ${ref}: yq exited ${status}"
+      return 2
+    }
+    # A path may hold a tab or a line break, which would split its record.
+    printf -v record_path '%q' "${path}"
+    if [[ -n ${odd_key} ]]; then
+      all_ids+="${record_path}"$'\t\n'
+      continue
+    fi
+    while IFS= read -r id; do
+      [[ -n ${id} ]] || continue
+      all_ids+="${record_path}"$'\t'"${id}"$'\n'
+    done <<<"${ids}"
   done
   rm --force -- "${blob_file}"
-  printf '%s' "${all_ids}" | tr -d '"' | sort -u
+  printf '%s' "${all_ids}"
+}
+
+# @description Print the record paths (shell-quoted) of the workflows marked
+#              in job-id records.
+# @stdin records from `job_ids_at`
+function odd_workflow_paths() {
+  local line
+  while IFS= read -r line; do
+    [[ ${line} == *$'\t' ]] || continue
+    printf '%s\n' "${line%$'\t'}"
+  done
+}
+
+# @description Print the job ids of the records whose workflow is not one
+#              of the given paths, sorted.
+# @arg $1 newline-separated record paths of the workflows to leave out
+# @stdin records from `job_ids_at`
+function ids_outside_workflows() {
+  local -r left_out="$1"
+  local line path
+  local -A skip=()
+  while IFS= read -r path; do
+    [[ -n ${path} ]] || continue
+    skip["${path}"]=1
+  done <<<"${left_out}"
+  while IFS= read -r line; do
+    [[ ${line} == *$'\t'?* ]] || continue
+    path="${line%%$'\t'*}"
+    [[ -z ${skip["${path}"]:-} ]] || continue
+    printf '%s\n' "${line#*$'\t'}"
+  done | sort -u
 }
 
 # @description Print a path relative to the repo root. `git show ref:path`
@@ -209,7 +270,7 @@ function members_at() {
     log_err "cannot read lint-group members from ${lint_groups_rel} at ${ref}"
     return 2
   fi
-  printf '%s' "${members}" | tr -d '"' | sort -u
+  printf '%s' "${members}" | sort -u
 }
 
 # @description Filter stdin to ids safe to render; drop the rest.
@@ -259,9 +320,19 @@ function main() {
   # a `job_ids_at` failure inside `comm <(…)` would exit its own subshell
   # and leave `comm` diffing an empty set at exit 0, which is the fail-open
   # the function's own status check exists to prevent.
-  local base_jobs head_jobs
-  base_jobs="$(job_ids_at "${base}")" || exit 2
-  head_jobs="$(job_ids_at HEAD)" || exit 2
+  local base_records head_records
+  base_records="$(job_ids_at "${base}")" || exit 2
+  head_records="$(job_ids_at HEAD)" || exit 2
+  # A workflow holding a job key the list cannot carry is left out at both
+  # refs and counted, so the list names no job it misread and reports none
+  # of that workflow's other jobs as added or removed.
+  local left_out odd_count base_jobs head_jobs
+  left_out="$(printf '%s\n%s\n' \
+    "$(odd_workflow_paths <<<"${base_records}")" \
+    "$(odd_workflow_paths <<<"${head_records}")" | sort -u)"
+  odd_count="$(printf '%s\n' "${left_out}" | grep --count . || true)"
+  base_jobs="$(ids_outside_workflows "${left_out}" <<<"${base_records}")"
+  head_jobs="$(ids_outside_workflows "${left_out}" <<<"${head_records}")"
 
   local jobs_added jobs_removed members_added members_removed
   jobs_added="$(comm -13 <(printf '%s\n' "${base_jobs}") <(printf '%s\n' "${head_jobs}") | only_valid_ids)"
@@ -284,6 +355,10 @@ function main() {
   render_list 'Jobs removed' "${jobs_removed}"
   render_list 'Lint-group members added' "${members_added}"
   render_list 'Lint-group members removed' "${members_removed}"
+  if ((odd_count > 0)); then
+    printf '%s workflow(s) hold a job key the list cannot carry; their jobs are not listed.\n\n' \
+      "${odd_count}"
+  fi
 
   printf 'Hand-written prose about CI is not covered by any freshness gate.\n'
   # shellcheck disable=SC2016 # literal backticks in human-readable prose

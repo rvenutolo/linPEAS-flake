@@ -811,8 +811,12 @@ scope name in it that holds a tab or a line break is refused (exit 1)
 before the rows are split: it could forge a row for another entry.
 
 `docs-audit-pressure.sh` lists job ids only to name them in an advisory
-report, and does not refuse these keys; the verdict it feeds is not
-affected.
+report, and its verdict is the commit count, so it does not exit on these
+keys. It leaves a workflow holding one out of the job lists at both refs
+(`first_unlistable_job_key`), so none of that workflow's jobs reads as
+added or removed, and names the number of such workflows in a line of the
+report. A merge key under `jobs:` is read through to the jobs it brings
+in, as the list reads it, and is not itself refused.
 
 No lint enforces this. `tests/lib-job-keys.test.sh` pins the library,
 and each lint's harness pins its own refusals.

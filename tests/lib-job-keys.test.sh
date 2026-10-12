@@ -2,8 +2,9 @@
 # @subject scripts/lib/job-keys.sh
 # tests/lib-job-keys.test.sh — proves scripts/lib/job-keys.sh names the
 # first job key the job list cannot carry (a line break, a carriage
-# return, an empty key, a key that is not a scalar, a merge key), reads
-# `jobs:` written as an alias, prints nothing for carriable keys or a
+# return, an empty key, a key that is not a scalar, a merge key) and the
+# first key of a job-id list that the list cannot carry, reads `jobs:`
+# written as an alias, prints nothing for carriable keys or a
 # `jobs:` that is no map, and reads a merge list first mapping wins
 # without yq's warning that the flag is false.
 set -Eeuo pipefail
@@ -80,6 +81,28 @@ readonly PQ=$'p: &P\n  permissions: {contents: write}\nq: &Q\n  permissions: {co
 readonly READ='yq eval "${YQ_MERGE_SPEC[@]}" ".jobs.a.permissions.contents" "$2"'
 expect_out merge-list-first-wins "${PQ}"$'jobs:\n  a:\n    <<: [*Q, *P]\n' "${READ}" 'read'
 expect_out merge-list-first-wins-write "${PQ}"$'jobs:\n  a:\n    <<: [*P, *Q]\n' "${READ}" 'write'
+
+# The keys a script lists are those of `jobs:` resolved through its
+# aliases, so a merge key is read through to the jobs it brings in.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process
+readonly UNLISTABLE='first_unlistable_job_key "$2"'
+expect_out line-break-listed $'jobs:\n  ok: {a: 1}\n  "a\\nb": {x: 1}\n' "${UNLISTABLE}" '"a\nb"'
+expect_out carriage-return-listed $'jobs:\n  "a\\rb": {x: 1}\n' "${UNLISTABLE}" '"a\rb"'
+expect_out tab-listed $'jobs:\n  "a\\tb": {x: 1}\n' "${UNLISTABLE}" '"a\tb"'
+expect_out empty-listed $'jobs:\n  "": {x: 1}\n' "${UNLISTABLE}" '""'
+expect_out nul-listed $'jobs:\n  "a\\0b": {x: 1}\n' "${UNLISTABLE}" '"a\u0000b"'
+expect_out sequence-key-listed $'jobs:\n  ? [a, b]\n  : {y: 1}\n' "${UNLISTABLE}" '"[a, b]"'
+expect_out aliased-key-listed $'x: &k "a\\nb"\njobs:\n  *k : {x: 1}\n' "${UNLISTABLE}" '"a\nb"'
+expect_out aliased-jobs-listed $'x: &b\n  "": {a: 1}\njobs: *b\n' "${UNLISTABLE}" '""'
+expect_out merged-in-key-listed $'x: &b\n  "": {a: 1}\njobs:\n  <<: *b\n  ok: {a: 1}\n' "${UNLISTABLE}" '""'
+expect_out merge-key-alone-listed $'x: &b\n  j: {a: 1}\njobs:\n  <<: *b\n' "${UNLISTABLE}" ''
+expect_out second-document-listed $'jobs:\n  ok: {a: 1}\n---\njobs:\n  "a\\nb": {x: 1}\n' "${UNLISTABLE}" '"a\nb"'
+expect_out carriable-listed $'jobs:\n  ok: {a: 1}\n  other-job_2: {a: 1}\n' "${UNLISTABLE}" ''
+expect_out scalar-jobs-listed $'jobs: hello\n' "${UNLISTABLE}" ''
+expect_out sequence-jobs-listed $'jobs: [a, b]\n' "${UNLISTABLE}" ''
+expect_out no-jobs-listed $'on: push\n' "${UNLISTABLE}" ''
+# shellcheck disable=SC2016 # snippet is bash source text for a child process
+expect_out unparsable-listed $'jobs: [\n' 'first_unlistable_job_key "$2" 2>/dev/null || printf "failed=%d" "$?"' 'failed=1'
 
 # The message names the file and the key.
 # shellcheck disable=SC2016 # snippet is bash source text for a child process

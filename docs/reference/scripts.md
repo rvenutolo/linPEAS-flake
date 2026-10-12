@@ -2112,6 +2112,12 @@ Body contents are restricted to integers and shape-validated identifiers
 parsed from YAML — never commit subjects or other free text, which would
 render as arbitrary markdown in the resulting issue.
 
+A workflow holding a job key the list cannot carry (an empty key, one
+with a line break, a tab, a carriage return or a NUL, or one that is no
+scalar) would be misread: omitted, or listed as other names. Such a
+workflow is left out of the job lists at both refs and counted in one
+line of the body; the commit count and the exit status are unaffected.
+
 Honors LINT_ALLOW_EMPTY_SCAN=1 to accept a ref whose workflows dir holds
 no YAML.
 
@@ -2123,7 +2129,7 @@ Exit codes:
       including an audit-state file that is absent, carries no
       LAST_AUDIT_SHA=<40-hex> line, or names a commit this history does
       not contain, and a workflow at either ref that git cannot show or
-      whose job ids `yq` cannot read
+      whose job ids or job keys `yq` cannot read
 ```
 
 ### scripts/gen-dashboard-data.sh
@@ -2658,6 +2664,28 @@ Print the finding for a refused job key.
 
 - `$1` — workflow path
 - `$2` — the key as JSON, from `first_odd_job_key`
+
+#### first_unlistable_job_key()
+
+Print the first key of the job ids a script lists that the
+list cannot carry, as a JSON string, or nothing when every key is
+carriable. The keys are those the job-id read returns: `jobs:` and the
+keys in it are resolved through `RESOLVE_JOB_ALIASES` first, so a merge
+key brings in the jobs it names, which are checked, and is not itself a
+key. A key is refused when it is not a scalar, is empty, or holds a tab,
+a line break, a carriage return or a NUL.
+
+**Args:**
+
+- `$1` — workflow path
+
+**Exit codes:**
+
+- `1` — yq could not evaluate the file
+
+**Stdout:**
+
+- the first refused key of the first document holding one, as one line of JSON, or nothing
 
 ### scripts/lib/locale-gap.sh
 
