@@ -1808,6 +1808,38 @@ Lint: the `attribute failure reason` step of
 `verify` job, reads every env var it declares, documents every reason
 token it emits, and walks the ladder in step-execution order.
 
+### scripts/check-workflow-ascii-space.sh
+
+Lint: workflow and composite-action YAML holds no Unicode
+space or line separator (U+0085, U+00A0, U+1680, U+2000 to U+200B,
+U+2028, U+2029, U+202F, U+205F, U+3000) in any position. The lints that
+scan these files by text read blankness with `[[:space:]]`, which
+matches U+1680, U+2000 to U+2006, U+2008 to U+200A, U+2028, U+2029,
+U+205F and U+3000 in every UTF-8 locale, `C.UTF-8` included, while YAML
+separates tokens with space and tab only. U+0085 (next line), the
+no-break spaces U+00A0, U+2007 and U+202F, and the zero-width space
+U+200B are outside that class; they are in the list because each is a
+line break, looks like a space or is invisible in a diff. A character
+between a key and its value, in an indent or before a `#` could make a
+lint and the consumer read the same line differently, and which reading
+GitHub Actions takes cannot be checked offline. Refusing the character
+keeps the text scanners and the consumers on one reading. A character
+that is wanted as data is written as an escape inside a double-quoted
+scalar (`"\u2003"`), which holds ASCII only in the file.
+
+The search is `grep --fixed-strings --text` for each separator's UTF-8
+bytes, which matches bytes, so the result does not depend on the locale
+the lint runs in.
+
+Scan set: `.github/workflows/*.yml` and `*.yaml`, and
+`.github/actions/*/action.yml` and `action.yaml`. Honors
+WORKFLOWS_DIR_OVERRIDE and ACTIONS_DIR_OVERRIDE for fixtures, and
+LINT_ALLOW_EMPTY_SCAN=1 for an empty scan set.
+
+Exits 0 when no file holds one, 1 when one does. Exits 2 when the check
+cannot run: `grep` absent from PATH, the scan globs together matching
+no regular file, or `grep` failing on a file.
+
 ### scripts/check-workflow-concurrency.sh
 
 Lint: every workflow under .github/workflows/\*.yml
