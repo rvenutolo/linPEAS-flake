@@ -126,4 +126,20 @@ expect_built 'merge list reads the first mapping (wrong token first) as the toke
 expect_built 'merge list reads the first mapping (right token first) as the token' \
   "${TOKEN_OK}${TOKEN_BAD}"'jobs:\n  a: {runs-on: x, steps: [{<<: [*tok, *tbad]}]}\n' 0 ''
 
+# `jobs:` written as an alias, and a job key written as an alias, are read
+# through: a clean job passes and an installer step is named by the job's
+# own key.
+expect_exact 'an aliased jobs: map without an installer passes (setup-nix required) as aliased-jobs' \
+  'x: &j\n  a: {runs-on: x, steps: [{run: echo PAYLOAD_RAN}]}\njobs: *j\n' 0 ''
+expect_exact 'an aliased jobs: map with an installer is named by its job key (setup-nix required) as aliased-jobs' \
+  "x: &j\n  a: {runs-on: x, steps: [${NIX_STEP}]}\njobs: *j\n" 1 \
+  'DIR/built.yml: job a: cachix/install-nix-action@v1 installs Nix outside the composite; use ./.github/actions/setup-nix
+check-setup-nix-required: 1 violation(s)'
+expect_exact 'a job key written as an alias without an installer passes (setup-nix required) as aliased-key' \
+  'x-k: &k a\njobs:\n  *k : {runs-on: x, steps: [{run: echo PAYLOAD_RAN}]}\n' 0 ''
+expect_exact 'a job key written as an alias is named by what it stands for (setup-nix required) as aliased-key' \
+  "x-k: &k a\njobs:\n  *k : {runs-on: x, steps: [${NIX_STEP}]}\n" 1 \
+  'DIR/built.yml: job a: cachix/install-nix-action@v1 installs Nix outside the composite; use ./.github/actions/setup-nix
+check-setup-nix-required: 1 violation(s)'
+
 printf 'all tests passed\n'

@@ -674,6 +674,65 @@ on: {push: , <<: *l}'
   run_scenario on-merge-key-bringing-in-a-list-exits-2 2 \
     'cannot read the on: triggers of .github/workflows/mergelist.yml: yq exited 1'
 
+  # `jobs:` written as an alias, and a job key written as an alias, are
+  # read through: the notify job is found under the key it stands for, so
+  # its marker is compared with the arms its gate files on.
+  fresh_root
+  gated_workflow jobsalias.yml 'on: [push, pull_request]'
+  sed --in-place --expression='s/^jobs:$/x-jobs: \&js/' --expression='$a jobs: *js' \
+    "${ROOT}/.github/workflows/jobsalias.yml"
+  run_scenario jobs-alias-is-read-through 1 \
+    'marker for jobsalias.yml/notify declares "failure"; the workflow files on "failure cancelled non-pr"'
+
+  fresh_root
+  gated_workflow notifykeyalias.yml 'on: [push, pull_request]'
+  sed --in-place --expression='s/^jobs:$/x-kn: \&kn notify\njobs:/' --expression='s/^  notify:$/  *kn :/' \
+    "${ROOT}/.github/workflows/notifykeyalias.yml"
+  run_scenario notify-job-key-alias-is-read-through 1 \
+    'marker for notifykeyalias.yml/notify declares "failure"; the workflow files on "failure cancelled non-pr"'
+
+  # A clean tree whose notify workflow writes `jobs:` as an alias still
+  # passes: the job's steps, body and outputs are looked up by name. Nine
+  # more workflows make the scan breadth differ from the other clean runs.
+  fresh_root
+  sed --in-place --expression='s/^jobs:$/x-jobs: \&js/' --expression='$a jobs: *js' \
+    "${ROOT}/.github/workflows/codeql.yml"
+  local alias_extra
+  for alias_extra in 1 2 3 4 5 6 7 8 9; do
+    odd_workflow "aliasextra${alias_extra}.yml" 'jobs: {}'
+  done
+  run_scenario jobs-alias-clean-tree-passes 0 '' "${CLEAN/6 workflow/15 workflow}"
+
+  # The same holds for a notify job whose key is written as an alias: the
+  # steps, body and outputs of the job it names are found.
+  fresh_root
+  sed --in-place --expression='s/^jobs:$/x-kn: \&kn notify-finding\njobs:/' --expression='s/^  notify-finding:$/  *kn :/' \
+    "${ROOT}/.github/workflows/codeql.yml"
+  for alias_extra in 1 2 3 4 5 6 7 8 9 10; do
+    odd_workflow "keyextra${alias_extra}.yml" 'jobs: {}'
+  done
+  run_scenario notify-key-alias-clean-tree-passes 0 '' "${CLEAN/6 workflow/16 workflow}"
+
+  # A job key written as an alias names the job it stands for in the
+  # reads of that job's steps (before the notify step) and of its
+  # declared outputs (the watched job).
+  fresh_root
+  sed --in-place --expression='s/^jobs:$/x-kn: \&kn notify\njobs:/' --expression='s/^  notify:$/  *kn :/' \
+    "${ROOT}/${SC}"
+  edit "${SC}" '      - uses: ./.github/actions/notify-workflow-result' \
+    '      - uses: actions/cache@v4
+      - uses: ./.github/actions/notify-workflow-result'
+  run_scenario notify-key-alias-step-before-notify-exits-2 2 \
+    'job notify: a step before the notify step can fail and skip it ("actions/cache@v4")'
+
+  fresh_root
+  sed --in-place --expression='s/^jobs:$/x-ka: \&ka analyze\njobs:/' --expression='s/^  analyze:$/  *ka :/' \
+    "${ROOT}/${CQ}"
+  for alias_extra in 1 2 3 4 5 6 7 8 9 10 11; do
+    odd_workflow "watchedextra${alias_extra}.yml" 'jobs: {}'
+  done
+  run_scenario watched-key-alias-clean-tree-passes 0 '' "${CLEAN/6 workflow/17 workflow}"
+
   # needs: is read through an alias; one job named by anything but a
   # scalar carrying the string tag is refused.
   fresh_root

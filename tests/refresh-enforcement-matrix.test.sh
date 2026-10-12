@@ -456,6 +456,48 @@ EOF
   rm --recursive --force -- "${ok_dir}" "${ok_scripts}"
   rm --force -- "${ok_out}" "${ok_err}" "${ok_stdout}" "${ok_outcome}"
 
+  # `jobs:` written as an alias, and a job key written as an alias, list
+  # the jobs they stand for: the index's `ci: foo` resolves, so the matrix
+  # is generated.
+  local ar_dir ar_scripts ar_out ar_err ar_stdout ar_outcome ar_rc ar_label ar_ci
+  ar_dir="$(mktemp --directory)"
+  ar_scripts="$(mktemp --directory)"
+  ar_out="$(mktemp)"
+  ar_err="$(mktemp)"
+  ar_stdout="$(mktemp)"
+  ar_outcome="$(mktemp)"
+  for ar_label in 'plain' 'jobs-alias' 'key-alias'; do
+    # The bullet is named for the scenario, so each run's warnings differ.
+    printf -- '# Invariant index (fixture)\n\n- **Rule %s** — a rule. → [x.md](x.md) <!-- enforcer: -; ci: foo; hook: - -->\n' \
+      "${ar_label}" >"${ar_dir}/index.md"
+    case "${ar_label}" in
+    plain) ar_ci=$'jobs:\n  foo:\n    runs-on: ubuntu-latest\n' ;;
+    jobs-alias) ar_ci=$'x: &js\n  foo:\n    runs-on: ubuntu-latest\njobs: *js\n' ;;
+    *) ar_ci=$'x: &k foo\njobs:\n  *k :\n    runs-on: ubuntu-latest\n' ;;
+    esac
+    printf '%s' "${ar_ci}" >"${ar_dir}/ci.yml"
+    printf 'SENTINEL\n' >"${ar_out}"
+    ar_rc=0
+    ROSTER_SOURCE_OVERRIDE="${test_only_roster}" \
+      PRECOMMIT_HOOK_NAMES_OVERRIDE='shellcheck' \
+      INVARIANT_INDEX_OVERRIDE="${ar_dir}/index.md" \
+      CI_YML_OVERRIDE="${ar_dir}/ci.yml" \
+      SCRIPTS_DIR_OVERRIDE="${ar_scripts}" \
+      MATRIX_OUTPUT_OVERRIDE="${ar_out}" \
+      "${SCRIPT}" >"${ar_stdout}" 2>"${ar_err}" || ar_rc=$?
+    printf 'harness-assert-outcome: exit=%d\n' "${ar_rc}" >"${ar_outcome}"
+    harness_assert_record "ci.yml ${ar_label} is read through" \
+      "gap: 'Rule ${ar_label}' has no enforcer script" "${ar_outcome}" "${ar_stdout}" "${ar_err}"
+    if [[ ${ar_rc} -eq 0 && "$(<"${ar_out}")" != 'SENTINEL' ]]; then
+      pass "ci.yml ${ar_label} is read through and the matrix is generated"
+    else
+      fail "ci.yml ${ar_label}: want exit 0 and a generated matrix, got exit ${ar_rc}"
+      cat -- "${ar_err}" >&2
+    fi
+  done
+  rm --recursive --force -- "${ar_dir}" "${ar_scripts}"
+  rm --force -- "${ar_out}" "${ar_err}" "${ar_stdout}" "${ar_outcome}"
+
   rm --force -- "${test_only_roster}"
 
   harness_assert_verify || failures=$((failures + 1))

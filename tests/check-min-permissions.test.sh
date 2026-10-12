@@ -255,4 +255,26 @@ expect_body key-tag-break.yml $'permissions: {}\njobs:\n  ? !<tag:x%09y> h\n  : 
 expect_body perms-tag-break.yml $'permissions: {}\njobs:\n  g:\n    permissions: !<tag:x%0Ay> {}\n' 1 \
   "DIR/perms-tag-break.yml: ${ODD_TAG}${ONE}"
 
+# `jobs:` written as an alias, and a job key written as an alias, are read
+# through: a job that declares its permissions passes and one that does
+# not is named by its own key. A merge list under `jobs:` is the same
+# finding as a merge key.
+expect_body jobs-alias.yml $'x-jobs: &js\n  a:\n    permissions: {}\npermissions: {}\njobs: *js\n' 0 ''
+expect_body jobs-alias-bare.yml $'x-jobs: &js\n  a:\n    runs-on: x\npermissions: {}\njobs: *js\n' 1 \
+  "DIR/jobs-alias-bare.yml: job a missing ${Q}permissions:${Q} block (every job must declare its own)${ONE}"
+expect_body job-key-alias.yml $'x-k: &k a\npermissions: {}\njobs:\n  *k :\n    permissions: {}\n' 0 ''
+expect_body job-key-alias-bare.yml $'x-k: &k a\npermissions: {}\njobs:\n  *k :\n    runs-on: x\n' 1 \
+  "DIR/job-key-alias-bare.yml: job a missing ${Q}permissions:${Q} block (every job must declare its own)${ONE}"
+expect_body jobs-merge-list.yml $'x-b: &b\n  permissions: {}\nx-c: &c\n  evil:\n    runs-on: x\npermissions: {}\njobs:\n  <<: [*b, *c]\n' 1 \
+  "DIR/jobs-merge-list.yml: ${MERGE}${ONE}"
+
+# A refused job id or merge key inside an aliased `jobs:` map is a
+# finding too, and a merge list at the root is read first mapping wins
+# for the top-level block.
+expect_body jobs-alias-odd-id.yml $'x-jobs: &js\n  "a\\nb":\n    permissions: {}\npermissions: {}\njobs: *js\n' 1 \
+  "DIR/jobs-alias-odd-id.yml: ${ODD_ID}"$'\n1 permissions posture violation(s) found'
+expect_body jobs-alias-merge.yml $'x-b: &b\n  evil:\n    runs-on: x\nx-jobs: &js\n  <<: *b\n  a:\n    permissions: {}\npermissions: {}\njobs: *js\n' 1 \
+  "DIR/jobs-alias-merge.yml: ${MERGE}"$'\n1 permissions posture violation(s) found'
+expect_body top-merge-list.yml $'x-a: &A {permissions: {}}\nx-b: &B {permissions: {contents: write}}\n<<: [*A, *B]\njobs: {}\n' 0 ''
+
 printf 'all tests passed\n'

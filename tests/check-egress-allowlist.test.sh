@@ -441,6 +441,20 @@ expect_text_has merge-list-first-wins-uses $'p: &P\n  steps:\n'"${CAFE_HR}"$'   
 expect_text_has merge-list-first-wins-runs $'p: &P\n  steps:\n'"${CAFE_HR}"$'    - run: echo PAYLOAD_RAN gh release upload x\n'"${PLAIN_Q}"$'jobs:\n  a:\n    <<: [*P, *Q]\n    runs-on: ubuntu-latest\n' \
   "runs 'gh release upload' but does not allowlist uploads.github.com"
 
+# `jobs:` written as an alias is read through: its job's allowlist is
+# checked as if the map were written out. A job key written as an alias
+# keeps the name the job list prints, so the `# egress-nix-exempt:`
+# comment in its block is found under that name and a stale one is a
+# finding.
+expect_text_has jobs-map-alias $'x-jobs: &js\n'"${CAFE_JOB}"$'jobs: *js\n' "allowlists cafe.github.com"
+readonly STALE_KEY_JOB=$'  *ka :\n    # egress-nix-exempt: no longer needed\n    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            api.github.com:443\n'
+expect_text_has job-key-alias-stale-marker $'x-name: &ka named\njobs:\n'"${STALE_KEY_JOB}" "job '*ka' carries a stale 'egress-nix-exempt:' marker"
+expect_text_has jobs-map-alias-key-alias-stale-marker $'x-name: &ka named\nx-jobs: &js\n'"${STALE_KEY_JOB}"$'jobs: *js\n' "job '*ka' carries a stale 'egress-nix-exempt:' marker"
+
+# A merge key inside an aliased `jobs:` map is refused like one written
+# under `jobs:`.
+expect_text_has jobs-map-alias-merge-key $'x: &base\n'"${CAFE_JOB}"$'x-jobs: &js\n  <<: *base\njobs: *js\n' 'which GitHub Actions refuses'
+
 # A merge key under `jobs:` ends the read of that file: a job beside it
 # adds no finding of its own, so the whole of stderr is the one finding.
 # @arg $1 scenario name  @arg $2 file text after `on:`  @arg $3 whole
