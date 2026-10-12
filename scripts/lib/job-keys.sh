@@ -35,6 +35,11 @@ readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | se
 # shellcheck disable=SC2034 # read by the scripts that source this library
 readonly RESOLVE_JOB_ALIASES='explode(.) | explode(.)'
 
+# A `yq` condition on a key: it is not a scalar, is empty, or holds a tab,
+# a line break, a carriage return or a NUL. Such a key cannot be listed
+# one per line and read back as itself.
+readonly UNLISTABLE_JOB_KEY='kind != "scalar" or (tostring | test("^$|[\t\n\r\x00]"))'
+
 # @description Print the first job key the job list cannot carry, as a
 # JSON string, or nothing when every key is carriable. A key is refused
 # when it is a merge key, is not a scalar, is empty, or holds a tab, a
@@ -46,7 +51,7 @@ readonly RESOLVE_JOB_ALIASES='explode(.) | explode(.)'
 # @exitcode 1 yq could not evaluate the file
 function first_odd_job_key() {
   local rows line
-  rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | select(kind == "map") | to_entries[] | .key | explode(.) | select(tag == "!!merge" or kind != "scalar" or (tostring | test("^$|[\t\n\r\x00]"))) | tostring | to_json(0)] | .[0] // ""' "$1")" || return
+  rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | select(kind == "map") | to_entries[] | .key | explode(.) | select(tag == "!!merge" or '"${UNLISTABLE_JOB_KEY}"') | tostring | to_json(0)] | .[0] // ""' "$1")" || return
   while IFS= read -r line; do
     if [[ -n ${line} ]]; then
       printf '%s\n' "${line}"
@@ -61,4 +66,26 @@ function first_odd_job_key() {
 function odd_job_key_message() {
   printf '%s: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
     "$1" "$2"
+}
+
+# @description Print the first key of the job ids a script lists that the
+# list cannot carry, as a JSON string, or nothing when every key is
+# carriable. The keys are those the job-id read returns: `jobs:` and the
+# keys in it are resolved through `RESOLVE_JOB_ALIASES` first, so a merge
+# key brings in the jobs it names, which are checked, and is not itself a
+# key. A key is refused when it is not a scalar, is empty, or holds a tab,
+# a line break, a carriage return or a NUL.
+# @arg $1 workflow path
+# @stdout the first refused key of the first document holding one, as one
+# line of JSON, or nothing
+# @exitcode 1 yq could not evaluate the file
+function first_unlistable_job_key() {
+  local rows line
+  rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '[(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | select(kind == "map") | to_entries[] | .key | select('"${UNLISTABLE_JOB_KEY}"') | tostring | to_json(0)] | .[0] // ""' "$1")" || return
+  while IFS= read -r line; do
+    if [[ -n ${line} ]]; then
+      printf '%s\n' "${line}"
+      return 0
+    fi
+  done <<<"${rows}"
 }

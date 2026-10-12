@@ -302,13 +302,15 @@ run_scenario 'removed job and member are reported' 0 \
 # A scenario puts the directory first on PATH for its own run only.
 # @arg $1 exit status for the failing read
 # @arg $2 text the failing read's input holds, or `-`
+# @arg $3 text of the failing read's expression (default: the job-id read's
+#         `| keys`; `to_entries` is the job-key read's)
 function yq_stub() {
   local real_yq
   real_yq="$(command -v yq)"
   STUB_DIR="$(mktemp --directory)"
   # shellcheck disable=SC2016 # the stub's own expansions, written literally
   printf '#!/usr/bin/env bash\ncase "$*" in *%q*)\n  if [[ %q == - ]]; then exit %d; fi\n  if grep --quiet --fixed-strings -- %q "${!#}"; then exit %d; fi ;;\nesac\nexec %q "$@"\n' \
-    '| keys' "$2" "$1" "$2" "$1" "${real_yq}" >"${STUB_DIR}/yq"
+    "${3:-| keys}" "$2" "$1" "$2" "$1" "${real_yq}" >"${STUB_DIR}/yq"
   chmod +x -- "${STUB_DIR}/yq"
 }
 
@@ -362,6 +364,13 @@ rm --recursive --force -- "${STUB_DIR}"
 yq_stub 9 rollout
 PATH="${STUB_DIR}:${PATH}" run_scenario 'failed job-id read at HEAD stops the run' 2 \
   --expect-err 'cannot read job ids from .github/workflows/a.yml at HEAD: yq exited 9' \
+  --forbid 'PRESSURE='
+rm --recursive --force -- "${STUB_DIR}"
+
+# The job-key read of the same workflow is a separate read and fails alone.
+yq_stub 9 rollout to_entries
+PATH="${STUB_DIR}:${PATH}" run_scenario 'failed job-key read at HEAD stops the run' 2 \
+  --expect-err 'cannot read job keys from .github/workflows/a.yml at HEAD: yq exited 9' \
   --forbid 'PRESSURE='
 rm --recursive --force -- "${STUB_DIR}"
 
@@ -446,6 +455,183 @@ git -C "${SANDBOX}" commit --quiet -m 'ci: break a workflow'
 run_scenario 'unparsable workflow at HEAD stops the run' 2 \
   --expect-err 'cannot read job ids from .github/workflows/a.yml at HEAD: yq exited 1' \
   --forbid 'Jobs removed:'
+
+# --- scenarios: job keys the id list cannot carry ---
+# A key the list cannot carry (empty, holding a line break, a tab, a
+# carriage return or a NUL, or not a scalar) is read as other names or as
+# none. The workflow holding one is left out of both id sets and counted in
+# a note, so its other jobs are not reported as added or removed either.
+ODD_NOTE='hold a job key the list cannot carry'
+
+# @description Fresh sandbox whose head commit rewrites a.yml to hold the
+#              given `jobs:` body after `build`, plus an unrelated clean
+#              workflow b.yml adding `sibling`.
+# @arg $1 YAML text appended to the jobs map of a.yml (printf escapes)
+# @arg $2 the id of the clean workflow's job, unique to the scenario so that
+#         each report differs from every other
+function make_odd_key_sandbox() {
+  make_sandbox
+  # shellcheck disable=SC2059 # the argument is YAML text with printf escapes
+  printf 'name: a\njobs:\n  build:\n    runs-on: x\n'"$1" >"${WF_DIR}/a.yml"
+  printf 'name: b\njobs:\n  %s:\n    runs-on: x\n' "$2" >"${WF_DIR}/b.yml"
+  git -C "${SANDBOX}" add --all
+  git -C "${SANDBOX}" commit --quiet -m 'ci: add odd key and sibling'
+  extra_commit
+}
+
+# @description Add a second commit touching CI structure, so a report's
+#              pressure count is not the one of the single-commit scenarios.
+function extra_commit() {
+  printf '# touched\n' >>"${WF_DIR}/c.yml"
+  git -C "${SANDBOX}" add --all
+  git -C "${SANDBOX}" commit --quiet -m 'ci: touch a workflow'
+}
+
+make_odd_key_sandbox '  "":\n    runs-on: x\n  extra:\n    runs-on: x\n' sib-empty
+cd "${SANDBOX}"
+run_scenario 'an empty job key leaves its workflow out and says so' 0 \
+  --expect "1 workflow(s) ${ODD_NOTE}" --expect "- ${BT}sib-empty${BT}" \
+  --forbid "${BT}extra${BT}" --forbid 'Jobs removed:'
+
+make_odd_key_sandbox '  "a\\nb":\n    runs-on: x\n' sib-newline
+cd "${SANDBOX}"
+run_scenario 'a job key holding a line break is not reported as two jobs' 0 \
+  --expect "1 workflow(s) ${ODD_NOTE}" --expect "- ${BT}sib-newline${BT}" \
+  --forbid "${BT}a${BT}" --forbid "${BT}b${BT}"
+
+make_odd_key_sandbox '  "a\\0b":\n    runs-on: x\n' sib-nul
+cd "${SANDBOX}"
+run_scenario 'a job key holding a NUL is not reported under a joined name' 0 \
+  --expect "1 workflow(s) ${ODD_NOTE}" --expect "- ${BT}sib-nul${BT}" \
+  --forbid "${BT}ab${BT}"
+
+make_odd_key_sandbox '  "a\\tb":\n    runs-on: x\n' sib-tab
+cd "${SANDBOX}"
+run_scenario 'a job key holding a tab leaves its workflow out and says so' 0 \
+  --expect "1 workflow(s) ${ODD_NOTE}" --expect "- ${BT}sib-tab${BT}" \
+  --forbid 'Jobs removed:'
+
+make_odd_key_sandbox '  "a\\rb":\n    runs-on: x\n' sib-cr
+cd "${SANDBOX}"
+run_scenario 'a job key holding a carriage return leaves its workflow out and says so' 0 \
+  --expect "1 workflow(s) ${ODD_NOTE}" --expect "- ${BT}sib-cr${BT}" --forbid 'Jobs removed:'
+
+make_odd_key_sandbox '  ? [seq-a, seq-b]\n  : {runs-on: x}\n' sib-seq
+cd "${SANDBOX}"
+run_scenario 'a job key that is not a scalar leaves its workflow out and says so' 0 \
+  --expect "1 workflow(s) ${ODD_NOTE}" --expect "- ${BT}sib-seq${BT}" --forbid 'Jobs removed:'
+
+# A workflow odd at the head only is excluded from the base set too: its
+# `build` job is in both, and excluding it at one ref alone would report it
+# as removed. A second odd workflow counts separately.
+make_odd_key_sandbox '  "":\n    runs-on: x\n' sib-two
+cd "${SANDBOX}"
+printf 'name: b\njobs:\n  sib-two:\n    runs-on: x\n  "":\n    runs-on: x\n' >"${WF_DIR}/b.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: make b odd as well'
+run_scenario 'two workflows with odd keys are counted as two' 0 \
+  --expect "2 workflow(s) ${ODD_NOTE}" --forbid "${BT}sib-two${BT}"
+
+# A workflow odd at both refs counts once.
+make_sandbox
+cd "${SANDBOX}"
+printf 'name: a\njobs:\n  "":\n    runs-on: x\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add an odd key'
+mark_audit_point
+printf 'name: a\njobs:\n  "":\n    runs-on: x\n  build:\n    runs-on: x\n  fresh:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add a job beside the odd key'
+extra_commit
+run_scenario 'a workflow odd at both refs is counted once' 0 \
+  --expect "1 workflow(s) ${ODD_NOTE}" --forbid "${BT}fresh${BT}"
+
+# A workflow odd at the audit point alone is left out of the head set too,
+# or every job it holds would be reported as added.
+make_sandbox
+cd "${SANDBOX}"
+printf 'name: a\njobs:\n  "":\n    runs-on: x\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add an odd key'
+mark_audit_point
+printf 'name: a\njobs:\n  build:\n    runs-on: x\n  base-fixed:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: remove the odd key'
+extra_commit
+extra_commit
+run_scenario 'a workflow odd at the audit point alone is left out of the head set' 0 \
+  --expect "1 workflow(s) ${ODD_NOTE}" --forbid "${BT}base-fixed${BT}" \
+  --forbid 'Jobs added:'
+
+# A key holding a double quote is no job id. Listed with the quote removed,
+# it would read as the job `quoted`.
+make_odd_key_sandbox '  "quo\\"ted":\n    runs-on: x\n' sib-quote
+cd "${SANDBOX}"
+run_scenario 'a job key holding a double quote is not listed under another name' 0 \
+  --expect "- ${BT}sib-quote${BT}" --forbid "${BT}quoted${BT}" \
+  --forbid "${ODD_NOTE}"
+
+# A lint-group member holding a double quote is no identifier. Listed with
+# the quote removed, it would read as the member `quotedmember`.
+make_sandbox
+cd "${SANDBOX}"
+printf 'lint-a:\n  - alpha\n  - "quoted\\"member"\n  - member-marker\n' >"${LG_FILE}"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add a member holding a quote'
+extra_commit
+extra_commit
+extra_commit
+extra_commit
+run_scenario 'a member holding a double quote is not listed under another name' 0 \
+  --expect "- ${BT}member-marker${BT}" --forbid "${BT}quotedmember${BT}"
+
+# A workflow path holding a tab or a line break does not change what is
+# listed: its jobs are listed when it is clean and left out when it is odd.
+make_sandbox
+cd "${SANDBOX}"
+printf 'name: t\njobs:\n  tab-old:\n    runs-on: x\n' >"${WF_DIR}/t"$'\t'"x.yml"
+printf 'name: n\njobs:\n  nl-old:\n    runs-on: x\n' >"${WF_DIR}/n"$'\n'"x.yml"
+printf 'name: o\njobs:\n  "":\n    runs-on: x\n  odd-old:\n    runs-on: x\n' >"${WF_DIR}/o"$'\t'"y.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add workflows with a tab or a line break in the name'
+mark_audit_point
+printf 'name: t\njobs:\n  tab-old:\n    runs-on: x\n  tab-added:\n    runs-on: x\n' >"${WF_DIR}/t"$'\t'"x.yml"
+printf 'name: n\njobs:\n  nl-old:\n    runs-on: x\n  nl-added:\n    runs-on: x\n' >"${WF_DIR}/n"$'\n'"x.yml"
+printf 'name: o\njobs:\n  odd-old:\n    runs-on: x\n  odd-added:\n    runs-on: x\n' >"${WF_DIR}/o"$'\t'"y.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add a job to each'
+extra_commit
+extra_commit
+extra_commit
+extra_commit
+run_scenario 'workflow paths holding a tab or a line break are listed or left out whole' 0 \
+  --expect "- ${BT}tab-added${BT}" --expect "- ${BT}nl-added${BT}" \
+  --expect "1 workflow(s) ${ODD_NOTE}" \
+  --forbid "${BT}odd-added${BT}" --forbid 'Jobs removed:'
+
+# A `jobs:` that is a sequence holds no job keys: its indices are not job
+# ids.
+make_sandbox
+cd "${SANDBOX}"
+printf 'name: a\njobs: [seq-first, seq-second]\n' >"${WF_DIR}/a.yml"
+printf 'name: b\njobs:\n  build:\n    runs-on: x\n  seq-marker:\n    runs-on: x\n' >"${WF_DIR}/b.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: write jobs as a sequence'
+extra_commit
+run_scenario 'a jobs sequence lists no job id' 0 \
+  --expect "- ${BT}seq-marker${BT}" --forbid "- ${BT}0${BT}" --forbid "- ${BT}1${BT}"
+
+# A merge key under `jobs:` is read through to the jobs it brings in, so it
+# is not an odd key and its workflow stays in the list.
+make_sandbox
+cd "${SANDBOX}"
+printf 'm: &m\n  merged-job:\n    runs-on: x\njobs:\n  <<: *m\n  build:\n    runs-on: x\n' >"${WF_DIR}/a.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: merge jobs in'
+extra_commit
+extra_commit
+run_scenario 'a merge key under jobs is read through and not counted as odd' 0 \
+  --expect "- ${BT}merged-job${BT}" --forbid "${ODD_NOTE}"
 
 cd "${REPO_ROOT}"
 
