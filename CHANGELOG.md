@@ -6,6 +6,15 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261012-6aaf1cd5] - 2026-10-12
+
+### Chores
+- Bump linpeas to 20261012-6aaf1cd5 ([#1267](https://github.com/rvenutolo/linPEAS-flake/pull/1267))
+
+### Fixes
+- Read egress exempt markers as YAML comments, not value text ([#1265](https://github.com/rvenutolo/linPEAS-flake/pull/1265))
+- End a failing jq read in the provenance lint under exit 2 ([#1264](https://github.com/rvenutolo/linPEAS-flake/pull/1264))
+
 ## [20261011-219a9168] - 2026-10-11
 
 ### Chores
