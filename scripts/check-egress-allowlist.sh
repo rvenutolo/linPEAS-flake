@@ -189,20 +189,30 @@
 #      buy false confidence rather than coverage.
 #
 #      The marker is a YAML comment, gone once yq has parsed the
-#      document, so it is found by a raw-text scan bounded to the job's
-#      own block (from its key's line, taken from yq's `line` builtin,
-#      to the last line before the first line that is not a comment and
-#      is indented no deeper than the key, or to the end of the file,
-#      without the trailing comments indented no deeper than the key)
-#      rather than by any yq query. A marker comment written at key
-#      indentation or shallower, such as just above the next job's key,
-#      sits outside the block and exempts nothing in the job above it; a
+#      document, so candidates are found by a raw-text scan bounded to
+#      the job's own block (from its key's line, taken from yq's `line`
+#      builtin, to the last line before the first line that is not a
+#      comment and is indented no deeper than the key, or to the end of
+#      the file, without the trailing comments indented no deeper than
+#      the key) and then confirmed against yq's comments. A marker
+#      comment written at key indentation or shallower, such as just
+#      above the next job's key, sits outside the block and exempts
+#      nothing in the job above it; a
 #      marker indented deeper than the key belongs to the job above it
 #      wherever it sits, and one after a shallower comment still inside
 #      the job is found.
-#      The scan reads text, not YAML comments, so a line of that shape
-#      inside a `run: |` script body also counts as a marker (a known
-#      limit).
+#      A marker-shaped line counts only when yq also reports it as a
+#      `head_comment` or `foot_comment` anywhere under the job (for the
+#      file's last job, also the document's foot comment), so a line
+#      of that shape inside a `run: |` body or a multi-line quoted scalar,
+#      which is value text, exempts nothing. The comparison is by comment
+#      text, not position: the trailing comments the block excludes are
+#      counted and subtracted from yq's count of the same text, so one
+#      cannot vouch for a value-text line, and a real marker whose text a
+#      trailing comment repeats is not credited. A same-line comment is not
+#      a marker. A marker at an indentation that no node of the job shares,
+#      ending the job's block, is a comment yq reports on no node, so it
+#      exempts nothing (a known limit).
 #      The key and its line are read as one tab-separated row, so a job
 #      key holding a tab or a line break, whatever its tag, is a finding
 #      naming the key, and that file is read no further: such a key
@@ -461,9 +471,9 @@ for f in "${selected_files[@]}"; do
 
   # Assertion 7 prep: each job's own line range, for the marker raw-text
   # scan below. A `# egress-nix-exempt:` marker is a YAML comment, gone
-  # once yq has parsed the document, so it can only be found by reading
-  # the file's own text — bounded to one job's block, so a marker sitting
-  # in a sibling job's block is never credited to this one. `line` (a yq
+  # once yq has parsed the document, so its candidates are found by
+  # reading the file's own text — bounded to one job's block, so a marker
+  # sitting in a sibling job's block is never credited to this one. `line` (a yq
   # builtin) reports a job key's own 1-indexed source line; a job's block
   # runs from there to the last line before the first line that is not a
   # comment and is indented no deeper than the key, or to the end of the
@@ -847,17 +857,71 @@ for f in "${selected_files[@]}"; do
     job_start="${JOB_START[${job}]:-0}"
     job_end="${JOB_END[${job}]:-0}"
     if ((job_start > 0)); then
-      # `|| true`: grep exits 1 on no match, which `set -e` would
-      # otherwise treat as this pipeline's own failure.
-      marker_line="$(sed -n "${job_start},${job_end}p" "${f}" |
-        grep -m1 -E "^[[:space:]]*#[[:space:]]*${NIX_EXEMPT_MARKER}" || true)"
-      if [[ -n ${marker_line} ]]; then
-        marker_present=1
-        marker_reason="${marker_line#*"${NIX_EXEMPT_MARKER}"}"
-        # Trim surrounding whitespace so a reason of only spaces reads as
-        # empty, the same as no reason at all.
-        marker_reason="${marker_reason#"${marker_reason%%[![:space:]]*}"}"
-        marker_reason="${marker_reason%"${marker_reason##*[![:space:]]}"}"
+      # Candidates are the comment-shaped marker lines of the job's block.
+      # A candidate counts only when yq also reports its text as a head or
+      # foot comment under the job: a line of that shape in a `run: |` body
+      # or a multi-line quoted scalar is value text, not a comment, and yq
+      # never reports it. yq can also report, under the job, a comment the
+      # block excludes (a trailing comment at key indentation or shallower,
+      # just above the next job); so that such a comment cannot vouch for a
+      # value-text line of the same text, the comments of that trailing run
+      # are counted and subtracted from yq's count of the text. When that
+      # run reaches the end of the file the document's own foot comment is
+      # read too: yq files there a comment that ends the file after a blank
+      # line, and the run's subtraction covers it. For any other job it is
+      # a comment of the file's end, which cannot vouch for it.
+      # `|| true`: grep exits 1 on no match, which `set -e` would otherwise
+      # treat as this pipeline's own failure.
+      marker_lines="$(sed -n "${job_start},${job_end}p" "${f}" |
+        grep -E "^[[:space:]]*#[[:space:]]*${NIX_EXEMPT_MARKER}" || true)"
+      if [[ -n ${marker_lines} ]]; then
+        tail_set=''
+        tail_to_eof=1
+        for ((jl = job_end + 1; jl <= file_lines; jl++)); do
+          tail_line="${file_text[jl - 1]}"
+          tail_line="${tail_line#"${tail_line%%[![:space:]]*}"}"
+          [[ -z ${tail_line} ]] && continue
+          if [[ ${tail_line} != '#'* ]]; then
+            tail_to_eof=0
+            break
+          fi
+          tail_line="${tail_line#\#}"
+          tail_line="${tail_line#"${tail_line%%[![:space:]]*}"}"
+          tail_line="${tail_line%"${tail_line##*[![:space:]]}"}"
+          tail_set+="${tail_line}"$'\n'
+        done
+        comment_expr="${JOB_BY_KEY}"' | [... | (head_comment, foot_comment)] | .[]'
+        ((tail_to_eof)) && comment_expr='(foot_comment), ('"${comment_expr}"')'
+        if ! job_comments="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${comment_expr}" "${f}")"; then
+          printf '%s: cannot read the comments of job %q\n' "${f}" "${job}" >&2
+          exit 2
+        fi
+        comment_set=''
+        while IFS= read -r comment_line; do
+          # yq drops the `#` and one space after it. A `#` written with no
+          # space or with a tab comes back with the `#` still on; one
+          # followed by a space is part of the comment's own text.
+          comment_line="${comment_line#"${comment_line%%[![:space:]]*}"}"
+          [[ ${comment_line} == '#'[![:space:]]* || ${comment_line} == '#'$'\t'* ]] && comment_line="${comment_line#\#}"
+          comment_line="${comment_line#"${comment_line%%[![:space:]]*}"}"
+          comment_line="${comment_line%"${comment_line##*[![:space:]]}"}"
+          comment_set+="${comment_line}"$'\n'
+        done <<<"${job_comments}"
+        while IFS= read -r marker_line; do
+          marker_text="${marker_line#"${marker_line%%[![:space:]]*}"}"
+          marker_text="${marker_text#\#}"
+          marker_text="${marker_text#"${marker_text%%[![:space:]]*}"}"
+          marker_text="${marker_text%"${marker_text##*[![:space:]]}"}"
+          yq_count="$(printf '%s' "${comment_set}" | grep --count --fixed-strings --line-regexp -- "${marker_text}" || true)"
+          tail_count="$(printf '%s' "${tail_set}" | grep --count --fixed-strings --line-regexp -- "${marker_text}" || true)"
+          ((yq_count > tail_count)) || continue
+          marker_present=1
+          marker_reason="${marker_text#"${NIX_EXEMPT_MARKER}"}"
+          # Trim surrounding whitespace so a reason of only spaces reads as
+          # empty, the same as no reason at all.
+          marker_reason="${marker_reason#"${marker_reason%%[![:space:]]*}"}"
+          break
+        done <<<"${marker_lines}"
       fi
     fi
 
