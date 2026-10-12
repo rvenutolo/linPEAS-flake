@@ -24,6 +24,7 @@ lint-workflow-security:
   - permission-scopes
   - job-timeout-minutes
   - workflow-concurrency
+  - workflow-ascii-space
   - checkout-persist-credentials
   - upload-artifact-strict
   - workflow-on-branches

@@ -665,8 +665,8 @@ in GNU `grep`, `sed`, `gawk`, `mawk`, `jq` and `yq` in every locale, and
 bash glob patterns read ranges as ASCII while `globasciiranges` is on
 (the default). POSIX classes such as `[[:space:]]` and `[[:alpha:]]`
 match characters outside ASCII in any UTF-8 locale, `C.UTF-8` included,
-and so does a letter range in `grep -E` under `en_US.UTF-8`; that is a
-separate rule, not this one.
+and so does a letter range in `grep -E` under `en_US.UTF-8`; those are
+settled in [Locale-bound character classes](#locale-bound-character-classes).
 
 A harness scenario that shows a script's answer under a locale pins the
 locale with `LC_ALL` and first calls `require_locale_gap` from
@@ -676,6 +676,41 @@ would run under C and pass whatever the script does.
 
 Enforced by `scripts/check-regex-range-ascii.sh`; what it reads and
 does not read is stated in its header.
+
+## Locale-bound character classes
+
+`[[:space:]]`, `[[:alpha:]]` and `[[:alnum:]]` match characters outside
+ASCII in any UTF-8 locale, `C.UTF-8` included, in a bash `=~` test, a
+bash glob pattern (`${s//[[:space:]]/}`, `${s%%[![:space:]]*}`), GNU
+`grep -E`, `sed -E` and `gawk`: an em space (U+2003) is `[[:space:]]`,
+`é` is `[[:alpha:]]`. Under `C` and `POSIX` none of them match. A letter
+range in `grep -E` (`[a-z]`, `[A-Za-z0-9._/-]`) matches `é` under
+`en_US.UTF-8` only. `tr` works on bytes and `[:space:]` leaves an em
+space alone. jq's `\s`, `\d` and `\w` match non-ASCII characters in every
+locale, `C` included. The one script that uses them, the fix-pass ledger
+checker, does so on purpose: text made only of Unicode spaces and format
+characters counts as blank there, which is the reading the check wants.
+
+What a non-ASCII character does at a site depends on the consumer of the
+text, so the sites are settled by consumer, not by pattern:
+
+- **Workflow and composite-action YAML.** A text scanner and the YAML
+    reader could disagree about a line holding such a character, and what
+    GitHub Actions does cannot be checked offline. The character is
+    refused in these files (`workflow-ascii-space` in
+    [workflow-hardening.md](../security/workflow-hardening.md#workflow-ascii-space)),
+    so every scanner of them reads one thing whatever class it uses.
+- **Nix files.** Nix rejects U+2003 as an invalid token, so a scanner
+    that treats it as blank only accepts a file Nix then refuses.
+- **Markdown.** The site build reads an em space after `#` as a heading
+    separator, as `[[:space:]]` does, so the scanners agree with their
+    consumer.
+- **Text the script wrote itself, and `tr`.** Not reachable by a pull
+    request, or byte-based.
+
+A new scanner of workflow YAML needs no class of its own: the file is
+ASCII-spaced by the lint above. A scanner of text from another source
+that must treat only space and tab as blank spells them out (`[ \t]`).
 
 ## Text from files in yq expressions
 

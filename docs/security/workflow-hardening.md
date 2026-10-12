@@ -37,6 +37,16 @@ The lint reads `concurrency:` and its `group:` by their YAML kind, and reports a
 
 Enforced by `scripts/check-workflow-concurrency.sh`. Wired as the `lint-workflow-security` CI job (member check `workflow-concurrency`) and as a pre-commit hook.
 
+## workflow-ascii-space
+
+Workflow and composite-action YAML (`.github/workflows/*.yml`, `*.yaml` and `.github/actions/*/action.yml`, `action.yaml`) holds no Unicode space or line separator in any position: U+0085, U+00A0, U+1680, U+2000 to U+200B, U+2028, U+2029, U+202F, U+205F, U+3000.
+
+The lints that scan these files by text read blankness with `[[:space:]]`, which matches most of them (not U+0085, U+00A0, U+2007, U+200B or U+202F) in every UTF-8 locale, while YAML separates tokens with space and tab only. A character after a key's colon, in an indent or before a `#` could make a text scanner and the consumer read one line two ways, and which reading GitHub Actions takes cannot be checked offline. Refusing the character keeps the scanners and the consumers on one reading. A character wanted as data is written as an escape in a double-quoted scalar (`"\u2003"`).
+
+The rule is by position-free byte match, not by structure: it flags the character inside a `run:` block or a string as well, since telling those apart needs a YAML parse the scanners it protects do not have. How the rest of the locale-bound classes are settled is in [linting.md, Locale-bound character classes](../development/linting.md#locale-bound-character-classes).
+
+Enforced by `scripts/check-workflow-ascii-space.sh`. Wired as the `lint-workflow-security` CI job (member check `workflow-ascii-space`).
+
 ## checkout-persist-credentials
 
 Every `actions/checkout` step sets `with.persist-credentials: false` (boolean, not string).
