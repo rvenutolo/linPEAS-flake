@@ -6,6 +6,19 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261013-bb2e52ee] - 2026-10-13
+
+### Chores
+- Bump linpeas to 20261013-bb2e52ee ([#1274](https://github.com/rvenutolo/linPEAS-flake/pull/1274))
+
+### Documentation
+- State the lint-group member list limit in docs-audit-pressure ([#1273](https://github.com/rvenutolo/linPEAS-flake/pull/1273))
+
+### Fixes
+- Read an aliased jobs: map in eleven workflow lints ([#1272](https://github.com/rvenutolo/linPEAS-flake/pull/1272))
+- Leave unreadable job keys out of the docs-audit pressure list ([#1271](https://github.com/rvenutolo/linPEAS-flake/pull/1271))
+- Refuse Unicode spaces in workflow and action YAML ([#1269](https://github.com/rvenutolo/linPEAS-flake/pull/1269))
+
 ## [20261012-6aaf1cd5] - 2026-10-12
 
 ### Chores
