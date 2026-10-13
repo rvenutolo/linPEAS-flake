@@ -14,11 +14,12 @@
 #      from top-level (which is empty anyway) is not allowed; an
 #      omitted block is a lint failure. A job's block is read by its
 #      kind: a map, whatever tag it carries, passes, and any other shape
-#      is reported with its kind and tag. A job written as an alias is
-#      read through it. A merge key under `jobs:`, and a job id, or the
-#      tag of a job id, a job or its `permissions:`, holding a tab or a
-#      line break, are findings: GitHub Actions refuses them, and the
-#      jobs behind them are not read.
+#      is reported with its kind and tag. A `jobs:` map, a job key and a
+#      job written as an alias are read through it. A merge key under
+#      `jobs:`, and a job id, or the tag of a job id, a job or its
+#      `permissions:`, holding a tab or a line break, are findings:
+#      GitHub Actions refuses them, and the jobs behind them are not
+#      read.
 #   3. Top-level cannot be `read-all`, `write-all`, or any scalar/
 #      list form. (Subsumed by rule 1; a string gets a dedicated
 #      message, any other shape is reported with its kind and tag.)
@@ -45,6 +46,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -70,7 +73,7 @@ fi
 function read_workflow() {
   local -r file="$1" expr="$2"
   local value
-  if ! value="$(yq eval "${expr}" "${file}")"; then
+  if ! value="$(yq eval "${YQ_MERGE_SPEC[@]}" "${expr}" "${file}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
     return 1
   fi
@@ -129,7 +132,7 @@ for f in "${selected_files[@]}"; do
     failed=$((failed + 1))
     ;;
   'scalar !!str')
-    top_val="$(yq eval "${TOP_PERMS}" "${f}")" ||
+    top_val="$(yq eval "${YQ_MERGE_SPEC[@]}" "${TOP_PERMS}" "${f}")" ||
       die_unread 'the top-level permissions' "${f}" "$?"
     # shellcheck disable=SC2016 # literal backticks in human-readable prose
     printf '%s: top-level permissions is scalar %q (need `permissions: {}`)\n' \
@@ -137,10 +140,10 @@ for f in "${selected_files[@]}"; do
     failed=$((failed + 1))
     ;;
   'map '*)
-    top_len="$(yq eval "${TOP_PERMS}"' | length' "${f}")" ||
+    top_len="$(yq eval "${YQ_MERGE_SPEC[@]}" "${TOP_PERMS}"' | length' "${f}")" ||
       die_unread 'the top-level permissions size' "${f}" "$?"
     if [[ ${top_len} != "0" ]]; then
-      top_keys="$(yq eval "${TOP_PERMS}"' | keys | join(",")' "${f}")" ||
+      top_keys="$(yq eval "${YQ_MERGE_SPEC[@]}" "${TOP_PERMS}"' | keys | join(",")' "${f}")" ||
         die_unread 'the top-level permissions keys' "${f}" "$?"
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
       printf '%s: top-level permissions non-empty (keys: %s); need `permissions: {}`\n' \
@@ -156,25 +159,6 @@ for f in "${selected_files[@]}"; do
   esac
 
   # --- per-job permissions -----------------------------------------
-  # Capture yq's output (and exit status) into a variable rather than
-  # feeding the loop from `< <(yq ...)`: a process substitution's exit
-  # status is not propagated under set -Eeuo pipefail, so a yq failure
-  # (e.g. `jobs:` is not a map) would yield empty input and the per-job
-  # scan would pass silently. Unlike the reads above, this one fails on
-  # the workflow's own shape (a `jobs:` that is not a map or a list), so
-  # its failure stays a counted finding.
-  # Each row: the job's key and the key's tag, which is `!!merge` for a
-  # `<<` merge key; the kind and tag of the job, read through an alias
-  # by `explode` handed only that node (an anchor cannot sit on an
-  # alias, so one pass resolves it); and those of its `permissions:`,
-  # read from the job handed to `explode` twice, so a block written as
-  # an alias, in a job written as one, is read through both.
-  if ! rows="$(yq eval '.jobs | to_entries[] | .key + "\t" + (.key | tag) + "\t" + ((.value | select(kind == "alias") | explode(.) | kind + " " + tag) // (.value | kind + " " + tag)) + "\t" + ([.value | explode(.) | explode(.) | .permissions | kind + " " + tag] + [""] | .[0])' "${f}")"; then
-    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
-    failed=$((failed + 1))
-    continue
-  fi
-  [[ -n ${rows} ]] || continue
   # The rows are tab-separated, one per line, so a job id holding a tab
   # or a line break could forge or split one. GitHub Actions refuses such
   # an id, so it is a finding and the workflow's jobs are not read.
@@ -183,7 +167,7 @@ for f in "${selected_files[@]}"; do
   # three tags as text (the key's, the job's, its `permissions:`'s), and
   # a verbatim tag decodes `%09` and `%0A` to a tab and a line break, so
   # a tag holding either is refused the same way.
-  if ! odd_ids="$(yq eval '[.jobs | select(kind == "map") | to_entries[] | ((.key | tostring), (.key | tag), (.value | explode(.) | explode(.) | (tag, ([.permissions] | .[] | tag)))) | select(test("[\t\n]"))] | length' "${f}")"; then
+  if ! odd_ids="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | select(kind == "map") | to_entries[] | ((.key | explode(.) | tostring), (.key | explode(.) | tag), (select((.key | explode(.) | tag) != "!!merge") | .value | explode(.) | explode(.) | (tag, ([.permissions] | .[] | tag)))) | select(test("[\t\n]"))] | length' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
@@ -194,16 +178,44 @@ for f in "${selected_files[@]}"; do
     failed=$((failed + 1))
     continue
   fi
-  while IFS=$'\t' read -r job key_tag job_node job_shape; do
+  # GitHub Actions refuses a merge key under `jobs:`, and the jobs one
+  # brings in are not listed as the map's own (a merge list would make
+  # the job reads below fail on a list), so it is a finding and the jobs
+  # are not read. The key is resolved through an alias first; the read
+  # prints one count per document.
+  if ! merge_counts="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | select(kind == "map") | to_entries[] | .key | explode(.) | select(tag == "!!merge")] | length' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  if [[ ${merge_counts//[0$'\n']/} != '' ]]; then
+    printf '%s: jobs: holds a merge key, which GitHub Actions refuses; the jobs it brings in are not read\n' \
+      "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  # Capture yq's output (and exit status) into a variable rather than
+  # feeding the loop from `< <(yq ...)`: a process substitution's exit
+  # status is not propagated under set -Eeuo pipefail, so a yq failure
+  # (e.g. `jobs:` is not a map) would yield empty input and the per-job
+  # scan would pass silently. Unlike the reads above, this one fails on
+  # the workflow's own shape (a `jobs:` that is not a map or a list), so
+  # its failure stays a counted finding.
+  # Each row: the job's key, read through an alias; the kind and tag of
+  # the job, read through an alias by
+  # `explode` handed only that node (an anchor cannot sit on an alias,
+  # so one pass resolves it); and those of its `permissions:`, read from
+  # the job handed to `explode` twice, so a block written as an alias,
+  # in a job written as one, is read through both. `jobs:` written as an
+  # alias is read through by `JOBS_NODE`.
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) + "\t" + ((.value | select(kind == "alias") | explode(.) | kind + " " + tag) // (.value | kind + " " + tag)) + "\t" + ([.value | explode(.) | explode(.) | .permissions | kind + " " + tag] + [""] | .[0])' "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  [[ -n ${rows} ]] || continue
+  while IFS=$'\t' read -r job job_node job_shape; do
     [[ -z ${job} ]] && continue
-    # GitHub Actions refuses a merge key, and the jobs one brings in are
-    # not listed as the map's own, so they would go unread.
-    if [[ ${key_tag} == '!!merge' ]]; then
-      printf '%s: jobs: holds a merge key, which GitHub Actions refuses; the jobs it brings in are not read\n' \
-        "${f}" >&2
-      failed=$((failed + 1))
-      continue
-    fi
     if [[ ${job_node} != 'map '* ]]; then
       printf '%s: job %q has unexpected shape (kind=%s, tag=%s); expected a map\n' \
         "${f}" "${job}" "${job_node%% *}" "${job_node#* }" >&2

@@ -97,7 +97,7 @@ readonly MULTILINE_SELECT='select(.value.run != null and ((.value.run | contains
 # text, and one holding the `|` separator would move its own text into
 # the index. The reads below find the job by its document and position.
 # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
-readonly ROWS_QUERY="document_index as \$d | (((.jobs // {}) | to_entries | to_entries[] as \$j | (\$j.value.value.steps // []) | to_entries[] | ${MULTILINE_SELECT} | \"job|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" + (.key | tostring)), ((.runs.steps // []) | to_entries[] | ${MULTILINE_SELECT} | \"composite|\" + (\$d | tostring) + \"||\" + (.key | tostring)))"
+readonly ROWS_QUERY="document_index as \$d | ((((${JOBS_NODE}) // {}) | to_entries | to_entries[] as \$j | (\$j.value.value.steps // []) | to_entries[] | ${MULTILINE_SELECT} | \"job|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" + (.key | tostring)), ((.runs.steps // []) | to_entries[] | ${MULTILINE_SELECT} | \"composite|\" + (\$d | tostring) + \"||\" + (.key | tostring)))"
 
 # Return first non-blank, non-comment line of a run: block.
 # Args: run-body-on-stdin
@@ -175,11 +175,11 @@ for f in "${selected_files[@]}"; do
       fi
       where="$(printf 'composite step[%s]' "${idx}")"
     else
-      if ! job="$(DOC="${doc}" JPOS="${jpos}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .jobs | to_entries | .[env(JPOS)].key | explode(.)' "${f}")"; then
+      if ! job="$(DOC="${doc}" JPOS="${jpos}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].key | explode(.)' "${f}")"; then
         printf '%s: cannot read the key of the job at position %s\n' "${f}" "${jpos}" >&2
         exit 2
       fi
-      if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .jobs | to_entries | .[env(JPOS)].value.steps[env(IDX)].run' "${f}")"; then
+      if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].value.steps[env(IDX)].run' "${f}")"; then
         printf '%s: cannot read job %q step[%s] run: block\n' "${f}" "${job}" "${idx}" >&2
         exit 2
       fi

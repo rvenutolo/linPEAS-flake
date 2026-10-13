@@ -92,8 +92,7 @@ for f in "${selected_files[@]}"; do
 
   # 1) Any direct Nix-installer action use is forbidden.
   # shellcheck disable=SC2016  # single quotes intentional: yq expression, no bash expansion wanted
-  if ! uses_rows="$(yq -r "${YQ_MERGE_SPEC[@]}" '
-    .jobs // {} | to_entries[] |
+  if ! uses_rows="$(yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) // {}"' | to_entries[] |
     .key as $job |
     (.value.steps // []) [] |
     [$job, (.uses // "null")] | @tsv
@@ -115,8 +114,7 @@ for f in "${selected_files[@]}"; do
 
   # 2) Every ./.github/actions/setup-nix caller must pass the exact token.
   # shellcheck disable=SC2016  # single quotes intentional: yq expression, no bash expansion wanted
-  if ! token_rows="$(yq -r "${YQ_MERGE_SPEC[@]}" '
-    .jobs // {} | to_entries[] |
+  if ! token_rows="$(yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) // {}"' | to_entries[] |
     .key as $job |
     (.value.steps // []) [] |
     select(.uses == "./.github/actions/setup-nix") |

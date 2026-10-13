@@ -79,19 +79,20 @@ source "${_lib_dir}/lib/generates.sh"
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 readonly LABELER="${LABELER_YML_OVERRIDE:-.github/workflows/labeler.yml}"
 readonly SIZE_ACTION='pascalgn/size-label-action'
-# The job a key names. The job list is read with `keys`, which refuses
-# `jobs:` written as an alias, so no lookup meets one. The key reaches
+# The job a key names. `jobs:` written as an alias is read through by
+# `JOBS_NODE` in the job list and in this lookup alike. The key reaches
 # `yq` as data, through `strenv`, and is compared by its base64 text:
 # spliced into the expression, a key holding a quote would be read as
 # `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
 # as wildcards, which base64 text never holds. Of keys written twice the
-# last is read, as `yq`'s own lookup reads it. `jobs:` is not handed to
-# `explode`: that would turn a key written as an alias into its anchor's
-# text, which the job list (printing the alias) never names, and would
-# expand every alias in `jobs:` on each lookup. The `.steps[]` reads after
+# last is read, as `yq`'s own lookup reads it. Only the `jobs:` node is
+# handed to `explode`: handing it the whole map would turn a key written
+# as an alias into its anchor's text, which the job list (printing the
+# alias) never names, and would expand every alias in `jobs:` on each
+# lookup. The `.steps[]` reads after
 # the lookup follow aliases and merge keys inside the job, first mapping
 # winning in a merge list (`YQ_MERGE_SPEC`).
-readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
+readonly JOB_BY_KEY="${JOBS_NODE}"' | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # IGNORED entries no `@generates` annotation can ever claim, because
 # nothing under scripts/ writes them. Each carries the reason it is not
@@ -183,7 +184,7 @@ if [[ -n ${odd_key} ]]; then
   odd_job_key_message "${LABELER}" "${odd_key}" >&2
   exit 1
 fi
-if ! job_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[]' "${LABELER}")"; then
+if ! job_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | keys | .[]' "${LABELER}")"; then
   printf '%s: could not evaluate %s with yq (malformed?)\n' "${0##*/}" "${LABELER}" >&2
   exit 2
 fi

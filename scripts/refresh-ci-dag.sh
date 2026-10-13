@@ -151,8 +151,8 @@ function main() {
   # A workflow that does not parse is an input this generator could not
   # read. Unchecked, yq's own exit 1 becomes the generator's status, and
   # --check mode reads that as a diagram gone stale.
-  if ! yq -o=json "${YQ_MERGE_SPEC[@]}" '
-    .jobs | with_entries(.value = ([(.value.needs // [])] | flatten))
+  if ! yq -o=json "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"'
+    | with_entries(.value = ([(.value.needs // [])] | flatten))
   ' "${workflow}" >"${jobs_file}"; then
     log_err "could not read the job graph from ${workflow}"
     exit 2

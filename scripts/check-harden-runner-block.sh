@@ -76,11 +76,11 @@ for f in "${selected_files[@]}"; do
   # split one step into several bogus records. The check only needs to
   # know whether the value is non-empty, so the separator is irrelevant.
   # shellcheck disable=SC2016 # $j is a yq variable inside single-quoted yq expression
-  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '
-    .jobs | to_entries[] as $j
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"'
+    | to_entries[] as $j
     | $j.value.steps[]
     | select(.uses // "" | test("step-security/harden-runner@"))
-    | $j.key + "\t" + (.with."egress-policy" // "null") + "\t" + ((.with."allowed-endpoints" // "null") | sub("\n"; " "))
+    | ($j.key | explode(.) | tostring) + "\t" + (.with."egress-policy" // "null") + "\t" + ((.with."allowed-endpoints" // "null") | sub("\n"; " "))
   ' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed, or non-string allowed-endpoints?)\n' "${f}" >&2
     failed=$((failed + 1))

@@ -775,7 +775,7 @@ printf '%s\n' "#!${BASH}" \
   '  if [[ -n ${STUB_FAIL_KEYS:-} && ${a} == *"test("* ]]; then exit 7; fi' \
   '  if [[ -n ${STUB_FAIL_COUNT:-} && ${a} == *"keys | length"* ]]; then exit 7; fi' \
   '  if [[ -n ${STUB_COUNT:-} && ${a} == *"keys | length"* ]]; then printf "%s\n" "${STUB_COUNT}"; exit 0; fi' \
-  '  if [[ ${a} == *"[., line]"* ]]; then printf "%s\n" "${STUB_ROWS}"; exit 0; fi' \
+  '  if [[ ${a} == *", line] | join"* ]]; then printf "%s\n" "${STUB_ROWS}"; exit 0; fi' \
   'done' \
   "exec ${real_yq@Q} \"\$@\"" >"${key_dir}/stub/yq"
 chmod +x -- "${key_dir}/stub/yq"
