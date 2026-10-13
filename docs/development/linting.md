@@ -831,6 +831,14 @@ added or removed, and names the number of such workflows in a line of the
 report. A merge key under `jobs:` is read through to the jobs it brings
 in, as the list reads it, and is not itself refused.
 
+The same report's lint-group member list has no such guard. It splits
+`yq`'s output on line breaks and drops a NUL, so a member holding a line
+break is listed as two names and one holding a NUL as one name without it;
+an empty member, or one holding a tab or a carriage return, is omitted.
+Refusing would end the reminder's run and lose its verdict, and the list is
+advisory. `check-ci-job-in-summary.sh` stops CI on an empty member and on one
+that spans lines, so a manifest on a measured ref holds neither.
+
 No lint enforces this. `tests/lib-job-keys.test.sh` pins the library,
 and each lint's harness pins its own refusals.
 
