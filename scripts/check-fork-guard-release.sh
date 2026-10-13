@@ -71,22 +71,23 @@ readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
 readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
 readonly REPO_SLUG="${REPO_SLUG_OVERRIDE:-${DEFAULT_REPO_SLUG}}"
 readonly GUARD_NEEDLE="github.repository == '${REPO_SLUG}'"
-# The job a key names. The job list is read with `keys`, which refuses
-# `jobs:` written as an alias, so no lookup meets one. The key reaches
+# The job a key names. `jobs:` written as an alias is read through by
+# `JOBS_NODE` in the job list and in this lookup alike. The key reaches
 # `yq` as data, through `strenv`, and is compared by its base64 text:
 # spliced into the expression, a key holding a quote would be read as
 # `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
 # as wildcards, which base64 text never holds. Of keys written twice the
-# last is read, as `yq`'s own lookup reads it. `jobs:` is not handed to
-# `explode`: that would turn a key written as an alias into its anchor's
-# text, which the job list (printing the alias) never names, and would
-# expand every alias in `jobs:` on each lookup. The `.permissions` and
+# last is read, as `yq`'s own lookup reads it. Only the `jobs:` node is
+# handed to `explode`: handing it the whole map would turn a key written
+# as an alias into its anchor's text, which the job list (printing the
+# alias) never names, and would expand every alias in `jobs:` on each
+# lookup. The `.permissions` and
 # `.if` reads after the lookup follow aliases and merge keys inside the
 # job, first mapping winning in a merge list (`YQ_MERGE_SPEC`); the body
 # read hands the matched job alone to `explode`, so an App-token step
 # reached through a job written as an alias or through a merge key is
 # searched as the text it stands for.
-readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
+readonly JOB_BY_KEY="${JOBS_NODE}"' | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -179,7 +180,7 @@ for f in "${selected_files[@]}"; do
     failed=$((failed + 1))
     continue
   fi
-  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs // {} | keys | .[]' "${f}")"; then
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) // {}"' | keys | .[]' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue

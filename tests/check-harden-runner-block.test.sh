@@ -110,4 +110,22 @@ expect_exact 'a refused job key stops the file: its jobs are not read' \
   "${ODD_HEAD}"'"")
 1 harden-runner step(s) not in block mode with non-empty allowed-endpoints'
 
+# `jobs:` written as an alias, and a job key written as an alias, are read
+# through: GitHub Actions accepts both, so a block-mode step passes and an
+# audit-mode one is named by the job's own key.
+readonly ALIASED_BLOCK='{uses: step-security/harden-runner@v2, with: {egress-policy: block, allowed-endpoints: "github.com:443"}}'
+readonly ALIASED_AUDIT='{uses: step-security/harden-runner@v2, with: {egress-policy: audit}}'
+expect_exact 'an aliased jobs: map with a block-mode step passes (harden-runner block) as aliased-jobs' \
+  "x: &j\n  a:\n    steps: [${ALIASED_BLOCK}]\njobs: *j\n" 0 ''
+expect_exact 'an aliased jobs: map with an audit-mode step is named by its job key (harden-runner block) as aliased-jobs' \
+  "x: &j\n  a:\n    steps: [${ALIASED_AUDIT}]\njobs: *j\n" 1 \
+  "DIR/built.yml: job a harden-runner egress-policy audit is not block
+1 harden-runner step(s) not in block mode with non-empty allowed-endpoints"
+expect_exact 'a job key written as an alias with a block-mode step passes (harden-runner block) as aliased-key' \
+  "x-k: &k a\njobs:\n  *k :\n    steps: [${ALIASED_BLOCK}]\n" 0 ''
+expect_exact 'a job key written as an alias is named by what it stands for (harden-runner block) as aliased-key' \
+  "x-k: &k a\njobs:\n  *k :\n    steps: [${ALIASED_AUDIT}]\n" 1 \
+  "DIR/built.yml: job a harden-runner egress-policy audit is not block
+1 harden-runner step(s) not in block mode with non-empty allowed-endpoints"
+
 printf 'all tests passed\n'

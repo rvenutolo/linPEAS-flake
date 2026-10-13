@@ -159,6 +159,27 @@ EOF
   rm --force -- "${tmpdoc}"
   tmpdoc=''
 
+  # Scenario 5b: the same workflow with `jobs:` written as an alias
+  # renders the same graph as the fixture written out.
+  local aliased_ci
+  tmpdoc="$(mktemp --suffix=.md)"
+  aliased_ci="$(mktemp --suffix=.yml)"
+  sed --expression='s/^jobs:$/x-jobs: \&js/' --expression='$a jobs: *js' \
+    "${FIXTURES}/with-needs/ci.yml" >"${aliased_ci}"
+  printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${tmpdoc}"
+  CI_WORKFLOW_OVERRIDE="${aliased_ci}" \
+    CATEGORIES_FILE_OVERRIDE="${FIXTURES}/categories.yml" \
+    DOC_OVERRIDE="${tmpdoc}" \
+    "${SCRIPT}" >/dev/null 2>&1 || true
+  if cmp --silent -- "${tmpdoc}" "${FIXTURES}/with-needs/expected.md"; then
+    pass 'with-needs fixture with jobs: written as an alias renders the same graph'
+  else
+    fail 'with-needs fixture with jobs: written as an alias diverges from expected.md'
+    diff -u -- "${FIXTURES}/with-needs/expected.md" "${tmpdoc}" >&2 || true
+  fi
+  rm --force -- "${tmpdoc}" "${aliased_ci}"
+  tmpdoc=''
+
   # Scenario 6: unknown arg exits 2 (arg parse precedes any file I/O).
   local rc3=0
   "${SCRIPT}" --bogus-arg >/dev/null 2>&1 || rc3=$?

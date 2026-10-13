@@ -609,6 +609,19 @@ each read that uses `RESOLVE_JOB_ALIASES` does. A lint that refuses a
 job key counts a merge key still present under `jobs:`, whether written
 inline or brought in through an alias, as a refused key.
 
+A lint that reads only the `jobs:` node hands `explode` that node alone
+(`JOBS_NODE` in `scripts/lib/job-keys.sh`): a `jobs:` written as an alias
+is read through, and the keys inside it stay as written. The lints that
+list the job keys and then look each one up (`check-fork-guard-release.sh`,
+`check-egress-allowlist.sh`, `check-size-label-ignores.sh`) rely on that:
+a key written as an alias is listed and looked up as the same text, so
+the job it names is read, under the alias's own spelling in a finding.
+The lints that name a job from its key (`check-harden-runner-first.sh`,
+`check-harden-runner-block.sh`, `check-setup-nix-required.sh`,
+`check-min-permissions.sh`, `check-notify-arms.sh`,
+`refresh-enforcement-matrix.sh`) resolve the key and name the job by what
+it stands for.
+
 ## Text from files in bash arithmetic
 
 Bash evaluates as an expression the text of an operand in contexts

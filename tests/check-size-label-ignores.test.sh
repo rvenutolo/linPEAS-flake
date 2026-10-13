@@ -281,6 +281,17 @@ EOF
   PATH="${work}/odd-stub:${PATH}" expect 'odd job key read fails' "${DECLARING_SCRIPTS}" "${work}/key-twice.yml" 2 '' '' \
     "check-size-label-ignores.sh: could not evaluate ${work}/key-twice.yml with yq (malformed?)"
 
+  # `jobs:` written as an alias, and a job key written as an alias, are
+  # read through: the size step is found and its ignore list compared.
+  printf 'name: a\non:\n  workflow_dispatch: {}\nx-jobs: &js\n  size:\n    steps:\n      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7\n        env:\n          IGNORED: "docs/alpha.md\\nCHANGELOG.md"\njobs: *js\n' \
+    >"${work}/jobs-alias.yml"
+  expect 'jobs written as an alias is read through (size label ignores jobs alias)' \
+    "${DECLARING_SCRIPTS}" "${work}/jobs-alias.yml" 0 ''
+  printf 'name: a\non:\n  workflow_dispatch: {}\nx-k: &k size\njobs:\n  *k :\n    steps:\n      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7\n        env:\n          IGNORED: "docs/alpha.md\\nCHANGELOG.md"\n' \
+    >"${work}/job-key-alias.yml"
+  expect 'job key written as an alias is read through (size label ignores key alias)' \
+    "${DECLARING_SCRIPTS}" "${work}/job-key-alias.yml" 0 ''
+
   # (m) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' \
     "${REPO_ROOT}/scripts" "${REPO_ROOT}/.github/workflows/labeler.yml" 0 ''

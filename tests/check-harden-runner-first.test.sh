@@ -141,4 +141,22 @@ expect_exact 'a refused job key stops the file: its jobs are not read' \
   "${ODD_HEAD}"'"")
 1 job(s) missing harden-runner as first step'
 
+# `jobs:` written as an alias, and a job key written as an alias, are read
+# through: GitHub Actions accepts both, so a pinned first step passes and
+# a missing one is named by the job's own key.
+# shellcheck disable=SC2016 # literal backticks in the expected message
+readonly NO_FIRST_STEP='DIR/built.yml: job a has no first-step `uses:` (need step-security/harden-runner@<sha>)
+1 job(s) missing harden-runner as first step'
+readonly HR_PINNED='step-security/harden-runner@0123456789abcdef0123456789abcdef01234567'
+expect_exact 'an aliased jobs: map with a pinned first step passes (harden-runner first) as aliased-jobs' \
+  "x: &j\n  a:\n    steps:\n      - uses: ${HR_PINNED}\njobs: *j\n" 0 ''
+expect_exact 'an aliased jobs: map without a first step is named by its job key (harden-runner first) as aliased-jobs' \
+  'x: &j\n  a:\n    steps:\n      - run: echo PAYLOAD_RAN\njobs: *j\n' 1 \
+  "${NO_FIRST_STEP}"
+expect_exact 'a job key written as an alias with a pinned first step passes (harden-runner first) as aliased-key' \
+  "x-k: &k a\njobs:\n  *k :\n    steps:\n      - uses: ${HR_PINNED}\n" 0 ''
+expect_exact 'a job key written as an alias is named by what it stands for (harden-runner first) as aliased-key' \
+  'x-k: &k a\njobs:\n  *k :\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "${NO_FIRST_STEP}"
+
 printf 'all tests passed\n'

@@ -247,4 +247,10 @@ if [[ ${merge_comp_exit} != 1 || ${merge_comp_err} != "${merge_comp_want}" ]]; t
 fi
 printf 'OK   merge-list-composite-first-wins\n'
 
+# `jobs:` written as an alias is read through, as GitHub Actions reads it:
+# a strict block passes and a weak one is named by its job key.
+expect_workflow jobs-alias-strict $'x-jobs: &js\n  a:\n'"${STRICT_STEP}"$'jobs: *js\n' 0 ''
+expect_workflow jobs-alias-weak $'x-jobs: &js\n  a:\n'"${WEAK_STEP}"$'jobs: *js\n' 1 "@F@: job a${weak_tail}"
+expect_workflow jobs-alias-key-alias-weak $'x-name: &ka named\nx-jobs: &js\n  *ka :\n'"${WEAK_STEP}"$'jobs: *js\n' 1 "@F@: job named${weak_tail}"
+
 printf 'all tests passed\n'

@@ -182,4 +182,17 @@ expect_body odd-key-ends-read.yml $'jobs:\n  "a\\nb":\n    permissions:\n      c
 expect_body odd-key-unread.yml "${WRITE_BARE}" 1 \
   "DIR/odd-key-unread.yml: could not evaluate workflow with yq (malformed?)${ONE_JOB}" '!!merge'
 
+# `jobs:` written as an alias, and a job key written as an alias, are read
+# through: a guarded write job passes and an unguarded one is named by its
+# own key (an alias key keeps the text the job list prints).
+readonly UNGUARDED_TAIL=$'`github.repository == \'rvenutolo/linPEAS-flake\'`; got if=\'\''
+readonly ALIASED_WRITE=$'    permissions:\n      contents: write\n    steps:\n      - run: echo PAYLOAD_RAN\n'
+readonly ALIASED_GUARD=$'    if: github.repository == \'rvenutolo/linPEAS-flake\'\n'
+expect_body jobs-alias-guarded.yml $'x-jobs: &js\n  a:\n'"${ALIASED_GUARD}${ALIASED_WRITE}"$'jobs: *js\n' 0 ''
+expect_body jobs-alias-unguarded.yml $'x-jobs: &js\n  a:\n'"${ALIASED_WRITE}"$'jobs: *js\n' 1 \
+  "DIR/jobs-alias-unguarded.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body job-key-alias-guarded.yml $'x-k: &k a\njobs:\n  *k :\n'"${ALIASED_GUARD}${ALIASED_WRITE}" 0 ''
+expect_body job-key-alias-unguarded.yml $'x-k: &k a\njobs:\n  *k :\n'"${ALIASED_WRITE}" 1 \
+  "DIR/job-key-alias-unguarded.yml: job \\*k holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+
 printf 'all tests passed\n'

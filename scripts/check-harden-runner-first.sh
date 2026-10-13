@@ -72,7 +72,7 @@ for f in "${selected_files[@]}"; do
   # status is not propagated under set -Eeuo pipefail, so a yq failure
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
-  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | to_entries[] | .key + "\t" + (.value.steps[0].uses // "null")' "${f}")"; then
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) + "\t" + (.value.steps[0].uses // "null")' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue

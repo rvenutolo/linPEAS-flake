@@ -340,7 +340,7 @@ function load_ci_jobs() {
     log_err "$(odd_job_key_message "${ci_yml}" "${odd}")"
     exit 2
   fi
-  if ! yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[]' "${ci_yml}" | sort --unique >"${out_file}"; then
+  if ! yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | keys | .[] | explode(.)' "${ci_yml}" | sort --unique >"${out_file}"; then
     log_err "could not read the job list from ${ci_yml}"
     exit 2
   fi

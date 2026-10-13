@@ -191,8 +191,8 @@ function check_composite() {
 # @stdout tab-separated records
 function notify_jobs() {
   # shellcheck disable=SC2016 # $job, $j and $n are yq variables
-  yq -r "${YQ_MERGE_SPEC[@]}" '
-    .jobs // {} | to_entries | .[] | .key as $job | .value as $j
+  yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) // {}"'
+    | to_entries | .[] | (.key | explode(.) | tostring) as $job | .value as $j
     | ($j.needs | explode(.) | explode(.) | [.] | flatten) as $n
     | ($j.steps // [])[]
     | select((.uses // "") | test("notify-workflow-result"))
@@ -215,8 +215,8 @@ function steps_before_notify() {
   # notify step while yq is still writing the steps after it gets yq
   # killed by SIGPIPE, which pipefail turns into a failed read.
   local uses step
-  uses="$(JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" '
-    .jobs[strenv(JOB)].steps // [] | .[] | (.uses // "-") | tostring
+  uses="$(JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) | ${RESOLVE_JOB_ALIASES}"'
+    | .[strenv(JOB)].steps // [] | .[] | (.uses // "-") | tostring
   ' "$1")" || return
   while IFS= read -r step; do
     [[ ${step} == *notify-workflow-result* ]] && break
@@ -267,8 +267,8 @@ function workflow_events() {
 # @arg $1 workflow path
 # @arg $2 job id
 function notify_body() {
-  JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" '
-    .jobs[strenv(JOB)].steps[]
+  JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) | ${RESOLVE_JOB_ALIASES}"'
+    | .[strenv(JOB)].steps[]
     | select((.uses // "") | test("^\\./\\.github/actions/notify-workflow-result$"))
     | .with.body // ""
   ' "$1"
@@ -280,7 +280,7 @@ function notify_body() {
 # @arg $2 job id
 # @stdout true or false
 function declares_has_finding() {
-  JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" '.jobs[strenv(JOB)].outputs // {} | keys | map(downcase) | any_c(. == "has-finding")' "$1"
+  JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) | ${RESOLVE_JOB_ALIASES}"' | .[strenv(JOB)].outputs // {} | keys | map(downcase) | any_c(. == "has-finding")' "$1"
 }
 
 # The gate evaluator. It tokenizes the `if:` expression once, then

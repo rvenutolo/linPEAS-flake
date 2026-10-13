@@ -336,19 +336,20 @@ readonly DECLARATION_REL=".github/actions/${NOTIFY_COMPOSITE}/egress-allowlist.t
 readonly NIX_SETUP_COMPOSITE='./.github/actions/setup-nix'
 readonly NIX_SUBCOMMANDS='build|develop|shell|run|flake|profile|eval|copy|store|search|registry|repl|show-config'
 readonly NIX_EXEMPT_MARKER='egress-nix-exempt:'
-# The job a key names. The job list is read with `keys`, which refuses
-# `jobs:` written as an alias, so no lookup meets one. The key reaches
+# The job a key names. `jobs:` written as an alias is read through by
+# `JOBS_NODE` in the job list and in this lookup alike. The key reaches
 # `yq` as data, through `strenv`, and is compared by its base64 text:
 # spliced into the expression, a key holding a quote would be read as
 # `yq` code, and `yq` reads `*` and `?` in an index or an `==` comparison
 # as wildcards, which base64 text never holds. A key written twice is a
-# finding before any lookup, so the lookup never meets one. `jobs:` is
-# not handed to `explode`: that would turn a key written as an alias
-# into its anchor's text, which the job list (printing the alias) never
-# names, and would expand every alias in `jobs:` on each lookup. The
+# finding before any lookup, so the lookup never meets one. Only the
+# `jobs:` node is handed to `explode`: handing it the whole map would
+# turn a key written as an alias into its anchor's text, which the job
+# list (printing the alias) never names, and would expand every alias
+# in `jobs:` on each lookup. The
 # `.steps[]` reads after the lookup follow aliases and merge keys inside
 # the job, first mapping winning in a merge list (`YQ_MERGE_SPEC`).
-readonly JOB_BY_KEY='.jobs | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
+readonly JOB_BY_KEY="${JOBS_NODE}"' | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # Resolved against this script's own location rather than the scan root:
 # the fixture harness repoints the scan root at tests/fixtures, and the
@@ -442,7 +443,7 @@ for f in "${selected_files[@]}"; do
   # A merge key directly under `jobs:` lists as the job `<<` while the
   # jobs it brings in are never read, so it is a finding and the file is
   # read no further. The key is resolved through an alias first.
-  if ! merge_keys="$(yq eval "${YQ_MERGE_SPEC[@]}" '[.jobs | select(kind == "map") | to_entries[] | .key | explode(.) | select(tag == "!!merge")] | length' "${f}")"; then
+  if ! merge_keys="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | select(kind == "map") | to_entries[] | .key | explode(.) | select(tag == "!!merge")] | length' "${f}")"; then
     fail "${f}: could not evaluate workflow with yq (malformed?)"
     continue
   fi
@@ -451,7 +452,7 @@ for f in "${selected_files[@]}"; do
     fail "${f}: jobs: holds a merge key, which GitHub Actions refuses; its jobs are not read"
     continue
   fi
-  if ! job_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[]' "${f}")"; then
+  if ! job_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | keys | .[]' "${f}")"; then
     fail "${f}: could not evaluate workflow with yq (malformed?)"
     continue
   fi
@@ -459,7 +460,7 @@ for f in "${selected_files[@]}"; do
   # empty line, which command substitution strips, so a file whose only
   # job has such a key would read as no jobs at all. The count is held to
   # ASCII digits before the arithmetic below reads it.
-  if ! job_count="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | length' "${f}")"; then
+  if ! job_count="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | keys | length' "${f}")"; then
     fail "${f}: could not evaluate workflow with yq (malformed?)"
     continue
   fi
@@ -498,7 +499,7 @@ for f in "${selected_files[@]}"; do
   declare -A JOB_START=()
   declare -A JOB_END=()
   declare -a row_names=() row_starts=()
-  if ! odd_keys="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[] | select(tostring | test("[\t\n]")) | tostring | @json' "${f}")"; then
+  if ! odd_keys="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | keys | .[] | select(tostring | test("[\t\n]")) | tostring | @json' "${f}")"; then
     fail "${f}: could not evaluate job keys with yq (malformed?)"
     continue
   fi
@@ -506,7 +507,7 @@ for f in "${selected_files[@]}"; do
     fail "${f}: job key ${odd_keys%%$'\n'*} holds a tab or a line break, which the job line read cannot carry"
     continue
   fi
-  if ! job_line_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs | keys | .[] | [., line] | join("\t")' "${f}")"; then
+  if ! job_line_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | keys | .[] | [(select(kind == "alias") | tostring) // ., line] | join("\t")' "${f}")"; then
     fail "${f}: could not evaluate job line numbers with yq (malformed?)"
     continue
   fi
