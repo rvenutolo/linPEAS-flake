@@ -61,7 +61,7 @@ Enforced by `scripts/check-checkout-persist-credentials.sh`. Wired as the `lint-
 
 ## upload-artifact-strict
 
-Every `actions/upload-artifact` step sets `with.if-no-files-found: error`.
+Every `actions/upload-artifact` step sets `with.if-no-files-found: error`. The lint selects a step by a `uses:` that starts with `actions/upload-artifact@` in that lower-case spelling.
 
 The action's default is `warn`, which emits a warning and uploads nothing when the `path:` glob matches nothing. That hides build-output drift: a broken path produces a green job with no artifact, and the consumer side only notices when something downstream goes missing — sometimes many runs later. `error` turns the path-mismatch into a hard upload failure, surfacing the bug at its source.
 
@@ -727,7 +727,7 @@ Known limits:
 - Indented code blocks are read as prose, because this repo's list-item paragraphs are indented the same way, so a marker in one counts as a declaration and the cancel word in one counts, though the page shows both as code: a silent pass. Fence indentation is uncapped for the same reason, so a fence marker indented four or more spaces inside a paragraph opens a fence and hides the prose after it up to the next closing fence marker, a silent pass or, with no later closing marker, an unterminated-fence exit 2. This repo writes neither shape.
 - An HTML block opened by `<pre>`, `<script>`, `<style>` or `<textarea>` is taken to end at a blank line, as the other block-level tags do, rather than at its closing tag.
 
-Docs are read as paragraphs split at blank lines and list-item starts, with fences, inline code spans and comment blocks skipped, as in [required-check-counts](#required-check-counts), except that here a fence marker carrying an info string does not close a fence; a file that ends inside a fence or a comment block is a precondition failure. The scan set is every Markdown file a commit would carry, minus `tests/fixtures/`, `CHANGELOG.md` and `docs/releases.md`, plus the tracked files of the Claude-behavior tree, and the issue bodies of every notify job in `.github/workflows/`.
+Docs are read as paragraphs split at blank lines and list-item starts, with fences, inline code spans and comment blocks skipped; a fence marker carrying an info string does not close a fence, and a file that ends inside a fence or a comment block is a precondition failure. The scan set is every Markdown file a commit would carry, minus `tests/fixtures/`, `CHANGELOG.md` and `docs/releases.md`, plus the tracked files of the Claude-behavior tree, and the issue bodies of every notify job in `.github/workflows/`.
 
 Enforced by `scripts/check-notify-arms.sh`. Wired as the `lint-doc-invariants` CI job (member check `notify-arms`) and as a pre-commit hook.
 

@@ -2644,8 +2644,8 @@ A merge key given a list (`<<: [*P, *Q]`) with a conflicting key is
 read first mapping wins, as the YAML merge specification says. `yq`
 reads it last mapping wins unless it is given
 `--yaml-fix-merge-anchor-to-spec`, so the scripts that source this
-library pass `"${YQ_MERGE_SPEC[@]}"` on their reads that follow a merge
-key. The flag also silences the warning `yq` prints when it is absent.
+library pass `"${YQ_MERGE_SPEC[@]}"` on their reads of a workflow that
+follow a merge key. The flag also silences the warning `yq` prints when it is absent.
 Source after `set -Eeuo pipefail`.
 
 #### first_odd_job_key()

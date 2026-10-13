@@ -585,10 +585,10 @@ under "Text from files in yq expressions" that use `explode` are the
 exception: each hands it the whole map it searches, which is the
 workflow's `jobs:` for the stale-entry read of
 `check-permission-scopes.sh` and the job lookups of
-`check-notify-arms.sh`, and the whole file for its allowlist
-reads and for the category map of `refresh-ci-dag.sh` and the manifest
-of `run-lint-group.sh`. An alias nest anywhere in such a map is
-expanded on every lookup.
+`check-notify-arms.sh`, and the whole file for the allowlist reads of
+`check-permission-scopes.sh`, the category map of `refresh-ci-dag.sh`
+and the manifest of `run-lint-group.sh`. An alias nest anywhere in such a
+map is expanded on every lookup.
 
 The copies are not capped. Aliases that each repeat another alias
 several times multiply at every level: a 408-byte workflow whose `on:`
@@ -822,8 +822,8 @@ A merge key given a list (`<<: [*P, *Q]`) with a conflicting key is read
 first mapping wins, as the YAML merge specification says. `yq` reads it
 last mapping wins unless it is given `--yaml-fix-merge-anchor-to-spec`,
 so the scripts that source the library pass `"${YQ_MERGE_SPEC[@]}"`
-from it on their reads that follow a merge key; the flag also silences
-the warning `yq` prints when it is absent. A workflow lint that does not
+from it on their reads of a workflow that follow a merge key; the flag
+also silences the warning `yq` prints when it is absent. A workflow lint that does not
 source the library, `check-workflow-on-branches.sh` among them, reads a
 merge key by `yq`'s own rule. A lint that reads a job after
 `explode` takes the first mapping as well.

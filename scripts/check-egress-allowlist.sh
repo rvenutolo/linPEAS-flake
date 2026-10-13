@@ -277,8 +277,8 @@
 # without it no fixture can present a tree whose declaration is absent or
 # names no host, and assertion 6's could-not-run branch is reachable only by
 # hand.
-# Exits 0 clean, 1 on any drift, and 2 when the check cannot run. That
-# includes yq missing, the declaration file missing or empty, the workflow
+# Exits 0 clean and 1 on any drift. Exits 2 when the check cannot run,
+# which includes yq missing, the declaration file missing or empty, the workflow
 # globs matching no file or WORKFLOW_FILE_FILTER selecting none of them, a
 # read of one job's allowed-endpoints, uses:, run: or comment list failing
 # once its workflow's jobs have been listed, and an unfiltered scan

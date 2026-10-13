@@ -45,7 +45,7 @@ The `gh issue create` invocation sets no `--assignee`; mismatches rely on defaul
 
 ## Exercising the diagnostic path on demand
 
-The diffoscope step and the `repro-diff` upload run on a nonzero compare result, so on a reproducible tree they are never exercised and a break in them stays latent until the one day they are needed. `workflow_dispatch` carries a `force_diffoscope` input that runs them regardless:
+The diffoscope step and the `repro-diff` upload run on a nonzero compare result, so while the compare keeps returning zero they are not exercised and a break in them stays latent until they are needed. `workflow_dispatch` carries a `force_diffoscope` input that runs them regardless:
 
 ```bash
 gh workflow run reproducibility-check.yml --ref <ref> --field force_diffoscope=true
