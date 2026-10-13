@@ -39,9 +39,9 @@ All three configurations caught every measured seed in both runs — the seven
 categories that existed then (ghost CI job, lint-group mislabel, cron drift,
 stale ref, internal-link, required-check count, ephemeral). The
 `false-exclusive` seed was added after this comparison, so it is absent from the
-rows above. It has since been measured under the shipped four-reader map only,
-where it hit 2/2 across two runs; the other two configurations have not been
-re-run with it, and two runs is too thin to call the category non-flaky.
+rows above. It has since been measured under the shipped four-reader map
+only; the other two configurations have not been re-run with it. Its
+readings are in [`seeded-defects/README.md`](seeded-defects/README.md).
 `near-miss-exclusive` was added later still and measured the same way, in a
 two-run pass over all nine seeds that scored 18/18; it hit 2/2 in that pass,
 and 1/2 in the next M=2 run — `seeded-defects/README.md` carries every
@@ -107,9 +107,11 @@ each cluster reader finishes; sum them across the readers of one run. The
 recall harness itself records only recall — `score.sh` reads report files and
 the manifest, and its output carries no token column.
 
-A configuration ships only if seed recall stays at 100% across two runs (no
-seed category dropped, whatever the seed set currently holds) **and**
-reader-tokens fall below the per-subdirectory baseline. A configuration
+A configuration ships only if recall on the seeds the comparison above
+measured stays at 100% across two runs (no seed category of those dropped)
+**and** reader-tokens fall below the per-subdirectory baseline. Seeds added
+since are scored in [`seeded-defects/README.md`](seeded-defects/README.md),
+whose last measurement is below 100% in the generator class. A configuration
 whose cost was never measured head-to-head is
 *unevaluated* against that gate, not failed by it. The recorded token figures
 are per-run sums across readers from a single measured run per configuration

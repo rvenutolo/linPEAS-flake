@@ -13,8 +13,9 @@ posture is non-negotiable.
     policy.
 - Read [`SECURITY.md`](SECURITY.md) — SHA-pinning, attestation chain,
     bump credentials.
-- Run `just verify` locally — runs the batched lint groups, harnesses,
-    doc-freshness checks, and standalone enforcers CI runs. Hook-only lints
+- Run `just verify` locally — runs the batched lint groups, the harness
+    group, the doc-freshness checks, and the standalone enforcers its
+    recipe lists. Hook-only lints
     run under `just lint`. The `pin-digest-provenance` and
     `flake-lock-provenance` members of `lint-doc-invariants` reach the
     GitHub API through `gh`, but only on a branch that moves an action pin

@@ -13,8 +13,9 @@
 #   1. Every scope the job grants with value `write` is listed under that
 #      job in the allowlist. An un-listed write scope is an over-grant.
 #   2. Every scope listed for the job in the allowlist is actually granted
-#      `write` by the job, and every allowlist workflow/job exists. A
-#      listed-but-absent scope (or a vanished workflow/job) is stale.
+#      `write` by the job, and an allowlist workflow/job that lists a
+#      scope exists. A listed-but-absent scope (or a vanished
+#      workflow/job that still lists one) is stale.
 #   3. Every per-job scope list in the allowlist is sorted, so the
 #      "sorted list of write-scope names" format documented in
 #      docs/security/min-permissions.md stays enforced, diffs stay

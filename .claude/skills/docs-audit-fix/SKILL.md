@@ -119,9 +119,12 @@ paragraph in its scope.
     writes as the PR's last commit, the only content commit after that run,
     and push again. Do not re-run the checker over it: the marker is in no
     ledger, so the checker would ask for a `code_changes` entry and a gate
-    attack on it. Anyone holding the ledger and gate reproduces the OK
-    line with `check-fix-ledger.sh --head <commit> <ledger> <gate>`, using
-    the commit recorded in step 5. A content commit needed after the
+    attack on it. While the PR is open, anyone holding the ledger and gate
+    reproduces the OK line with
+    `check-fix-ledger.sh --head <commit> <ledger> <gate>`, using the
+    commit recorded in step 5. Once the PR has merged, `main` holds that
+    commit, so the command also needs `--base <merge>^1`, the merge
+    commit's first parent. A content commit needed after the
     marker means reverting the marker commit, re-running the checker, recording the new
     commit as in step 5, updating the PR body's OK line and commit, and
     committing a new marker. If another audit will read these fixes, do
@@ -275,7 +278,8 @@ matching does not (see **Sweep**).
 - **Shape.** The ledger and the gate each hold exactly one JSON object,
     with no key repeated inside any object (either fault stops the run
     with exit 2);
-    every list element is an object; an artifact entry holds either `file`
+    every element of the `pairs`, `code_changes`, `artifact` and
+    `siblings` lists is an object; an artifact entry holds either `file`
     and `lines` or a non-blank `command` and `observed`, never both;
     every pair and artifact range is
     `<start>-<end>` with at most six digits a side (a sibling's range is

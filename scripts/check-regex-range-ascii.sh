@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # scripts/check-regex-range-ascii.sh
 #
-# @description Lint: a bash `[[ … =~ … ]]` regex under `scripts/` or
-# `tests/` must not hold a range between ASCII letters or digits (`[0-9]`,
+# @description Lint: a bash `[[ … =~ … ]]` regex in `scripts/*.sh`,
+# `scripts/lib/*.sh` or `tests/*.sh` must not hold a range between ASCII letters or digits (`[0-9]`,
 # `[a-f]`, `[A-Za-z_]`) unless it is matched under a C locale. A range
 # follows the locale's collation: under `en_US.UTF-8` `[0-9]` also matches
 # digits such as `٣` and `５`, and `[a-f]` matches `é`, while the CI
@@ -14,8 +14,8 @@
 # `local LC_ALL=C` or `local LC_ALL=C.UTF-8` that is a direct statement
 # of its own function (`ascii_match` in `scripts/lib/ascii-match.sh` is
 # one), or follows a top-level `export LC_ALL=C` or
-# `export LC_ALL=C.UTF-8`; the value is one unquoted word, the last
-# `LC_ALL` word on its line. A later assignment, `declare`, `local` or
+# `export LC_ALL=C.UTF-8`; the value is one word, unquoted or in single
+# quotes, the last `LC_ALL` word on its line. A later assignment, `declare`, `local` or
 # `export` (also behind `builtin` or `command`, and with the whole
 # assignment quoted) that sets anything but one lone `C` or `C.UTF-8`
 # word, or a later `unset LC_ALL`, `wait -p LC_ALL`, `read`, `mapfile`,
@@ -38,11 +38,11 @@
 # read through the assignments to that variable and the items of a `for`
 # loop over it in the same file, following variables they name, three levels deep. Not read: a regex
 # that reaches the test as a function argument, from a function's output,
-# from an array element, or from a sourced file; a regex inside `eval`
+# from an array assigned as a list (`re=(…)`), or from a sourced file; a regex inside `eval`
 # or `bash -c` text; and `grep`, `sed`, `awk`, `jq` and `yq` patterns.
 # A quoted operand (`=~ "[0-9]"`) is a literal match, but is read like
 # an unquoted one and reported; so is a function whose `local LC_ALL`
-# value is quoted. Unquote it or spell the class out.
+# value is in double quotes. Unquote it or spell the class out.
 #
 # Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and TESTS_DIR_OVERRIDE
 # (default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.

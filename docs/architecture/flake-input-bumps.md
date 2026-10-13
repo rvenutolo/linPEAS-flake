@@ -329,17 +329,18 @@ The `path:$(pwd)#site` form is required for the `site` derivation —
 it bypasses the git filter so the gitignored `docs/_data/dashboard.yml`
 is visible to the build.
 
-### 7. Run all test suites
+### 7. Run the local suites
 
 ```bash
 nix develop --command just verify
 ```
 
-`just verify` runs the batched lint groups, the full harness suite,
-the doc-freshness checks, and every standalone required-check enforcer
-(the changelog checks and the rest of the `justfile` recipe) — the
-in-repo enforcer set CI gates on. The action-driven checks are not part
-of `just verify`:
+`just verify` runs the batched lint groups, the harness group, the
+doc-freshness checks, and the standalone required-check enforcers its
+`justfile` recipe lists (the changelog checks among them). Those
+enforcers have fixture harnesses of their own, which the recipe does not
+run; they run in the enforcers' CI jobs. The action-driven checks are not
+part of `just verify`:
 `markdownlint`, `typos` and `editorconfig` run as CI jobs and, locally,
 through the pre-commit hook set (`just lint` / `just check`); `commitlint`
 runs as a CI job and, locally, only through the installed `commit-msg` git

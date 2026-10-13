@@ -70,8 +70,8 @@ discipline itself leaked rather than that one sentence rotted.
 
 It reads the branch side of each merge (`<merge>^1..<merge>^2`), so commits
 `main` gained underneath an open PR are not credited to it. A commit that
-touched no prose file — a marker commit, a pure code change — is listed
-nowhere. With no merge in the window the section says so; a cycle that landed
+touched no file under those pathspecs — a marker commit, a change to Nix
+or a test harness alone — is listed nowhere. With no merge in the window the section says so; a cycle that landed
 on the branch directly is attributed from the ranking's line window instead.
 
 ### The rest of the bundle

@@ -277,10 +277,12 @@
 # without it no fixture can present a tree whose declaration is absent or
 # names no host, and assertion 6's could-not-run branch is reachable only by
 # hand.
-# Exits 0 clean, 1 on any drift, 2 if yq is missing, if the declaration
-# file is missing or empty, if a read of one job's allowed-endpoints,
-# uses: or run: list fails once its workflow's jobs have been listed, or
-# if an unfiltered scan discovers no notify job or no
+# Exits 0 clean, 1 on any drift, and 2 when the check cannot run. That
+# includes yq missing, the declaration file missing or empty, the workflow
+# globs matching no file or WORKFLOW_FILE_FILTER selecting none of them, a
+# read of one job's allowed-endpoints, uses:, run: or comment list failing
+# once its workflow's jobs have been listed, and an unfiltered scan
+# discovering no notify job or no
 # cache.nixos.org/releases.nixos.org-carrying job at all.
 
 set -Eeuo pipefail

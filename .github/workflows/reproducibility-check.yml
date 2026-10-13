@@ -8,7 +8,7 @@ on:
     inputs:
       # This input widens the `if:` on the diagnostic steps only — the
       # diffoscope run and its artifact upload. `open issue (on mismatch)`
-      # and `fail job (on mismatch)` keep the mismatch-only condition, so a
+      # and `fail job (on mismatch)` keep the nonzero-result condition, so a
       # forced run can add execution but can never fabricate or suppress
       # the reproducibility signal.
       force_diffoscope:

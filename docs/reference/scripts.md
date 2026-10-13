@@ -1435,8 +1435,8 @@ future edits cannot silently weaken it.
 
 ### scripts/check-regex-range-ascii.sh
 
-Lint: a bash `[[ … =~ … ]]` regex under `scripts/` or
-`tests/` must not hold a range between ASCII letters or digits (`[0-9]`,
+Lint: a bash `[[ … =~ … ]]` regex in `scripts/*.sh`,
+`scripts/lib/*.sh` or `tests/*.sh` must not hold a range between ASCII letters or digits (`[0-9]`,
 `[a-f]`, `[A-Za-z_]`) unless it is matched under a C locale. A range
 follows the locale's collation: under `en_US.UTF-8` `[0-9]` also matches
 digits such as `٣` and `５`, and `[a-f]` matches `é`, while the CI
@@ -1448,8 +1448,8 @@ A test is matched under a C locale when it follows a
 `local LC_ALL=C` or `local LC_ALL=C.UTF-8` that is a direct statement
 of its own function (`ascii_match` in `scripts/lib/ascii-match.sh` is
 one), or follows a top-level `export LC_ALL=C` or
-`export LC_ALL=C.UTF-8`; the value is one unquoted word, the last
-`LC_ALL` word on its line. A later assignment, `declare`, `local` or
+`export LC_ALL=C.UTF-8`; the value is one word, unquoted or in single
+quotes, the last `LC_ALL` word on its line. A later assignment, `declare`, `local` or
 `export` (also behind `builtin` or `command`, and with the whole
 assignment quoted) that sets anything but one lone `C` or `C.UTF-8`
 word, or a later `unset LC_ALL`, `wait -p LC_ALL`, `read`, `mapfile`,
@@ -1472,11 +1472,11 @@ parsed. A regex held in a variable is
 read through the assignments to that variable and the items of a `for`
 loop over it in the same file, following variables they name, three levels deep. Not read: a regex
 that reaches the test as a function argument, from a function's output,
-from an array element, or from a sourced file; a regex inside `eval`
+from an array assigned as a list (`re=(…)`), or from a sourced file; a regex inside `eval`
 or `bash -c` text; and `grep`, `sed`, `awk`, `jq` and `yq` patterns.
 A quoted operand (`=~ "[0-9]"`) is a literal match, but is read like
 an unquoted one and reported; so is a function whose `local LC_ALL`
-value is quoted. Unquote it or spell the class out.
+value is in double quotes. Unquote it or spell the class out.
 
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and TESTS_DIR_OVERRIDE
 (default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
@@ -1557,7 +1557,8 @@ nobody checks.
 A backstop catches a count written without a marker: a number of up to
 three digits or a number word, after whitespace or an opening parenthesis
 or at the start of a paragraph, followed within two words by "required
-check(s)", "required status check(s)" or "required context(s)". Emphasis
+check(s)", "required status check(s)", "required context(s)" or
+"required status context(s)". Emphasis
 markers and HTML comments count as whitespace. The words between may not
 include "of", so a partitive ("one of the required checks") is not a count,
 and the bare word "one" reads as an article rather than a count. Anything wider matched unrelated numbers
@@ -1791,7 +1792,8 @@ when the check cannot run: `shfmt` or `jq` absent from PATH, a script
 
 ### scripts/check-upload-artifact-strict.sh
 
-Lint: every `actions/upload-artifact` step in every
+Lint: every step whose `uses:` starts with
+`actions/upload-artifact@`, in that lower-case spelling, in every
 workflow under `.github/workflows/*.yml` sets
 `with.if-no-files-found: error` so empty-glob bugs hard-fail.
 
@@ -2641,9 +2643,9 @@ key as a finding instead of reading around it.
 A merge key given a list (`<<: [*P, *Q]`) with a conflicting key is
 read first mapping wins, as the YAML merge specification says. `yq`
 reads it last mapping wins unless it is given
-`--yaml-fix-merge-anchor-to-spec`, so every `yq` read of a workflow
-that follows a merge key passes `"${YQ_MERGE_SPEC[@]}"`. The flag also
-silences the warning `yq` prints when it is absent.
+`--yaml-fix-merge-anchor-to-spec`, so the scripts that source this
+library pass `"${YQ_MERGE_SPEC[@]}"` on their reads that follow a merge
+key. The flag also silences the warning `yq` prints when it is absent.
 Source after `set -Eeuo pipefail`.
 
 #### first_odd_job_key()

@@ -2,10 +2,10 @@ name: stale-pin-check
 
 # Daily watchdog: catches a pin that stops advancing for an extended
 # window, whatever the cause (a failing `update-linpeas` run, a bump PR
-# that never merges, a disabled schedule). It reads only the pin and
-# upstream's latest release, never `update-linpeas` run results, so the
-# `update-linpeas` cron itself can't see "we stopped bumping" and this
-# check can't say why.
+# that never merges, a disabled schedule). The `update-linpeas` cron
+# itself can't see "we stopped bumping". This check reads only the pin
+# and upstream's latest release, never `update-linpeas` run results, so
+# it can say that the pin stalled but not why.
 #
 # Logic: read the timestamp prefix of `pin.version` (peass-ng tags use
 # `YYYYMMDD-<sha>`). If we are >14d behind that date AND the upstream
@@ -196,7 +196,7 @@ jobs:
                 - upstream `.digest` field absent (`bump-linpeas.sh` exits 1;
                   look for `has no .digest field`)
                 - `linpeas-flake-bumper` GitHub App installation broken
-                  (`BUMP_APP_PRIVATE_KEY` not rotated, App not uninstalled)
+                  (`BUMP_APP_PRIVATE_KEY` invalid, or the App uninstalled)
                 - a closed (declined) bump PR for the same version
               - Runs are green but the pin did not move: a bump PR is open
                 with auto-merge waiting on a required check or a branch

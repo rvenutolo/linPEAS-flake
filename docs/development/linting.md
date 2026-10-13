@@ -584,7 +584,8 @@ aliases elsewhere in the file cost nothing. The name lookups described
 under "Text from files in yq expressions" that use `explode` are the
 exception: each hands it the whole map it searches, which is the
 workflow's `jobs:` for the stale-entry read of
-`check-permission-scopes.sh`, and the whole file for its allowlist
+`check-permission-scopes.sh` and the job lookups of
+`check-notify-arms.sh`, and the whole file for its allowlist
 reads and for the category map of `refresh-ci-dag.sh` and the manifest
 of `run-lint-group.sh`. An alias nest anywhere in such a map is
 expanded on every lookup.
@@ -616,10 +617,10 @@ list the job keys and then look each one up (`check-fork-guard-release.sh`,
 `check-egress-allowlist.sh`, `check-size-label-ignores.sh`) rely on that:
 a key written as an alias is listed and looked up as the same text, so
 the job it names is read, under the alias's own spelling in a finding.
-The lints that name a job from its key (`check-harden-runner-first.sh`,
-`check-harden-runner-block.sh`, `check-setup-nix-required.sh`,
-`check-min-permissions.sh`, `check-notify-arms.sh`,
-`refresh-enforcement-matrix.sh`) resolve the key and name the job by what
+The lints that name a job from its key (among them
+`check-harden-runner-first.sh`, `check-harden-runner-block.sh`,
+`check-setup-nix-required.sh`, `check-min-permissions.sh`,
+`check-notify-arms.sh` and `refresh-enforcement-matrix.sh`) resolve the key and name the job by what
 it stands for.
 
 ## Text from files in bash arithmetic
@@ -709,10 +710,13 @@ text, so the sites are settled by consumer, not by pattern:
 
 - **Workflow and composite-action YAML.** A text scanner and the YAML
     reader could disagree about a line holding such a character, and what
-    GitHub Actions does cannot be checked offline. The character is
-    refused in these files (`workflow-ascii-space` in
+    GitHub Actions does cannot be checked offline. The Unicode spaces
+    and line separators are refused in these files
+    (`workflow-ascii-space` in
     [workflow-hardening.md](../security/workflow-hardening.md#workflow-ascii-space)),
-    so every scanner of them reads one thing whatever class it uses.
+    which settles `[[:space:]]`. Other non-ASCII characters are not
+    refused, so `[[:alpha:]]` and `[[:alnum:]]` still follow the locale
+    in a scanner of these files.
 - **Nix files.** Nix rejects U+2003 as an invalid token, so a scanner
     that treats it as blank only accepts a file Nix then refuses.
 - **Markdown.** The site build reads an em space after `#` as a heading
@@ -721,8 +725,8 @@ text, so the sites are settled by consumer, not by pattern:
 - **Text the script wrote itself, and `tr`.** Not reachable by a pull
     request, or byte-based.
 
-A new scanner of workflow YAML needs no class of its own: the file is
-ASCII-spaced by the lint above. A scanner of text from another source
+A new scanner of workflow YAML needs no space class of its own: the
+file is ASCII-spaced by the lint above. A scanner of text from another source
 that must treat only space and tab as blank spells them out (`[ \t]`).
 
 ## Text from files in yq expressions
@@ -740,9 +744,12 @@ A script hands such text to `yq` as data and never splices it into the
 expression: it sets an environment variable on the `yq` call and reads
 it with `strenv`. A lookup by that text is still not exact, because
 `yq` reads `*` and `?` as wildcards both in an index (`.[strenv(X)]`)
-and in an `==` comparison, so `a*` also finds `abc`. A script therefore
-finds a key by comparing base64 text, which holds neither character:
+and in an `==` comparison, so `a*` also finds `abc`. A script that needs
+the exact key therefore finds it by comparing base64 text, which holds
+neither character:
 `explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(X) | @base64))] | reverse | .[0] | .value`.
+`check-notify-arms.sh` looks a notify job up through the index instead,
+so a job id holding `*` or `?` also reads the jobs the pattern matches.
 `explode` resolves merge keys and aliased entries, which `to_entries`
 does not follow, and the last of the matches is read, as `yq`'s own
 index reads a name written twice. A key written as an alias is found by
@@ -789,9 +796,10 @@ anyway misreads it:
 - a merge key (`<<`) directly under `jobs:` lists as the job `<<`, and
     the jobs it brings in are never reached by `.jobs[]` or `to_entries`.
 
-A job key that is empty, holds a line break or a tab, is not a scalar,
-or is a merge key is therefore a counted finding that names the file and
-the key, and that file's jobs are not read. `check-ci-job-in-summary.sh`
+A lint that lists job keys through the shared reading therefore counts
+a job key that is empty, holds a line break or a tab, is not a scalar, or
+is a merge key as a finding that names the file and the key, and does not
+read that file's jobs. `check-ci-job-in-summary.sh`
 and `check-prose-ci-names.sh` still list the names they can resolve in
 such a file, so the refusal is its only finding and their other checks do
 not report those names missing. The shared reading also
@@ -813,9 +821,11 @@ job key to refuse.
 A merge key given a list (`<<: [*P, *Q]`) with a conflicting key is read
 first mapping wins, as the YAML merge specification says. `yq` reads it
 last mapping wins unless it is given `--yaml-fix-merge-anchor-to-spec`,
-so every `yq` read of a workflow that follows a merge key passes
-`"${YQ_MERGE_SPEC[@]}"` from the same library; the flag also silences
-the warning `yq` prints when it is absent. A lint that reads a job after
+so the scripts that source the library pass `"${YQ_MERGE_SPEC[@]}"`
+from it on their reads that follow a merge key; the flag also silences
+the warning `yq` prints when it is absent. A workflow lint that does not
+source the library, `check-workflow-on-branches.sh` among them, reads a
+merge key by `yq`'s own rule. A lint that reads a job after
 `explode` takes the first mapping as well.
 
 The allowlist of `check-permission-scopes.sh` is split into

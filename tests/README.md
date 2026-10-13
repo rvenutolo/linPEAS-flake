@@ -33,9 +33,9 @@ files (command shims, a `justfile`, a `README`).
 
 Neither shape is guaranteed: a handful of directories are named for the
 invariant rather than for the harness, so read the harness's `FIXTURES`
-constant rather than inferring a path from its name. Roughly a third of
-the harnesses build their tree at runtime and have no fixture directory
-at all; those render an em dash in the census.
+constant rather than inferring a path from its name. Many
+harnesses build their tree at runtime and have no fixture directory at
+all; those render an em dash in the census.
 
 Every `tests/*.test.sh` harness, its subject and its fixture directories
 are listed in

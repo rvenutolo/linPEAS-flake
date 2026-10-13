@@ -22,7 +22,7 @@ lint:
 lint-links:
   lychee --config lychee.toml './**/*.md' '.github/**/*.md' '.claude/**/*.md'
 
-# Run the lint groups, harnesses, doc-freshness checks, and standalone enforcers CI runs
+# Run the lint groups, the harness group, the doc-freshness checks, and the standalone enforcers listed here
 verify:
   nix develop --command bash -c '\
   rc=0; \
