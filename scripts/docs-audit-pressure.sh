@@ -31,6 +31,16 @@
 # workflow is left out of the job lists at both refs and counted in one
 # line of the body; the commit count and the exit status are unaffected.
 #
+# A lint-group member the list cannot carry is not refused and not counted.
+# The member read splits `yq`'s output on line breaks and drops a NUL, so a
+# member holding a line break is listed as two names and one holding a NUL
+# as one name without it; an empty member, or one holding a tab, a carriage
+# return or any other character outside a job id, is omitted. The list is
+# advisory and the verdict is the commit count, so a misread member changes
+# the list alone. `check-ci-job-in-summary.sh` stops CI on an empty member
+# and on one that spans lines, so a manifest that reached a ref the audit
+# measures does not hold either.
+#
 # Honors LINT_ALLOW_EMPTY_SCAN=1 to accept a ref whose workflows dir holds
 # no YAML.
 #
