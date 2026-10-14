@@ -756,13 +756,10 @@ and in an `==` comparison, so `a*` also finds `abc`. A script that needs
 the exact key therefore finds it by comparing base64 text, which holds
 neither character:
 `explode(.) | [to_entries[] | select((.key | tostring | @base64) == (strenv(X) | @base64))] | reverse | .[0] | .value`.
-`check-notify-arms.sh` looks a notify job up through the index instead,
-so a job id holding `*` or `?` also reads the jobs the pattern matches.
 `explode` resolves merge keys and aliased entries, which `to_entries`
 does not follow, and the last of the matches is read, as `yq`'s own
 index reads a name written twice. A key written as an alias is found by
-its anchor's text after `explode`, and by the alias (`*ka`) through the
-index.
+its anchor's text after `explode`.
 
 A lookup whose name came from `keys` on the same map leaves `explode`
 out. `keys` prints a key written as an alias as the alias (`*ka`),

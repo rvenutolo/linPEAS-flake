@@ -802,7 +802,7 @@ on: [push]' '*n'
   # A failed read of a job's steps names the command and its status, so a
   # killed or failing yq is not mistaken for anything about the workflow.
   fresh_root
-  yq_stub '.[strenv(JOB)].steps // []' 7
+  yq_stub '.steps // [] | .[] | (.uses' 7
   PATH="${STUB_DIR}:${PATH}" run_scenario steps-read-failure-names-yq-exits-2 2 \
     'cannot read the steps of .github/workflows/codeql.yml job notify-finding: yq exited 7'
   rm --recursive --force -- "${STUB_DIR}"
@@ -1192,6 +1192,96 @@ jobs:
           body: emptykey'
   run_scenario job-key-empty-is-a-finding 1 \
     '.github/workflows/emptykey.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+
+  # A job is looked up by its exact key. `yq` reads `*` and `?` in an
+  # index as wildcards, so a job keyed `n*` read through one would also
+  # be handed the notify body of job `nx`, and the marker in it would be
+  # reported as sitting in the body of another job. Each tree is clean:
+  # the one marked job matches its markers, and the job with the wildcard
+  # key holds no marker.
+  fresh_root
+  odd_workflow starkey.yml 'jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  nx:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: starkey
+          title: starkey
+          body: "A failed or cancelled run <!-- notify-arms: starkey.yml/nx = failure cancelled -->."
+  "n*":
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: starkey
+          title: starkey
+          body: PAYLOAD_RAN text only'
+  printf 'A failed or cancelled run <!-- notify-arms: starkey.yml/nx = failure cancelled -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario job-key-asterisk-reads-only-its-own-body 0 '' \
+    "11 body marker(s) and 11 docs marker(s) match the arms of 10 scanner notify job(s) (${TALLY}); scanned 7 workflow(s)"
+  refute_stderr 'names starkey.yml/nx'
+
+  fresh_root
+  odd_workflow markkey.yml 'jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+  nx:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: markkey
+          title: markkey
+          body: "A failed or cancelled run <!-- notify-arms: markkey.yml/nx = failure cancelled -->."
+  "n?":
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.build.result }}
+          label: markkey
+          title: markkey
+          body: PAYLOAD_RAN text only'
+  printf 'A failed or cancelled run <!-- notify-arms: markkey.yml/nx = failure cancelled -->.\n' >>"${ROOT}/${DOC}"
+  local mark_extra
+  for mark_extra in 1 2 3 4 5 6 7 8 9 10 11; do
+    odd_workflow "markextra${mark_extra}.yml" 'jobs: {}'
+  done
+  run_scenario job-key-question-mark-reads-only-its-own-body 0 '' \
+    "11 body marker(s) and 11 docs marker(s) match the arms of 10 scanner notify job(s) (${TALLY}); scanned 18 workflow(s)"
+  refute_stderr 'names markkey.yml/nx'
+
+  # A notify job in a scanner workflow is derived with or without a
+  # marker, so the steps read before its notify step decide its verdict.
+  # Read through a wildcard index, the steps of job `za`, listed before
+  # `z*`, would be read as steps of `z*` and block it.
+  fresh_root
+  printf '%s\n' '  za:' '    runs-on: ubuntu-latest' '    steps:' '      - uses: foo/bar@v1' \
+    '  "z*":' '    needs: analyze' '    if: always()' '    runs-on: ubuntu-latest' '    steps:' \
+    '      - uses: ./.github/actions/notify-workflow-result' '        with:' \
+    '          result: ${{ needs.analyze.result }}' '          label: starkey' \
+    '          title: starkey' '          body: PAYLOAD_RAN text only' >>"${ROOT}/${CQ}"
+  run_scenario job-key-asterisk-reads-only-its-own-steps 1 \
+    '.github/workflows/codeql.yml: job z* has no notify-arms marker in its issue body'
+  refute_stderr 'a step before the notify step can fail and skip it ("foo/bar@v1")'
 
   # A refused scanner workflow is one finding: its missing notify listing
   # is not also a could-not-run, and the docs markers naming its jobs are
