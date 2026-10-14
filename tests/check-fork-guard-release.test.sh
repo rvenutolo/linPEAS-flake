@@ -176,9 +176,15 @@ expect_stderr_has merge-list-read-first.yml "${PQ}"$'jobs:\n  a:\n    <<: [*Q, *
 # job beside it is not read, so the run holds this finding alone. A
 # failure of the read that names the key is a counted finding too, and
 # the workflow is read no further.
-readonly ODD_MSG='jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
+readonly ODD_MSG='jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
 expect_body odd-key-ends-read.yml $'jobs:\n  "a\\nb":\n    permissions:\n      contents: read\n    steps:\n      - run: echo PAYLOAD_RAN\n'"${WRITE_BARE#jobs:$'\n'}" 1 \
   "DIR/odd-key-ends-read.yml: ${ODD_MSG} (first: \"a\\nb\")${ONE_JOB}"
+# A carriage return and a NUL are refused the same way, and the finding
+# names each.
+expect_body odd-key-carriage-return.yml $'jobs:\n  "a\\rb":\n    permissions:\n      contents: read\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "DIR/odd-key-carriage-return.yml: ${ODD_MSG} (first: \"a\\rb\")${ONE_JOB}"
+expect_body odd-key-nul.yml $'jobs:\n  "a\\0b":\n    permissions:\n      contents: read\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "DIR/odd-key-nul.yml: ${ODD_MSG} (first: \"a\\u0000b\")${ONE_JOB}"
 expect_body odd-key-unread.yml "${WRITE_BARE}" 1 \
   "DIR/odd-key-unread.yml: could not evaluate workflow with yq (malformed?)${ONE_JOB}" '!!merge'
 

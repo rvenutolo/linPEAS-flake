@@ -106,7 +106,7 @@ expect_out unparsable-listed $'jobs: [\n' 'first_unlistable_job_key "$2" 2>/dev/
 
 # The message names the file and the key.
 # shellcheck disable=SC2016 # snippet is bash source text for a child process
-expect_out message '' 'odd_job_key_message f.yml "\"<<\""' 'f.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "<<")'
+expect_out message '' 'odd_job_key_message f.yml "\"<<\""' 'f.yml: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "<<")'
 
 harness_assert_verify || failures=$((failures + 1))
 

@@ -201,15 +201,15 @@ expect_workflow job-key-unread $'jobs:\n  a:\n'"${WEAK_STEP}" 2 \
 readonly REFUSED_KEY='which GitHub Actions refuses'
 readonly KEY_TAIL=$'\n1 run: block(s) missing strict-mode prelude'
 expect_workflow job-key-line-break $'jobs:\n  "a\\nb":\n'"${WEAK_STEP}" 1 \
-  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"a\\nb\")${KEY_TAIL}"
+  "@F@: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"a\\nb\")${KEY_TAIL}"
 expect_workflow job-key-empty $'jobs:\n  "":\n'"${WEAK_STEP}" 1 \
-  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"\")${KEY_TAIL}"
+  "@F@: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"\")${KEY_TAIL}"
 expect_workflow job-key-merge-key $'x: &base\n  j:\n'"${WEAK_STEP}"$'jobs:\n  <<: *base\n' 1 \
-  "@F@: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"<<\")${KEY_TAIL}"
+  "@F@: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, ${REFUSED_KEY}; its jobs are not read (first: \"<<\")${KEY_TAIL}"
 
 # The read that names an odd job key prints one line per document, and
 # the first document holding such a key is the one reported.
-readonly ODD_HEAD='jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
+readonly ODD_HEAD='jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
 expect_workflow odd-key-second-document \
   $'jobs:\n  a:\n'"${STRICT_STEP}"$'---\njobs:\n  "a\\nb":\n'"${WEAK_STEP}" 1 \
   "@F@: ${ODD_HEAD} (first: \"a\\nb\")${KEY_TAIL}"

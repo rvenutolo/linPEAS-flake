@@ -33,7 +33,8 @@
 #   1 — --check mode and the file would change.
 #   2 — structural error: typoed reference, orphan enforcer, missing field,
 #       or a ci.yml `jobs:` key GitHub Actions refuses (empty, holding a
-#       line break or a tab, not a scalar, or a merge key), which a
+#       tab, a line break, a carriage return or a NUL, not a scalar, or a
+#       merge key), which a
 #       name-per-line job list would read as other names or as none.
 #
 # Env overrides (for tests):

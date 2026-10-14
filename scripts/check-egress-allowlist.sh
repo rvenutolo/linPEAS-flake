@@ -216,14 +216,16 @@
 #      ending the job's block, is a comment yq reports on no node, so it
 #      exempts nothing (a known limit).
 #      The key and its line are read as one tab-separated row, so a job
-#      key holding a tab or a line break, whatever its tag, is a finding
-#      naming the key, and that file is read no further: such a key
-#      would choose its own rows and line numbers, and the range is
-#      computed in bash arithmetic, which runs a command placed in an
-#      array subscript.
-#      A job key that is empty or null is a finding too: the job list
-#      prints it as an empty name and the main loop skips empty names, so
-#      that job's allowlist would never be read.
+#      key the shared job-key reading refuses (see scripts/lib/job-keys.sh:
+#      empty, holding a tab, a line break, a carriage return or a NUL, or
+#      not a scalar), whatever its tag, is a finding naming the key as
+#      JSON, and that file is read no further: such a key would choose its
+#      own rows and line numbers, lose a NUL to bash or be read as no name
+#      at all, and the range is computed in bash arithmetic, which runs a
+#      command placed in an array subscript.
+#      A job key that is null is a finding too: the job list prints it as
+#      an empty name and the main loop skips empty names, so that job's
+#      allowlist would never be read.
 #      Two job keys that print as the same text (a literal `build:` twice,
 #      or `1` beside `"1"`) are a finding too, naming the key: they share
 #      one lookup and one line range, so one job would shadow the other.
@@ -473,6 +475,17 @@ for f in "${selected_files[@]}"; do
     fail "${f}: jobs: holds a merge key, which GitHub Actions refuses; its jobs are not read"
     continue
   fi
+  # A key the shared job-key reading refuses (see the job line rows
+  # below) is a finding before any read prints the keys as text: a NUL
+  # in one would be dropped by the command substitution holding them.
+  if ! odd_key="$(first_odd_job_key "${f}")"; then
+    fail "${f}: could not evaluate job keys with yq (malformed?)"
+    continue
+  fi
+  if [[ -n ${odd_key} ]]; then
+    fail "$(odd_job_key_message "${f}" "${odd_key}")"
+    continue
+  fi
   if ! job_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | keys | .[]' "${f}")"; then
     fail "${f}: could not evaluate workflow with yq (malformed?)"
     continue
@@ -506,12 +519,13 @@ for f in "${selected_files[@]}"; do
   # The key is free text ahead of the line number in each row. A key
   # holding a tab or a line break splits into rows of its own choosing
   # (`b<TAB>999<LF>c` reads as a job `b` on line 999), so every key is
-  # tested, whatever its tag, before the rows are read, and a file with
-  # such a key is a finding naming it, read no further. The line field
+  # tested by the shared job-key reading, whatever its tag, before the
+  # rows are read, and a file with a key it refuses is a finding naming
+  # it, read no further. The line field
   # is then held to ASCII digits before it is stored, since the range
   # arithmetic below would evaluate any other text (an array subscript
-  # in it runs a command). A key that prints as an empty name (empty or
-  # null) is a finding and the file is read no further: the job list
+  # in it runs a command). A key that prints as an empty name (null)
+  # is a finding and the file is read no further: the job list
   # loop skips an empty name, so that job's allowlist would never be
   # read, and an associative array cannot hold an empty key. The
   # ranges are computed from indexed arrays, so no key text sits inside
@@ -520,14 +534,6 @@ for f in "${selected_files[@]}"; do
   declare -A JOB_START=()
   declare -A JOB_END=()
   declare -a row_names=() row_starts=()
-  if ! odd_keys="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | keys | .[] | select(tostring | test("[\t\n]")) | tostring | @json' "${f}")"; then
-    fail "${f}: could not evaluate job keys with yq (malformed?)"
-    continue
-  fi
-  if [[ -n ${odd_keys} ]]; then
-    fail "${f}: job key ${odd_keys%%$'\n'*} holds a tab or a line break, which the job line read cannot carry"
-    continue
-  fi
   if ! job_line_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | keys | .[] | [(select(kind == "alias") | tostring) // ., line] | join("\t")' "${f}")"; then
     fail "${f}: could not evaluate job line numbers with yq (malformed?)"
     continue

@@ -281,7 +281,7 @@ expect_body top-merge-list.yml $'x-a: &A {permissions: {}}\nx-b: &B {permissions
 # reading in scripts/lib/job-keys.sh: one finding that names the file and
 # the key, and the workflow's jobs are not read, so no job is reported
 # with a block it does not have.
-readonly ODD_KEY='jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: '
+readonly ODD_KEY='jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: '
 expect_body job-key-empty.yml $'permissions: {}\njobs:\n  "":\n    permissions: {}\n' 1 \
   "DIR/job-key-empty.yml: ${ODD_KEY}\"\")${ONE}"
 expect_body job-key-empty-bare.yml $'permissions: {}\njobs:\n  "":\n    runs-on: x\n  a:\n    runs-on: x\n' 1 \

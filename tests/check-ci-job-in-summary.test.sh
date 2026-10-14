@@ -347,7 +347,7 @@ function expect_jobs() {
 # ci.yml and in any other workflow: listed a line at a time, a line-break
 # key reads as two names that the category map can then match, and an
 # empty key reads as none.
-readonly REFUSED='holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
+readonly REFUSED='holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
 readonly ONE_JOB=$'jobs:\n  foo:\n    runs-on: ubuntu-latest\n'
 expect_jobs 'ci.yml job key with a line break' \
   $'jobs:\n  "a\\nb":\n    runs-on: ubuntu-latest\n' $'a: A\nb: B\n' '' 1 \
