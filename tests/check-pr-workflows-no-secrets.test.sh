@@ -337,11 +337,18 @@ function main() {
   run_spelling_scenario 'secret in the second expression on a line fails' \
     'second-expr.yml' 'secrets.GITHUB_TOKEN }} ${{ secrets.SECOND_SECRET' 1 stderr \
     'FILE:8: secrets.SECOND_SECRET not allowed in PR-triggered workflow'
-  # Neither text outside `${{ }}` nor a double-quoted index, which GitHub
-  # Actions refuses as an expression error, is a reference it reads.
+  # A `}}` inside a string literal does not end the expression: a
+  # reference after it is still read.
+  run_spelling_scenario 'secret after a closing-brace pair in a string literal fails' \
+    'literal-braces.yml' "format('{{ {0} }}', secrets.LITERAL_SECRET)" 1 stderr \
+    'FILE:8: secrets.LITERAL_SECRET not allowed in PR-triggered workflow'
+  # None of these is a reference GitHub Actions reads: text outside
+  # `${{ }}`, a double-quoted index (an expression error GitHub Actions
+  # refuses), and `secrets` as a step id or a property inside a longer
+  # path.
   # shellcheck disable=SC2016 # the workflow expression is literal text
-  run_spelling_scenario 'text outside an expression and a double-quoted index are not read' \
-    'not-read.yml' 'github.sha }} secrets.OUTSIDE_SECRET ${{ github.ref'$'\t''secrets["DOUBLE_SECRET"]' 0 stdout \
+  run_spelling_scenario 'text that is not a secret reference is not read' \
+    'not-read.yml' 'github.sha }} secrets.OUTSIDE_SECRET ${{ github.ref'$'\t''secrets["DOUBLE_SECRET"]'$'\t''steps.secrets.outputs.x || inputs.secrets' 0 stdout \
     'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 0 secrets.GITHUB_TOKEN reference(s) allowed'
   # A workflow with no `on:` is not PR-triggered: beside a clean
   # PR-triggered one, it is counted as skipped.
