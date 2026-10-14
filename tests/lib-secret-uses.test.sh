@@ -7,8 +7,9 @@
 # for text outside an expression or for `secrets` as a step id, each
 # record with its line number, and exits 2 when grep fails reading; and
 # that double_quoted_scalars prints each double-quoted key and value as
-# YAML decodes it, a NUL as a space, no other style, and exits 2 when `yq`
-# cannot read the file.
+# YAML decodes it, a tagged scalar too, a NUL as a space, no untagged
+# plain, single-quoted or block scalar, and exits 2 when `yq` cannot read
+# the file.
 set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -176,6 +177,15 @@ function run_scalar_scenario() {
     'a: "one\ntwo"' 'one;two;'
   run_scalar_scenario 'a NUL is printed as a space' \
     'a: "x\0y"' 'x y;'
+  # A tag hides the double-quoted style from `yq`, which reports a tagged
+  # scalar's style as `tagged` or `<unknown>`, so every scalar but a plain,
+  # single-quoted or block one without a tag is printed.
+  run_scalar_scenario 'a tagged double-quoted value is printed decoded' \
+    'a: !!str "s\x65crets.TAG"' 'secrets.TAG;'
+  run_scalar_scenario 'a tagged double-quoted key is printed decoded' \
+    '!!str "\x24{{ secrets.TAGKEY }}": v' '${{ secrets.TAGKEY }};'
+  run_scalar_scenario 'a custom tag on a double-quoted value is printed decoded' \
+    'a: !custom "s\x65crets.CUSTOM"' 'secrets.CUSTOM;'
   run_scalar_scenario 'other styles are not printed' \
     $'a: plain\nb: \'single\'\nc: |\n  block\n' ';'
   run_scalar_scenario 'a scalar under an anchor is printed once' \

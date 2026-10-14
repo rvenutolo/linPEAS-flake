@@ -449,6 +449,9 @@ function main() {
     run_text_scenario 'an escaped line break inside an expression fails' \
       'escape-line-break.yml' "${PR_JOB_HEAD}"'          T1: "${{\n secrets.GITHUB_TOKEN }}"'$'\n' 1 stderr \
       'FILE: expression not closed on its line, not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'
+    run_text_scenario 'an escape in a tagged scalar fails' \
+      'escape-tagged.yml' "${PR_JOB_HEAD}"'          T1: !!str "${{ s\x65crets.TAGGED_SECRET }}"'$'\n' 1 stderr \
+      'FILE: secrets.TAGGED_SECRET not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'
     run_text_scenario 'a NUL escape beside a hidden reference fails' \
       'escape-nul.yml' "${PR_JOB_HEAD}"'          T1: "\0${{ s\x65crets.NUL_SECRET }}"'$'\n' 1 stderr \
       'FILE: secrets.NUL_SECRET not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'

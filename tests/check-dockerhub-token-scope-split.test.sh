@@ -64,6 +64,8 @@ MD
 # @arg $4 expected stderr substring (empty skips the check)
 # @arg $5 PATHS_OVERRIDE value for the Markdown scan; defaults to the
 #   baseline's compliant snippet so no scenario reads the real tree
+# ASSERT_PATH_PREFIX, when set, is put first on the lint's PATH, for a
+# scenario that stubs a tool.
 function assert_run() {
   local -r name="$1" dir="$2" expected_exit="$3" expected_stderr="$4"
   local md_paths="${5:-${dir}/recovery.md}"
@@ -72,7 +74,8 @@ function assert_run() {
   stdout_file="$(mktemp)"
   outcome_file="$(mktemp)"
   local actual_exit=0
-  WORKFLOWS_DIR_OVERRIDE="${dir}" PATHS_OVERRIDE="${md_paths}" \
+  PATH="${ASSERT_PATH_PREFIX:+${ASSERT_PATH_PREFIX}:}${PATH}" \
+    WORKFLOWS_DIR_OVERRIDE="${dir}" PATHS_OVERRIDE="${md_paths}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" ||
     actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
@@ -364,6 +367,31 @@ function main() {
   # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
   assert_run 'escaped whole context fails' "${dir}" 1 \
     'other.yml: ${{ toJSON(secrets) }} reads the secrets context without a literal name (the scope split cannot tell which token it reads) (read decoded from a double-quoted scalar)'
+  rm --recursive --force -- "${dir}"
+
+  # A tag hides the double-quoted style from `yq`; the tagged scalar is
+  # read decoded all the same.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf 'jobs:\n  a:\n    steps:\n      - env:\n          T: !!str "${{ secrets.DOCKERHUB_T\\x4fKEN_TAGGED }}"\n' \
+    >"${dir}/other.yml"
+  assert_run 'escaped unsuffixed token in a tagged scalar fails' "${dir}" 1 \
+    'other.yml: secrets.DOCKERHUB_TOKEN_TAGGED is not authoritative'
+  rm --recursive --force -- "${dir}"
+
+  # A grep that fails reading the decoded text is a could-not-run, never a
+  # workflow that consumes no token: this shim fails each read of a token
+  # pattern from stdin, and passes every other read through.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  mkdir -- "${dir}/stub"
+  # shellcheck disable=SC2016 # the shim's own text
+  printf '#!/usr/bin/env bash\nlast="${!#}"\nif [[ $* == *"[kK][eE][nN]"* && ! -f ${last} ]]; then exit 2; fi\nexec %q "$@"\n' \
+    "$(command -v grep)" >"${dir}/stub/grep"
+  chmod +x -- "${dir}/stub/grep"
+  ASSERT_PATH_PREFIX="${dir}/stub" assert_run 'grep failing on the decoded text is a could-not-run' "${dir}" 2 \
+    'grep failed reading the decoded scalars of'
   rm --recursive --force -- "${dir}"
 
   # Markdown: the write-scoped token in a delete snippet. The tree
