@@ -394,6 +394,11 @@ function main() {
   run_spelling_scenario 'the whole context beside GITHUB_TOKEN fails' \
     'beside-token.yml' 'secrets.GITHUB_TOKEN || toJSON(secrets)' 1 stderr \
     'FILE:8: ${{ secrets.GITHUB_TOKEN || toJSON(secrets) }} reads the secrets context without a literal name, not allowed in PR-triggered workflow'
+  # The word `secrets` inside a string literal cannot be told from a
+  # use of the context, so it is refused too.
+  run_spelling_scenario 'the word secrets in a string literal fails' \
+    'literal-word.yml' "contains(github.head_ref, 'secrets')" 1 stderr \
+    "FILE:8: \${{ contains(github.head_ref, 'secrets') }} reads the secrets context without a literal name, not allowed in PR-triggered workflow"
   # GitHub Actions reads an expression whose `${{` and `}}` sit on
   # different lines of a block scalar; the guard reads one line at a
   # time, so such an expression is refused, not read.
