@@ -3112,7 +3112,9 @@ and after scripts/lib/ascii-match.sh.
 #### secret_uses()
 
 Print one record per use of the `secrets` context in the
-text on stdin (a workflow file or a part of one), as `LINE<TAB>KIND<TAB>TEXT`, in the order of the text:
+text on stdin (a workflow file or a part of one), as
+`LINE<TAB>KIND<TAB>TEXT`, in the order of the text. Text outside `${{ }}`
+is not read. The kinds:
 
 - `named`: a reference with a literal name, in the dot or the
     single-quoted index form; TEXT is the reference.
@@ -3127,7 +3129,6 @@ text on stdin (a workflow file or a part of one), as `LINE<TAB>KIND<TAB>TEXT`, i
     reads an expression broken across the lines of a block scalar, and
     this reader reads one line at a time, so whatever the expression reads
     is unknown.
-    Text outside `${{ }}` is not read.
 
 **Exit codes:**
 

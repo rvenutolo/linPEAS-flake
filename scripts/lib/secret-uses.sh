@@ -35,7 +35,9 @@ readonly SECRET_EXPRESSION_RE="\\\$\\{\\{([^}]|\\}[^}]|'[^']*')*\\}\\}"
 readonly SECRET_EXPRESSION_OR_OPEN_RE="(${SECRET_EXPRESSION_RE})|\\\$\\{\\{"
 
 # @description Print one record per use of the `secrets` context in the
-# text on stdin (a workflow file or a part of one), as `LINE<TAB>KIND<TAB>TEXT`, in the order of the text:
+# text on stdin (a workflow file or a part of one), as
+# `LINE<TAB>KIND<TAB>TEXT`, in the order of the text. Text outside `${{ }}`
+# is not read. The kinds:
 # - `named`: a reference with a literal name, in the dot or the
 #   single-quoted index form; TEXT is the reference.
 # - `unnamed`: an expression that uses the context in any other way, so no
@@ -49,7 +51,6 @@ readonly SECRET_EXPRESSION_OR_OPEN_RE="(${SECRET_EXPRESSION_RE})|\\\$\\{\\{"
 #   reads an expression broken across the lines of a block scalar, and
 #   this reader reads one line at a time, so whatever the expression reads
 #   is unknown.
-# Text outside `${{ }}` is not read.
 # @stdout the records
 # @exitcode 0 the text was read, whether it holds a use or not
 # @exitcode 2 grep failed reading it
