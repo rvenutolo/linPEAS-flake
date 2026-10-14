@@ -6,6 +6,24 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261014-2ddc3388] - 2026-10-14
+
+### CI
+- Drop the editorconfig-checker version pin ([#1276](https://github.com/rvenutolo/linPEAS-flake/pull/1276))
+
+### Chores
+- Bump linpeas to 20261014-2ddc3388 ([#1289](https://github.com/rvenutolo/linPEAS-flake/pull/1289))
+
+### Documentation
+- Fix the drift the cycle-closing docs audit found ([#1280](https://github.com/rvenutolo/linPEAS-flake/pull/1280))
+
+### Fixes
+- Refuse a NUL or non-scalar job key by name in check-egress-allowlist ([#1288](https://github.com/rvenutolo/linPEAS-flake/pull/1288))
+- Match secret and action names whatever their ASCII case ([#1287](https://github.com/rvenutolo/linPEAS-flake/pull/1287))
+- Refuse an empty or non-scalar job key in check-min-permissions ([#1284](https://github.com/rvenutolo/linPEAS-flake/pull/1284))
+- Look a notify job up by its exact key ([#1283](https://github.com/rvenutolo/linPEAS-flake/pull/1283))
+- Match an action's owner and repository in either case ([#1282](https://github.com/rvenutolo/linPEAS-flake/pull/1282))
+
 ## [20261013-bb2e52ee] - 2026-10-13
 
 ### Chores
