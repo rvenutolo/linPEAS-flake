@@ -20,17 +20,22 @@
 # `secrets['FOO']` is refused too. A reference is read wherever it sits
 # inside a `${{ }}` expression on one line, beside an operator or as a
 # function argument as well as alone, and past a `}}` inside a string
-# literal. Not read: text outside `${{ }}`, an expression broken
-# across lines, a double-quoted index (an expression error GitHub Actions
-# refuses), a name the expression computes (`secrets[format(...)]`), and
-# the whole context (`toJSON(secrets)`).
+# literal. Any other use of the `secrets` context in an expression is
+# refused, since no name in the text says which secret it reads: the
+# whole context (`toJSON(secrets)`), a name the expression computes
+# (`secrets[format(...)]`, `secrets[env.NAME]`), the object filter
+# (`secrets.*`), and a double-quoted index. So is the word `secrets`
+# inside a string literal of an expression, which the guard cannot tell
+# from a use. A `${{` not closed on its own line is refused as well: GitHub
+# Actions reads an expression broken across the lines of a block scalar,
+# and the guard reads one line at a time. Not read: text outside `${{ }}`.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the
 # test harness can point at a temp dir with a single fixture.
 #
 # Exits 0 if every PR-triggered workflow is clean, 1 on a secrets
-# violation, 2 on a tooling error (workflows dir missing, yq missing, or
-# a workflow yq cannot parse).
+# violation or an expression it refuses, 2 on a tooling error (workflows
+# dir missing, yq missing, or a workflow yq cannot parse).
 set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"
@@ -43,12 +48,20 @@ source "${_lib_dir}/lib/temp.sh"
 source "${_lib_dir}/lib/ascii-match.sh"
 
 # A secret reference in the dot or the index form, with any name, the
-# context's ASCII letters in either case, as a grep -E regex. The one
-# character before it must not continue a name or a path: `secrets` as a
-# step id (`steps.secrets.outputs.x`) or an input is no secret reference.
-# A match therefore starts with that character, which the reader drops.
-SECRET_REF_RE="[^A-Za-z0-9_.-]$(secret_ref_regex '[A-Za-z0-9_]+')"
-readonly SECRET_REF_RE
+# context's ASCII letters in either case, as a grep -E regex.
+NAMED_REF_RE="$(secret_ref_regex '[A-Za-z0-9_]+')"
+readonly NAMED_REF_RE
+# Any use of the context: a reference with a literal name, or the
+# context's name and the one character after it, which must not continue
+# the name. grep takes the longest match, so a reference with a name is
+# taken whole. A use whose character after it is the bound before a
+# second use hides that second use, but the first is a finding already.
+# The one character before a use must not continue a name or a path:
+# `secrets` as a step id (`steps.secrets.outputs.x`) or an input is no
+# use of the context. A match therefore starts with that character, which
+# the reader drops.
+SECRET_USE_RE="[^A-Za-z0-9_.-](${NAMED_REF_RE}|$(ascii_fold_regex secrets)[^A-Za-z0-9_-])"
+readonly SECRET_USE_RE
 # One `${{ }}` expression on a line. A `}}` may sit inside a run of text
 # between single quotes, as in a format string's escaped brace, and a
 # quote may also stand alone; grep takes the longest match, so the span
@@ -57,6 +70,9 @@ readonly SECRET_REF_RE
 # single-quoted scalar, twice. Text between two expressions on a line is
 # read too when quotes on either side pair across it.
 readonly EXPRESSION_RE="\\\$\\{\\{([^}]|\\}[^}]|'[^']*')*\\}\\}"
+# A `${{` with no `}}` after it on its line, which EXPRESSION_RE cannot
+# reach: grep takes the longer match where both can start.
+readonly EXPRESSION_OR_OPEN_RE="(${EXPRESSION_RE})|\\\$\\{\\{"
 
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
@@ -118,29 +134,41 @@ function is_pr_triggered() {
   grep --extended-regexp --line-regexp --quiet 'pull_request|pull_request_target' <<<"${triggers}"
 }
 
-# @description Scan a PR-triggered workflow for disallowed secrets refs.
-# Increments the global failed counter and prints violations to stderr.
+# @description Scan a PR-triggered workflow for disallowed secrets uses
+# and for expressions not closed on their line. Increments the global
+# failed counter and prints violations to stderr.
 # @arg $1 path to workflow YAML
 function scan_secrets() {
   local -r file="$1"
   local tmp
   tmp="$(make_temp)"
   LC_ALL=C grep --extended-regexp --line-number --only-matching \
-    "${EXPRESSION_RE}" "${file}" >"${tmp}" || true
+    "${EXPRESSION_OR_OPEN_RE}" "${file}" >"${tmp}" || true
 
   local line
   while IFS= read -r line; do
     [[ -z ${line} ]] && continue
     local lineno="${line%%:*}"
     local rest="${line#*:}"
+    # shellcheck disable=SC2016 # the expression opener is literal text
+    if [[ ${rest} == '${{' ]]; then
+      printf '%s:%s: expression not closed on its line, not allowed in PR-triggered workflow\n' \
+        "${file}" "${lineno}" >&2
+      failed=$((failed + 1))
+      continue
+    fi
     local tokens_file
     tokens_file="$(make_temp)"
     LC_ALL=C grep --extended-regexp --only-matching \
-      "${SECRET_REF_RE}" >"${tokens_file}" <<<"${rest}" || true
-    local token
+      "${SECRET_USE_RE}" >"${tokens_file}" <<<"${rest}" || true
+    local token unnamed=0
     while IFS= read -r token; do
       [[ -z ${token} ]] && continue
       token="${token:1}"
+      if ! ascii_match "${token}" "^${NAMED_REF_RE}\$"; then
+        unnamed=1
+        continue
+      fi
       # Under LC_ALL=C the token holds ASCII only, so upper-casing its
       # name folds nothing else.
       local name
@@ -154,6 +182,11 @@ function scan_secrets() {
       failed=$((failed + 1))
     done <"${tokens_file}"
     rm --force -- "${tokens_file}"
+    if ((unnamed)); then
+      printf '%s:%s: %s reads the secrets context without a literal name, not allowed in PR-triggered workflow\n' \
+        "${file}" "${lineno}" "${rest}" >&2
+      failed=$((failed + 1))
+    fi
   done <"${tmp}"
   rm --force -- "${tmp}"
 }

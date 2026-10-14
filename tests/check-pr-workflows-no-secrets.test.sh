@@ -118,27 +118,18 @@ function run_body_scenario() {
     "${stdout_file}" "${outcome_file}"
 }
 
-# @description Run the guard against one pull_request workflow written at
-# run time whose one job reads each expression given, written as given
-# inside `${{ }}`, one per line from line 8, and assert one whole line of the
-# stream named.
-# @arg $1 scenario name  @arg $2 file name  @arg $3 the expressions, each the text inside one `${{ }}`, separated by tabs
+# @description Run the guard against one workflow written at run time
+# from the text given, and assert one whole line of the stream named.
+# @arg $1 scenario name  @arg $2 file name  @arg $3 file body
 # @arg $4 expected exit code  @arg $5 stdout or stderr  @arg $6 expected line, with FILE standing for the workflow path
-function run_spelling_scenario() {
-  local -r name="$1" file="$2" ref="$3" expected_exit="$4" stream="$5"
-  local tmpdir stderr_file stdout_file outcome_file want_file each i=0
-  local -a refs
+function run_text_scenario() {
+  local -r name="$1" file="$2" body="$3" expected_exit="$4" stream="$5"
+  local tmpdir stderr_file stdout_file outcome_file want_file
   tmpdir="$(mktemp --directory)"
   stderr_file="$(mktemp)"
   stdout_file="$(mktemp)"
   outcome_file="$(mktemp)"
-  IFS=$'\t' read -r -a refs <<<"${ref}"
-  printf 'on: pull_request\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: echo\n        env:\n' >"${tmpdir}/${file}"
-  for each in "${refs[@]}"; do
-    i=$((i + 1))
-    # shellcheck disable=SC2016 # the workflow expression is literal text
-    printf '          T%d: ${{ %s }}\n' "${i}" "${each}" >>"${tmpdir}/${file}"
-  done
+  printf '%s' "${body}" >"${tmpdir}/${file}"
   local -r want="${6//FILE/${tmpdir}/${file}}"
   local actual_exit=0
   WORKFLOWS_DIR_OVERRIDE="${tmpdir}" \
@@ -162,6 +153,29 @@ function run_spelling_scenario() {
   fi
   rm --recursive --force -- "${tmpdir}" "${stderr_file}" \
     "${stdout_file}" "${outcome_file}"
+}
+
+# The lines of a pull_request workflow above its one job's `env:` entries,
+# which start on line 8.
+readonly PR_JOB_HEAD=$'on: pull_request\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: echo\n        env:\n'
+
+# @description Run the guard against one pull_request workflow written at
+# run time whose one job reads each expression given, written as given
+# inside `${{ }}`, one per line from line 8, and assert one whole line of the
+# stream named.
+# @arg $1 scenario name  @arg $2 file name  @arg $3 the expressions, each the text inside one `${{ }}`, separated by tabs
+# @arg $4 expected exit code  @arg $5 stdout or stderr  @arg $6 expected line, with FILE standing for the workflow path
+function run_spelling_scenario() {
+  local -r ref="$3"
+  local body="${PR_JOB_HEAD}" each i=0
+  local -a refs
+  IFS=$'\t' read -r -a refs <<<"${ref}"
+  for each in "${refs[@]}"; do
+    i=$((i + 1))
+    # shellcheck disable=SC2016 # the workflow expression is literal text
+    body+="$(printf '          T%d: ${{ %s }}' "${i}" "${each}")"$'\n'
+  done
+  run_text_scenario "$1" "$2" "${body}" "$4" "$5" "$6"
 }
 
 # @description Print an `env:` block holding a chain of aliases DEPTH
@@ -351,13 +365,52 @@ function main() {
   run_spelling_scenario 'secret after a format placeholder in a doubled-quote literal fails' \
     'doubled-placeholder.yml' "format(''{0}'', secrets.PLACEHOLDER_SECRET)" 1 stderr \
     'FILE:8: secrets.PLACEHOLDER_SECRET not allowed in PR-triggered workflow'
-  # None of these is a reference GitHub Actions reads: text outside
-  # `${{ }}`, a double-quoted index (an expression error GitHub Actions
-  # refuses), and `secrets` as a step id or a property inside a longer
-  # path.
+  # Any use of the `secrets` context but a literal name is refused, since
+  # no name in the text says which secret it reads: the whole context
+  # handed to a function, an index the expression computes, the object
+  # filter, and a double-quoted index.
+  # shellcheck disable=SC2016 # the workflow expression is literal text
+  run_spelling_scenario 'the whole secrets context as a function argument fails' \
+    'to-json.yml' 'toJSON(secrets)' 1 stderr \
+    'FILE:8: ${{ toJSON(secrets) }} reads the secrets context without a literal name, not allowed in PR-triggered workflow'
+  run_spelling_scenario 'an index the expression computes fails' \
+    'format-index.yml' "secrets[format('{0}', 'NPM_TOKEN')]" 1 stderr \
+    "FILE:8: \${{ secrets[format('{0}', 'NPM_TOKEN')] }} reads the secrets context without a literal name, not allowed in PR-triggered workflow"
+  # shellcheck disable=SC2016 # the workflow expression is literal text
+  run_spelling_scenario 'an index read from another context fails' \
+    'env-index.yml' 'SECRETS[env.NAME]' 1 stderr \
+    'FILE:8: ${{ SECRETS[env.NAME] }} reads the secrets context without a literal name, not allowed in PR-triggered workflow'
+  # shellcheck disable=SC2016 # the workflow expression is literal text
+  run_spelling_scenario 'the object filter on the secrets context fails' \
+    'object-filter.yml' 'join(secrets.*)' 1 stderr \
+    'FILE:8: ${{ join(secrets.*) }} reads the secrets context without a literal name, not allowed in PR-triggered workflow'
+  # shellcheck disable=SC2016 # the workflow expression is literal text
+  run_spelling_scenario 'a double-quoted index fails' \
+    'double-index.yml' 'secrets["DOUBLE_SECRET"]' 1 stderr \
+    'FILE:8: ${{ secrets["DOUBLE_SECRET"] }} reads the secrets context without a literal name, not allowed in PR-triggered workflow'
+  # Beside an allowed GITHUB_TOKEN in the same expression, a use without
+  # a name is still refused.
+  # shellcheck disable=SC2016 # the workflow expression is literal text
+  run_spelling_scenario 'the whole context beside GITHUB_TOKEN fails' \
+    'beside-token.yml' 'secrets.GITHUB_TOKEN || toJSON(secrets)' 1 stderr \
+    'FILE:8: ${{ secrets.GITHUB_TOKEN || toJSON(secrets) }} reads the secrets context without a literal name, not allowed in PR-triggered workflow'
+  # The word `secrets` inside a string literal cannot be told from a
+  # use of the context, so it is refused too.
+  run_spelling_scenario 'the word secrets in a string literal fails' \
+    'literal-word.yml' "contains(github.head_ref, 'secrets')" 1 stderr \
+    "FILE:8: \${{ contains(github.head_ref, 'secrets') }} reads the secrets context without a literal name, not allowed in PR-triggered workflow"
+  # GitHub Actions reads an expression whose `${{` and `}}` sit on
+  # different lines of a block scalar; the guard reads one line at a
+  # time, so such an expression is refused, not read.
+  run_text_scenario 'an expression broken across lines fails' \
+    'broken-line.yml' "${PR_JOB_HEAD}"$'          T1: |\n            ${{\n              secrets.BROKEN_SECRET\n            }}\n' 1 stderr \
+    'FILE:9: expression not closed on its line, not allowed in PR-triggered workflow'
+  # None of these is a use of the secrets context: text outside
+  # `${{ }}`, and `secrets` as a step id, a property inside a longer
+  # path, or the start of a longer name.
   # shellcheck disable=SC2016 # the workflow expression is literal text
   run_spelling_scenario 'text that is not a secret reference is not read' \
-    'not-read.yml' 'github.sha }} secrets.OUTSIDE_SECRET ${{ github.ref'$'\t''secrets["DOUBLE_SECRET"]'$'\t''steps.secrets.outputs.x || inputs.secrets' 0 stdout \
+    'not-read.yml' 'github.sha }} secrets.OUTSIDE_SECRET ${{ github.ref'$'\t''steps.secrets.outputs.x || inputs.secrets'$'\t''inputs.x || secrets_count || secrets-x' 0 stdout \
     'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 0 secrets.GITHUB_TOKEN reference(s) allowed'
   # A workflow with no `on:` is not PR-triggered: beside a clean
   # PR-triggered one, it is counted as skipped.
