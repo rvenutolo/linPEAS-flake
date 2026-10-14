@@ -42,6 +42,9 @@ below.
 - a workflow file `yq` reads as several YAML documents
 - any job whose `permissions:` block is omitted or not a map (read by its
     YAML kind, so a map carrying a tag of its own passes)
+- a merge key directly under `jobs:`, or a job key that is empty, is
+    not a scalar, or holds a tab, a line break, a carriage return or a
+    NUL; that workflow's jobs are not read
 
 Wired as the `lint-workflow-security` CI job (member check
 `min-permissions`) and as a pre-commit hook.

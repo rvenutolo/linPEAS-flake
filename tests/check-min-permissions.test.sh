@@ -277,4 +277,22 @@ expect_body jobs-alias-merge.yml $'x-b: &b\n  evil:\n    runs-on: x\nx-jobs: &js
   "DIR/jobs-alias-merge.yml: ${MERGE}"$'\n1 permissions posture violation(s) found'
 expect_body top-merge-list.yml $'x-a: &A {permissions: {}}\nx-b: &B {permissions: {contents: write}}\n<<: [*A, *B]\njobs: {}\n' 0 ''
 
+# A job key the job rows cannot carry is refused through the shared
+# reading in scripts/lib/job-keys.sh: one finding that names the file and
+# the key, and the workflow's jobs are not read, so no job is reported
+# with a block it does not have.
+readonly ODD_KEY='jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: '
+expect_body job-key-empty.yml $'permissions: {}\njobs:\n  "":\n    permissions: {}\n' 1 \
+  "DIR/job-key-empty.yml: ${ODD_KEY}\"\")${ONE}"
+expect_body job-key-empty-bare.yml $'permissions: {}\njobs:\n  "":\n    runs-on: x\n  a:\n    runs-on: x\n' 1 \
+  "DIR/job-key-empty-bare.yml: ${ODD_KEY}\"\")${ONE}"
+expect_body job-key-list.yml $'permissions: {}\njobs:\n  ? [a]\n  : {permissions: {}}\n' 1 \
+  "DIR/job-key-list.yml: ${ODD_KEY}\"[a]\")${ONE}"
+expect_body job-key-cr.yml $'permissions: {}\njobs:\n  "a\\rb":\n    permissions: {}\n' 1 \
+  "DIR/job-key-cr.yml: ${ODD_KEY}\"a\\rb\")${ONE}"
+expect_body job-key-nul.yml $'permissions: {}\njobs:\n  "a\\0b":\n    permissions: {}\n' 1 \
+  "DIR/job-key-nul.yml: ${ODD_KEY}\"a\\u0000b\")${ONE}"
+expect_body jobs-alias-empty-key.yml $'x-jobs: &js\n  "":\n    permissions: {}\npermissions: {}\njobs: *js\n' 1 \
+  "DIR/jobs-alias-empty-key.yml: ${ODD_KEY}\"\")${ONE}"
+
 printf 'all tests passed\n'

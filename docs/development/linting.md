@@ -810,8 +810,10 @@ such a file, so the refusal is its only finding and their other checks do
 not report those names missing. The shared reading also
 refuses a carriage return and a NUL. `yq` counts a lone carriage return
 as a line break and a line-by-line read does not. A lint with a check of
-its own refuses a line break and a tab, most also refuse a NUL, and none
-refuses a carriage return, which they read as part of the name. A
+its own refuses a line break and a tab, most also refuse a NUL, and of
+those only `check-min-permissions.sh`, which also runs the shared
+reading, refuses a carriage return; the others read it as part of the
+name. A
 generator (`refresh-ci-dag.sh`, `refresh-enforcement-matrix.sh`) stops
 with exit 2 and leaves its output untouched instead. The shared reading
 is `first_odd_job_key` and `odd_job_key_message` in

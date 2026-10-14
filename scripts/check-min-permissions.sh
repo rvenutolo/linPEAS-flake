@@ -16,8 +16,10 @@
 #      kind: a map, whatever tag it carries, passes, and any other shape
 #      is reported with its kind and tag. A `jobs:` map, a job key and a
 #      job written as an alias are read through it. A merge key under
-#      `jobs:`, and a job id, or the tag of a job id, a job or its
-#      `permissions:`, holding a tab or a line break, are findings:
+#      `jobs:`, a job id, or the tag of a job id, a job or its
+#      `permissions:`, holding a tab or a line break, and a job key the
+#      shared reading refuses (see scripts/lib/job-keys.sh: empty, not a
+#      scalar, or holding a carriage return or a NUL) are findings:
 #      GitHub Actions refuses them, and the jobs behind them are not
 #      read.
 #   3. Top-level cannot be `read-all`, `write-all`, or any scalar/
@@ -191,6 +193,22 @@ for f in "${selected_files[@]}"; do
   if [[ ${merge_counts//[0$'\n']/} != '' ]]; then
     printf '%s: jobs: holds a merge key, which GitHub Actions refuses; the jobs it brings in are not read\n' \
       "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  # The rows below hold the job key as their first field, and the tab
+  # `IFS` collapses an empty one, shifting every later field; a key that
+  # is not a scalar, or holds a carriage return or a NUL, is not read back
+  # as itself either. GitHub Actions refuses such a key, so the shared
+  # reading counts it as a finding naming the key, and the workflow's jobs
+  # are not read.
+  if ! odd_key="$(first_odd_job_key "${f}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  if [[ -n ${odd_key} ]]; then
+    odd_job_key_message "${f}" "${odd_key}" >&2
     failed=$((failed + 1))
     continue
   fi
