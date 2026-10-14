@@ -100,7 +100,10 @@ function secret_uses() {
 # scalar is the one YAML style whose escapes (`\x65`, `e`, `\n`, an
 # escaped line break) make that text differ from the file's: an escape can
 # hide a use's name, its `${{` or its `}}` from a reader of the file text.
-# A NUL is printed as a space, since grep reads text holding a NUL as
+# A tagged scalar is printed too, whatever its style: `yq` reports the
+# style of a tagged scalar as `tagged` or `<unknown>`, never `double`, so
+# every scalar is printed but an untagged plain, single-quoted, literal or
+# folded one, the styles that hold no escape. A NUL is printed as a space, since grep reads text holding a NUL as
 # binary and prints no match, and a NUL continues no name. A scalar written
 # once under an anchor is printed once, however many aliases repeat it.
 # @arg $1 workflow file path
@@ -110,7 +113,8 @@ function secret_uses() {
 function double_quoted_scalars() {
   local -r file="$1"
   local texts
-  if ! texts="$(yq eval '(.. | select(style == "double")), (.. | select(kind == "map") | keys | .[] | select(style == "double"))' "${file}" | tr '\000' ' ')"; then
+  local -r escapable='select(kind == "scalar" and style != "" and style != "single" and style != "literal" and style != "folded")'
+  if ! texts="$(yq eval "(.. | ${escapable}), (.. | select(kind == \"map\") | keys | .[] | ${escapable})" "${file}" | tr '\000' ' ')"; then
     return 2
   fi
   if [[ -n ${texts} ]]; then

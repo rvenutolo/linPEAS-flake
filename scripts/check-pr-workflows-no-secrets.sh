@@ -33,11 +33,12 @@
 # GitHub Actions evaluates an expression in the scalar as YAML decodes it,
 # and in a double-quoted scalar an escape (`s\x65crets`, `\x24{{`, `\x7d}`,
 # `\u0065`, `\n`) can hide a use's name, its `${{` or its `}}` from the file
-# text. So the decoded text of each double-quoted scalar, key or value, is
-# read too, and a use found there that the file text did not show is
+# text. So the decoded text of each double-quoted scalar, tagged or not,
+# key or value, is read too, and a use found there that the file text did not show is
 # reported with the file but no line: `yq` does not give a scalar's file
-# line reliably. An allowed GITHUB_TOKEN reference read only there counts
-# once in the tally. The reader is scripts/lib/secret-uses.sh.
+# line reliably. In the tally, an allowed GITHUB_TOKEN reference read
+# there counts once when its text differs from every reference the file
+# text showed. The reader is scripts/lib/secret-uses.sh.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the
 # test harness can point at a temp dir with a single fixture.

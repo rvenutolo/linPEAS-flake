@@ -26,7 +26,7 @@
 # GitHub Actions evaluates an expression in a scalar as YAML decodes it,
 # and in a double-quoted scalar an escape (`s\x65crets`, `\x24{{`) can hide
 # a reference from the file text, so each rule also reads the decoded text
-# of every double-quoted scalar, key or value.
+# of every double-quoted scalar, tagged or not, key or value.
 #
 # The same split binds every manual recovery snippet in the docs. A
 # shell-fenced Markdown block that performs a tag delete
@@ -133,7 +133,14 @@ function consumes_secret() {
     exit 2
   fi
   decoded="$(decoded_scalars "${file}")" || exit 2
-  LC_ALL=C grep --extended-regexp --quiet -- "${ref_re}" <<<"${decoded}"
+  rc=0
+  LC_ALL=C grep --extended-regexp --quiet -- "${ref_re}" <<<"${decoded}" || rc=$?
+  if ((rc > 1)); then
+    printf 'dockerhub-token-scope-split lint: grep failed reading the decoded scalars of %s\n' \
+      "${file}" >&2
+    exit 2
+  fi
+  return "${rc}"
 }
 
 # Absence: delete-scoped token must not leak into release/verify workflows.
@@ -181,8 +188,14 @@ for wf in "${workflow_files[@]}"; do
     exit 2
   fi
   decoded="$(decoded_scalars "${wf}")" || exit 2
+  matches_rc=0
   decoded_matches="$(LC_ALL=C grep --extended-regexp --only-matching -- \
-    "${DOCKERHUB_TOKEN_REF_RE}" <<<"${decoded}")" || true
+    "${DOCKERHUB_TOKEN_REF_RE}" <<<"${decoded}")" || matches_rc=$?
+  if ((matches_rc > 1)); then
+    printf 'dockerhub-token-scope-split lint: grep failed reading the decoded scalars of %s\n' \
+      "${wf}" >&2
+    exit 2
+  fi
   matches+=$'\n'"${decoded_matches}"
   [[ -z ${matches} ]] && continue
   matches="$(sort --unique <<<"${matches}")"
