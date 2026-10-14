@@ -60,6 +60,7 @@ readonly -a HARNESSES=(
   'lib-generates|lib-generates.test.sh|'
   'lib-locale-gap|lib-locale-gap.test.sh|'
   'lib-ascii-match|lib-ascii-match.test.sh|'
+  'lib-secret-uses|lib-secret-uses.test.sh|'
   'lib-job-keys|lib-job-keys.test.sh|'
   'lib-md-fence|lib-md-fence.test.sh|'
   'md-fence-shapes|md-fence-shapes.test.sh|'

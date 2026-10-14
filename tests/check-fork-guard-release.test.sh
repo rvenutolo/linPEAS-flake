@@ -238,7 +238,24 @@ expect_body app-key-index-mixed-case.yml "${KEY_JOB_HEAD}Secrets[ 'Bump_App_Priv
 # shellcheck disable=SC2016 # the workflow expression is literal text
 expect_body app-key-index-yaml-single-quoted.yml "${KEY_JOB_HEAD%'${{ '}'\${{ secrets[''BUMP_APP_PRIVATE_KEY''] }}'"$'\n' 1 \
   "DIR/app-key-index-yaml-single-quoted.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
-expect_body app-key-index-double-quoted.yml "${KEY_JOB_HEAD}secrets[\"BUMP_APP_PRIVATE_KEY\"]${KEY_JOB_TAIL}" 0 ''
 expect_body app-key-index-other-secret.yml "${KEY_JOB_HEAD}secrets['bump_app_other_key']${KEY_JOB_TAIL}" 0 ''
+
+# A use of the `secrets` context with no literal name may read the App's
+# private key, so the job needs the guard: the whole context, a name the
+# expression computes, the object filter, a double-quoted index, and an
+# expression not closed on its line, which the lint reads one line at a
+# time. A step id spelled `secrets` is no use of the context, and a guarded
+# job reading the whole context is the control.
+for case in 'whole-context|toJSON(secrets)' "computed-index|secrets[format('BUMP_APP_{0}', 'PRIVATE_KEY')]" \
+  'env-index|secrets[env.NAME]' 'object-filter|secrets.*' 'double-quoted-index|secrets["BUMP_APP_PRIVATE_KEY"]'; do
+  label="${case%%|*}" shape="${case#*|}"
+  expect_body "app-key-unnamed-${label}.yml" "${KEY_JOB_HEAD}${shape}${KEY_JOB_TAIL}" 1 \
+    "DIR/app-key-unnamed-${label}.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+done
+# shellcheck disable=SC2016 # the workflow expression is literal text
+expect_body app-key-unnamed-open.yml "${KEY_JOB_HEAD%'${{ '}"$'>-\n            ${{\n            secrets.BUMP_APP_PRIVATE_KEY }}\n' 1 \
+  "DIR/app-key-unnamed-open.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body app-key-unnamed-step-id.yml "${KEY_JOB_HEAD}steps.secrets.outputs.key${KEY_JOB_TAIL}" 0 ''
+expect_body app-key-unnamed-guarded.yml "${KEY_JOB_HEAD/$'    permissions:'/$'    if: github.repository == \'rvenutolo/linPEAS-flake\'\n    permissions:'}toJSON(secrets)${KEY_JOB_TAIL}" 0 ''
 
 printf 'all tests passed\n'
