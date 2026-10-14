@@ -3,8 +3,9 @@
 # @description Read the uses of the GitHub Actions `secrets` context in
 # workflow text, one line at a time: each secret a `${{ }}` expression
 # names, each expression that uses the context without a literal name,
-# and each `${{` not closed on its line. Source after `set -Eeuo pipefail`
-# and after scripts/lib/ascii-match.sh.
+# and each `${{` not closed on its line; and the decoded text of a YAML
+# file's double-quoted scalars, which a reader of the file text misses.
+# Source after `set -Eeuo pipefail` and after scripts/lib/ascii-match.sh.
 # shellcheck shell=bash
 
 # A secret reference in the dot or the index form, with any name, the
@@ -91,4 +92,28 @@ function secret_uses() {
       printf '%s\tunnamed\t%s\n' "${lineno}" "${rest}"
     fi
   done <<<"${expressions}"
+}
+
+# @description Print the text of each double-quoted scalar in a YAML file
+# as `yq` decodes it, keys and values alike, each on its own lines. GitHub
+# Actions evaluates an expression in the decoded text, and a double-quoted
+# scalar is the one YAML style whose escapes (`\x65`, `e`, `\n`, an
+# escaped line break) make that text differ from the file's: an escape can
+# hide a use's name, its `${{` or its `}}` from a reader of the file text.
+# A NUL is printed as a space, since grep reads text holding a NUL as
+# binary and prints no match, and a NUL continues no name. A scalar written
+# once under an anchor is printed once, however many aliases repeat it.
+# @arg $1 workflow file path
+# @stdout the decoded texts
+# @exitcode 0 the file was read, whether it holds such a scalar or not
+# @exitcode 2 `yq` could not read the file
+function double_quoted_scalars() {
+  local -r file="$1"
+  local texts
+  if ! texts="$(yq eval '(.. | select(style == "double")), (.. | select(kind == "map") | keys | .[] | select(style == "double"))' "${file}" | tr '\000' ' ')"; then
+    return 2
+  fi
+  if [[ -n ${texts} ]]; then
+    printf '%s\n' "${texts}"
+  fi
 }

@@ -269,8 +269,10 @@ third path there is no such issue: close the
 
 Binding (in workflows, each secret reference is matched with the ASCII
 letters of `secrets` and of the name in either case, as GitHub Actions
-reads a secret's name whatever its case, and in the index form
-`secrets['NAME']` as in the dot form `secrets.NAME`):
+reads a secret's name whatever its case, in the index form
+`secrets['NAME']` as in the dot form `secrets.NAME`, and in the decoded
+text of a double-quoted scalar, where an escape can hide it from the file
+text):
 
 1. `secrets.DOCKERHUB_TOKEN_RW` must never be consumed in `dockerhub-sync.yml`
     or the anonymous/read-only `verify-latest-release.yml` (the write-scoped

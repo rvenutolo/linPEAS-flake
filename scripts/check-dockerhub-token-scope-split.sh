@@ -23,6 +23,10 @@
 # the object filter (`secrets.*`), a double-quoted index, and the word
 # `secrets` inside a string literal. So is a `${{` not closed on its line,
 # which the lint reads one line at a time (see scripts/lib/secret-uses.sh).
+# GitHub Actions evaluates an expression in a scalar as YAML decodes it,
+# and in a double-quoted scalar an escape (`s\x65crets`, `\x24{{`) can hide
+# a reference from the file text, so each rule also reads the decoded text
+# of every double-quoted scalar, key or value.
 #
 # The same split binds every manual recovery snippet in the docs. A
 # shell-fenced Markdown block that performs a tag delete
@@ -76,6 +80,11 @@ if [[ ! -d ${WORKFLOWS_DIR} ]]; then
   exit 2
 fi
 
+if ! command -v yq >/dev/null 2>&1; then
+  printf 'yq not found on PATH\n' >&2
+  exit 2
+fi
+
 readonly RELEASE_WF="${WORKFLOWS_DIR}/release-on-bump.yml"
 readonly VERIFY_WF="${WORKFLOWS_DIR}/verify-latest-release.yml"
 readonly SYNC_WF="${WORKFLOWS_DIR}/dockerhub-sync.yml"
@@ -89,19 +98,42 @@ function violation() {
   failed=$((failed + 1))
 }
 
+# @description Print the decoded text of a workflow's double-quoted
+# scalars (see scripts/lib/secret-uses.sh), exiting 2 when `yq` cannot
+# read the file.
+# @arg $1 workflow file path
+function decoded_scalars() {
+  local -r file="$1"
+  if ! double_quoted_scalars "${file}"; then
+    printf 'dockerhub-token-scope-split lint: yq could not read %s\n' \
+      "${file}" >&2
+    exit 2
+  fi
+}
+
 # @description Return 0 if the file consumes secrets.<name>, in the dot or
-# the index form, else 1, with the ASCII letters of `secrets` and of the
-# name in either case. A missing file returns 1 (treated as "does not
-# consume").
+# the index form, in its text or in the decoded text of a double-quoted
+# scalar, else 1, with the ASCII letters of `secrets` and of the name in
+# either case. A missing file returns 1 (treated as "does not consume").
+# Exits 2 when the file cannot be read.
 # @arg $1 workflow file path
 # @arg $2 bare secret name (e.g. DOCKERHUB_TOKEN_RW)
 function consumes_secret() {
   local -r file="$1" name="$2"
-  local name_re
+  local name_re ref_re decoded rc=0
   [[ -f ${file} ]] || return 1
   name_re="$(ascii_fold_regex "${name,,}")"
-  LC_ALL=C grep --extended-regexp --quiet \
-    "$(secret_ref_regex "${name_re}")([^A-Za-z0-9_]|\$)" "${file}"
+  ref_re="$(secret_ref_regex "${name_re}")([^A-Za-z0-9_]|\$)"
+  LC_ALL=C grep --extended-regexp --quiet -- "${ref_re}" "${file}" || rc=$?
+  if ((rc == 0)); then
+    return 0
+  elif ((rc > 1)); then
+    printf 'dockerhub-token-scope-split lint: grep failed reading %s\n' \
+      "${file}" >&2
+    exit 2
+  fi
+  decoded="$(decoded_scalars "${file}")" || exit 2
+  LC_ALL=C grep --extended-regexp --quiet -- "${ref_re}" <<<"${decoded}"
 }
 
 # Absence: delete-scoped token must not leak into release/verify workflows.
@@ -148,6 +180,10 @@ for wf in "${workflow_files[@]}"; do
       "${wf}" >&2
     exit 2
   fi
+  decoded="$(decoded_scalars "${wf}")" || exit 2
+  decoded_matches="$(LC_ALL=C grep --extended-regexp --only-matching -- \
+    "${DOCKERHUB_TOKEN_REF_RE}" <<<"${decoded}")" || true
+  matches+=$'\n'"${decoded_matches}"
   [[ -z ${matches} ]] && continue
   matches="$(sort --unique <<<"${matches}")"
   while IFS= read -r match; do
@@ -166,22 +202,45 @@ done
 # either token or the unsuffixed one, and so may an expression not closed
 # on its line. Refused in every workflow, since no name in the text says
 # which token it reads.
+# The decoded text of the workflow's double-quoted scalars is read after
+# its file text, and a use the file text already showed is not reported
+# again. A use read only there is reported with the file but no line: `yq`
+# does not give a scalar's file line reliably.
 for wf in "${workflow_files[@]}"; do
   if ! uses="$(secret_uses <"${wf}")"; then
     printf 'dockerhub-token-scope-split lint: grep failed reading %s\n' \
       "${wf}" >&2
     exit 2
   fi
-  while IFS=$'\t' read -r lineno kind text; do
-    case "${kind}" in
-    unnamed)
-      violation "${wf}:${lineno}: ${text} reads the secrets context without a literal name (the scope split cannot tell which token it reads)"
-      ;;
-    open)
-      violation "${wf}:${lineno}: expression not closed on its line (the scope split cannot tell which token it reads)"
-      ;;
-    esac
-  done <<<"${uses}"
+  decoded="$(decoded_scalars "${wf}")" || exit 2
+  if ! decoded_uses="$(secret_uses <<<"${decoded}")"; then
+    printf 'dockerhub-token-scope-split lint: grep failed reading the decoded scalars of %s\n' \
+      "${wf}" >&2
+    exit 2
+  fi
+  declare -A seen=()
+  for source in file decoded; do
+    if [[ ${source} == file ]]; then
+      records="${uses}"
+    else
+      records="${decoded_uses}"
+    fi
+    while IFS=$'\t' read -r lineno kind text; do
+      [[ ${kind} == unnamed || ${kind} == open ]] || continue
+      [[ -n ${seen["${kind}"$'\t'"${text}"]:-} ]] && continue
+      seen["${kind}"$'\t'"${text}"]=1
+      at="${wf}:${lineno}" suffix=''
+      if [[ ${source} == decoded ]]; then
+        at="${wf}" suffix=' (read decoded from a double-quoted scalar)'
+      fi
+      if [[ ${kind} == unnamed ]]; then
+        violation "${at}: ${text} reads the secrets context without a literal name (the scope split cannot tell which token it reads)${suffix}"
+      else
+        violation "${at}: expression not closed on its line (the scope split cannot tell which token it reads)${suffix}"
+      fi
+    done <<<"${records}"
+  done
+  unset seen
 done
 
 # Markdown: a shell-fenced Docker Hub tag delete must carry the
