@@ -142,8 +142,8 @@ column) is exactly the signal being measured.
     no bundle support whatsoever and are the hardest of the set. Both encode a
     defect a fix pass leaves behind rather than one that rots on its own:
     `distant-contradiction` plants a claim under `## Tools needed` that the
-    page refutes both inside that same section, a dozen lines below the
-    insertion point, and again under the cosign section hundreds of lines
+    page refutes both inside that same section, below the insertion
+    point, and again under the cosign section hundreds of lines
     further on, so a reader who reads only the inserted sentence and stops
     will miss it;
     `dangling-deixis` plants "the three checkers listed below" where nothing

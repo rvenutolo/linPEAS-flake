@@ -25,7 +25,8 @@
 # A backstop catches a count written without a marker: a number of up to
 # three digits or a number word, after whitespace or an opening parenthesis
 # or at the start of a paragraph, followed within two words by "required
-# check(s)", "required status check(s)" or "required context(s)". Emphasis
+# check(s)", "required status check(s)", "required context(s)" or
+# "required status context(s)". Emphasis
 # markers and HTML comments count as whitespace. The words between may not
 # include "of", so a partitive ("one of the required checks") is not a count,
 # and the bare word "one" reads as an article rather than a count. Anything wider matched unrelated numbers

@@ -88,8 +88,12 @@ jobs:
           # GITHUB_OUTPUT; rc=0 clean, rc=1 = findings present OR the
           # scanner ran and errored, rc=2 = the scan could not proceed
           # (docker or jq absent, or a per-file temp file could not be
-          # created); notify jobs branch on has-finding.
+          # created); notify jobs branch on has-finding. The captured
+          # text is printed to the step log too, because the
+          # `classification=` line the notify-infra body sends a reader
+          # to is on stdout.
           stdout="$(scripts/octoscan-scan.sh --sarif octoscan.sarif)" || rc=$?
+          printf '%s\n' "${stdout}"
           has_finding="$(printf '%s\n' "${stdout}" | grep -E '^has-finding=' | tail -n1 || true)"
           [[ -n "${has_finding}" ]] || has_finding="has-finding=false"
           echo "${has_finding}" >> "$GITHUB_OUTPUT"

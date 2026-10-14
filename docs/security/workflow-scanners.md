@@ -193,7 +193,7 @@ and "Stale-pin failure attribution" is the notify-body reason split.
 | actionlint-pyflakes-active   | guards that actionlint's pyflakes integration stays enabled                  |
 | uses-sha-pinned              | every `uses:` pinned to a full commit SHA or a `./` self-reference           |
 | patch-tag-pins               | the patch-tag pin-comment convention on SHA pins                             |
-| pin-diff-isolated            | pin bumps isolated to their own diff                                         |
+| pin-diff-isolated            | a second script under `scripts/` writing `linpeas-pin.json`                  |
 | ratchet-pin-audit            | a publisher force-moving a tag to a new SHA after we pinned it (daily cron)  |
 | stale-pin-check              | the linpeas upstream pin stalled >14d behind a newer upstream release (cron) |
 | min-permissions              | least-privilege `permissions:` on every workflow and job                     |

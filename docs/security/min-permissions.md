@@ -80,7 +80,8 @@ against the allowlist in both directions and fails on any of:
     that job in the allowlist. The token a compromised step could wield
     exceeds what was reviewed.
 - **Stale entry** — the allowlist lists a write scope the job no longer
-    grants, or names a workflow or job that no longer exists. Stale entries
+    grants, or lists a scope under a workflow or job that no longer
+    exists. Stale entries
     rot the allowlist into a misleading record of the actual write surface.
 - **Unsorted scope list** — a job's scope list departs from sorted
     order. Sorting keeps allowlist diffs minimal and blocks the

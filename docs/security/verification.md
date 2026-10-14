@@ -296,8 +296,8 @@ check named `gitleaks` in the `protect-main` ruleset.
     the rewritten commits before pushing — history rewriting drops the
     original signatures, and every commit on `main` must be signed —
     then re-enable the ruleset.
-- Vendor `gitleaks/*` is in the `allowed_actions` allowlist; do not
-    remove without replacing the workflow.
+- The `gitleaks/gitleaks-action@*` pattern is in the `allowed_actions`
+    allowlist; do not remove it without replacing the workflow.
 
 ## TruffleHog secret scanning<a name="trufflehog-secret-scanning"></a>
 
@@ -321,8 +321,8 @@ runs. Neither substitutes for the other, and dropping either needs a
     re-signing requirement.
     Rotate first — the secret is confirmed valid, so history rewriting
     is the slower half of the response.
-- Vendor `trufflesecurity/*` is in the `allowed_actions` allowlist; do
-    not remove without replacing the workflow.
+- The `trufflesecurity/trufflehog@*` pattern is in the `allowed_actions`
+    allowlist; do not remove it without replacing the workflow.
 
 ## Dependency review<a name="dependency-review"></a>
 

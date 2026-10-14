@@ -87,9 +87,10 @@ how branch commits and bot commits both satisfy this.
 
 The `release-tag-protection` ruleset (target=tag, enforcement=active,
 bypass_actors empty) blocks deletion, non-fast-forward update, and
-arbitrary update of release-tag refs matching
-`refs/tags/[0-9]{8}-[0-9a-f]{7,40}` (fallback include of
-`refs/tags/**` if GitHub ever rejects the regex).
+arbitrary update of the refs its include pattern `refs/tags/**` matches.
+The pattern is a glob and takes in every tag in the repository, the
+release tags among them, so a tag pushed by mistake cannot be deleted or
+moved while the ruleset stands.
 
 ## Renovate invariants
 

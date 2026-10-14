@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # scripts/check-upload-artifact-strict.sh
 #
-# @description Lint: every `actions/upload-artifact` step in every
+# @description Lint: every step whose `uses:` starts with
+# `actions/upload-artifact@`, in that lower-case spelling, in every
 # workflow under `.github/workflows/*.yml` sets
 # `with.if-no-files-found: error` so empty-glob bugs hard-fail.
 
-# Lint: every `actions/upload-artifact` step in every workflow under
+# Lint: every step whose `uses:` starts with `actions/upload-artifact@`,
+# in that lower-case spelling, in every workflow under
 # `.github/workflows/*.yml` sets `with.if-no-files-found: error`.
 #
 # The action's default is `warn`, which emits a warning and uploads

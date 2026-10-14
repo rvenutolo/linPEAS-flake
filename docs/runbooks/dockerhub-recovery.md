@@ -202,14 +202,16 @@ Either:
     button, i.e. `workflow_dispatch` — if the pin commit is still `HEAD`
     on `main`, setting `force-republish: true` so the image, manifest,
     verify, and changelog jobs run for the current pin even though the GitHub
-    release already exists. **"Re-run jobs" is not a substitute:** it
-    replays the original run's inputs and cannot set a new one, so on a
-    push-triggered run `force-republish` stays false, `tag-exists` stays
-    true, and all five jobs skip — the recovery looks green while doing
-    nothing. The `release` job's release-creation step stays gated by the
-    "tag exists" guard, so the existing release assets are preserved and
-    step 1 does not apply on this route. This route is faster and leaves
-    no retrigger commit behind, OR
+    release already exists. **Re-running the original run is not a
+    substitute:** a re-run replays that run's inputs and cannot set a new
+    one, so on a push-triggered run `force-republish` stays false. Under
+    "Re-run all jobs" the `release` job then finds the release, reports
+    `tag-exists` true, and the image, manifest, verify, and changelog
+    jobs skip — the recovery looks green while doing nothing. The
+    `release` job's release-creation step stays gated by the "tag exists"
+    guard, so the existing release assets are preserved and step 1 does
+    not apply on this route. This route is faster and leaves no retrigger
+    commit behind, OR
 
 - Open a PR that touches `linpeas-pin.json` itself with a
     prettier-stable edit (one blank line between two properties survives
