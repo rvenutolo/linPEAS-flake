@@ -875,6 +875,17 @@ on: [push]' '*n'
 
   # The base zizmor notify job opens with those two steps, and passes.
 
+  # Those two actions are read by their owner and repository whatever the
+  # case of their ASCII letters, as GitHub resolves them: respelled, the
+  # base zizmor notify job still passes.
+  fresh_root
+  edit '.github/workflows/zizmor-drift-check.yml' \
+    '      - uses: step-security/harden-runner@0000000000000000000000000000000000000000
+      - uses: actions/checkout@0000000000000000000000000000000000000000' \
+    '      - uses: Step-Security/Harden-Runner@0000000000000000000000000000000000000000
+      - uses: Actions/Checkout@0000000000000000000000000000000000000000'
+  run_scenario mixed-case-prior-steps-pass 0 '' "${CLEAN}"
+
   # An empty gate leaves a record yq prints with a field missing.
   fresh_root
   edit "${SC}" 'if: always()' "if: ''"

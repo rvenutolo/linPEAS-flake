@@ -207,4 +207,16 @@ expect_body app-token-mixed-case.yml "${TOKEN_JOB_HEAD}Actions/Create-GitHub-App
   "DIR/app-token-mixed-case.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
 expect_body app-token-other-action.yml "${TOKEN_JOB_HEAD}actions/cache${TOKEN_JOB_TAIL}" 0 ''
 
+# GitHub Actions reads a secret's name whatever its case, so a job
+# naming the App's private key needs the guard however its ASCII letters,
+# and those of the `secrets` context, are cased. The other secret is the
+# control: it carries no App privilege.
+readonly KEY_JOB_HEAD=$'on:\n  workflow_dispatch:\npermissions: {}\njobs:\n  a:\n    permissions:\n      contents: read\n    steps:\n      - run: echo PAYLOAD_RAN\n        env:\n          KEY: ${{ '
+readonly KEY_JOB_TAIL=$' }}\n'
+for spelling in secrets.BUMP_APP_PRIVATE_KEY secrets.bump_app_private_key Secrets.Bump_App_Private_Key SECRETS.BUMP_APP_PRIVATE_KEY; do
+  expect_body "app-key-${spelling}.yml" "${KEY_JOB_HEAD}${spelling}${KEY_JOB_TAIL}" 1 \
+    "DIR/app-key-${spelling}.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+done
+expect_body app-key-other-secret.yml "${KEY_JOB_HEAD}secrets.bump_app_other_key${KEY_JOB_TAIL}" 0 ''
+
 printf 'all tests passed\n'

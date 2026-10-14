@@ -126,6 +126,18 @@ expect_built 'merge list reads the first mapping (wrong token first) as the toke
 expect_built 'merge list reads the first mapping (right token first) as the token' \
   "${TOKEN_OK}${TOKEN_BAD}"'jobs:\n  a: {runs-on: x, steps: [{<<: [*tok, *tbad]}]}\n' 0 ''
 
+# GitHub Actions reads a secret's name whatever its case, so the token is
+# the job's GITHUB_TOKEN however the ASCII letters of `secrets` and of the
+# name are cased. A longer name is another secret.
+for token_spelling in secrets.github_token Secrets.GitHub_Token SECRETS.GITHUB_TOKEN; do
+  # shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+  expect_built "github-token spelled ${token_spelling} passes" \
+    'jobs:\n  a: {runs-on: x, steps: [{uses: ./.github/actions/setup-nix, with: {github-token: "${{ '"${token_spelling}"' }}"}}]}\n' 0 ''
+done
+# shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+expect_built 'github-token naming a longer secret fails' \
+  'jobs:\n  a: {runs-on: x, steps: [{uses: ./.github/actions/setup-nix, with: {github-token: "${{ secrets.github_token_x }}"}}]}\n' 1 'has wrong github-token'
+
 # `jobs:` written as an alias, and a job key written as an alias, are read
 # through: a clean job passes and an installer step is named by the job's
 # own key.

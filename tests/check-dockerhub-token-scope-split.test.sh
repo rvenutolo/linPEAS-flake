@@ -178,6 +178,49 @@ function main() {
     'bad-unsuffixed.yaml: secrets.DOCKERHUB_TOKEN is not authoritative'
   rm --recursive --force -- "${dir}"
 
+  # GitHub Actions reads a secret's name whatever its case, so each rule
+  # reads a reference however its ASCII letters, and those of the
+  # `secrets` context, are cased.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf '      - with:\n          password: ${{ secrets.dockerhub_token_delete }}\n' \
+    >>"${dir}/release-on-bump.yml"
+  assert_run 'lower-case DELETE token in release fails' "${dir}" 1 \
+    'release-on-bump.yml: consumes secrets.DOCKERHUB_TOKEN_DELETE'
+  rm --recursive --force -- "${dir}"
+
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf '      - env:\n          X: ${{ Secrets.DockerHub_Token_Rw }}\n' \
+    >>"${dir}/dockerhub-sync.yml"
+  assert_run 'mixed-case RW token in sync fails' "${dir}" 1 \
+    'dockerhub-sync.yml: consumes secrets.DOCKERHUB_TOKEN_RW'
+  rm --recursive --force -- "${dir}"
+
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf '      - env:\n          Y: ${{ secrets.dockerhub_token }}\n' \
+    >>"${dir}/release-on-bump.yml"
+  assert_run 'lower-case unsuffixed token fails' "${dir}" 1 \
+    'release-on-bump.yml: secrets.dockerhub_token is not authoritative'
+  rm --recursive --force -- "${dir}"
+
+  # The producers spelled in lower and mixed case still consume their
+  # tokens, and a suffix in any case is authoritative.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf 'jobs:\n  push:\n    steps:\n      - env:\n          DOCKERHUB_TOKEN: ${{ secrets.dockerhub_token_rw }}\n' \
+    >"${dir}/release-on-bump.yml"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf 'jobs:\n  sync:\n    steps:\n      - with:\n          password: ${{ SECRETS.DockerHub_Token_Delete }}\n' \
+    >"${dir}/dockerhub-sync.yml"
+  assert_run 'producers in lower and mixed case pass' "${dir}" 0 ''
+  rm --recursive --force -- "${dir}"
+
   # A workflow the suffix scan listed but grep could not read. grep exits 2
   # there, and scoring that as "this file names no DOCKERHUB_TOKEN" clears
   # the file of every suffix violation it carries. The lever needs a
