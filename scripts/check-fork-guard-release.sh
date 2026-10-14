@@ -25,8 +25,9 @@
 # token carries real write privilege, letting the job commit, open
 # PRs, and enable auto-merge through the App identity. Such a job is
 # detected by a reference to the `actions/create-github-app-token`
-# action or to the `secrets.BUMP_APP_PRIVATE_KEY` signing key, and
-# must carry the fork guard the same as a write-scoped job.
+# action, its ASCII letters in either case, or to the
+# `secrets.BUMP_APP_PRIVATE_KEY` signing key as written, and must carry
+# the fork guard the same as a write-scoped job.
 #
 # Without the guard, a fork that inherits these workflows can fire
 # them under its own GITHUB_TOKEN (or repo-scoped secrets, if any
@@ -61,6 +62,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
 
@@ -71,6 +74,12 @@ readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
 readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
 readonly REPO_SLUG="${REPO_SLUG_OVERRIDE:-${DEFAULT_REPO_SLUG}}"
 readonly GUARD_NEEDLE="github.repository == '${REPO_SLUG}'"
+
+# The owner and repository of the action that mints an App installation
+# token, with each ASCII letter in either case, so a respelling does not
+# take a job out of the lint's reach.
+APP_TOKEN_ACTION_RE="$(ascii_fold_regex actions/create-github-app-token)"
+readonly APP_TOKEN_ACTION_RE
 # The job a key names. `jobs:` written as an alias is read through by
 # `JOBS_NODE` in the job list and in this lookup alike. The key reaches
 # `yq` as data, through `strenv`, and is compared by its base64 text:
@@ -135,7 +144,7 @@ job_needs_fork_guard() {
   if ! body="$(read_workflow "${file}" "${JOB_BY_KEY} | explode(.)" "${job}" body)"; then
     exit 2
   fi
-  [[ ${body} == *"actions/create-github-app-token"* ]] && return 0
+  [[ ${body} =~ ${APP_TOKEN_ACTION_RE} ]] && return 0
   [[ ${body} == *"secrets.BUMP_APP_PRIVATE_KEY"* ]] && return 0
   return 1
 }

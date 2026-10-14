@@ -173,4 +173,22 @@ ${ONE}"
 expect_built 'a merge list inside a step with: is read first mapping wins: a false first passes' \
   'x-a: &A {persist-credentials: true}\nx-b: &B {persist-credentials: false}\non: push\njobs:\n  ml:\n    steps:\n      - uses: actions/checkout@abc\n        with: {<<: [*B, *A]}\n' 0 ''
 
+# Respelling a step in another case must not take it out of the lint's
+# reach, so a step is selected whatever the case of the ASCII letters
+# before the `@`, and the finding names it as written.
+expect_built 'a step spelled in mixed case is a checkout step, named as written' \
+  'on: push\njobs:\n  mixed:\n    steps:\n      - uses: Actions/Checkout@abc\n' 1 \
+  "%W: job mixed step[0] Actions/Checkout missing ${BT}with.persist-credentials: false${BT}
+${ONE}"
+expect_built 'a step spelled in upper case holding a bad value is read' \
+  'on: push\njobs:\n  upper:\n    steps:\n      - uses: ACTIONS/CHECKOUT@abc\n        with:\n          persist-credentials: true\n' 1 \
+  "%W: job upper step[0] ACTIONS/CHECKOUT has ${BT}persist-credentials: true${BT}; must be ${BT}false${BT}
+${ONE}"
+expect_built 'a step spelled in mixed case that sets false passes' \
+  'on: push\njobs:\n  mixedok:\n    steps:\n      - uses: Actions/Checkout@abc\n        with:\n          persist-credentials: false\n' 0 ''
+# The Kelvin sign folds to `k` under a case-insensitive regex flag; it is
+# no ASCII letter, and no repository name holds it.
+expect_built 'a non-ASCII letter that folds to an ASCII one is no checkout step' \
+  'on: push\njobs:\n  kelvin:\n    steps:\n      - uses: actions/chec\xe2\x84\xaaout@abc\n' 0 ''
+
 printf 'all tests passed\n'

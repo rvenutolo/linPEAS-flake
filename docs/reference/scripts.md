@@ -1793,7 +1793,7 @@ when the check cannot run: `shfmt` or `jq` absent from PATH, a script
 ### scripts/check-upload-artifact-strict.sh
 
 Lint: every step whose `uses:` starts with
-`actions/upload-artifact@`, in that lower-case spelling, in every
+`actions/upload-artifact@`, its ASCII letters in either case, in every
 workflow under `.github/workflows/*.yml` sets
 `with.if-no-files-found: error` so empty-glob bugs hard-fail.
 
@@ -2280,7 +2280,8 @@ checks even if one fails; exits 1 if any failed, 2 on config error.
 
 ### scripts/lib/ascii-match.sh
 
-Bash regex matching whose ranges hold ASCII only. Source
+Bash regex matching whose ranges hold ASCII only, and a
+regex that matches a text with its ASCII letters in either case. Source
 after `set -Eeuo pipefail`.
 
 #### ascii_match()
@@ -2304,6 +2305,28 @@ theirs.
 - `0` — the text matches
 - `1` — it does not
 - `2` — the regex does not compile
+
+#### ascii_fold_regex()
+
+Print a regex that matches the given text with each of its
+letters in either case, as a bracket of the two ASCII letters (`[aA]`),
+for a bash `[[ =~ ]]` or a `yq` `test()`. A lint uses it to select an
+action by its owner and repository however their letters are cased. A
+case-insensitive regex flag also folds letters outside ASCII (the
+Kelvin sign to `k`, the long s to `s`), and a bracket of two letters
+does not.
+
+**Args:**
+
+- `$1` — text of lower-case ASCII letters, digits, `/`, `-` and `_`
+
+**Exit codes:**
+
+- `2` — the text is empty or holds any other character
+
+**Stdout:**
+
+- the regex, unanchored
 
 ### scripts/lib/awk-path.sh
 

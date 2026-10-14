@@ -49,7 +49,7 @@ Enforced by `scripts/check-workflow-ascii-space.sh`. Wired as the `lint-workflow
 
 ## checkout-persist-credentials
 
-Every `actions/checkout` step sets `with.persist-credentials: false` (boolean, not string).
+Every `actions/checkout` step sets `with.persist-credentials: false` (boolean, not string). The lint selects a step by a `uses:` that starts with `actions/checkout@`, its ASCII letters in either case, and a finding names the owner and repository as the step spells them.
 
 Without it, `actions/checkout` writes `GITHUB_TOKEN` into `.git/config` and leaves it on disk for the remainder of the job. Any later step in the same job — a third-party action, a misbehaving binary, a shell injection in a `run:` block — can read the token from the working tree and use its scopes. `persist-credentials: false` drops the credential after the initial clone/fetch, narrowing the blast radius of a compromised later step.
 
@@ -61,7 +61,7 @@ Enforced by `scripts/check-checkout-persist-credentials.sh`. Wired as the `lint-
 
 ## upload-artifact-strict
 
-Every `actions/upload-artifact` step sets `with.if-no-files-found: error`. The lint selects a step by a `uses:` that starts with `actions/upload-artifact@` in that lower-case spelling.
+Every `actions/upload-artifact` step sets `with.if-no-files-found: error`. The lint selects a step by a `uses:` that starts with `actions/upload-artifact@`, its ASCII letters in either case, and a finding names the owner and repository as the step spells them.
 
 The action's default is `warn`, which emits a warning and uploads nothing when the `path:` glob matches nothing. That hides build-output drift: a broken path produces a green job with no artifact, and the consumer side only notices when something downstream goes missing — sometimes many runs later. `error` turns the path-mismatch into a hard upload failure, surfacing the bug at its source.
 
@@ -639,7 +639,7 @@ Every workflow job that holds a guard-required write scope includes a fork-guard
 
 Guard-required write scopes are any of: `contents: write`, `packages: write`, `id-token: write`, `attestations: write`, `actions: write`. A fork that inherits these workflows can otherwise fire them under its own `GITHUB_TOKEN` (or repo-scoped secrets, if any were configured) — accidentally cutting a release, pushing to the fork's container registry, minting OIDC tokens, or (for `actions: write`) deleting the fork's own Actions caches and re-running its failed jobs on triggers the fork owner never asked for. The repository check pins execution to the canonical repo.
 
-A job that mints a GitHub App installation token (via `actions/create-github-app-token`, or referencing `secrets.BUMP_APP_PRIVATE_KEY`) is likewise privileged despite declaring a read-only `GITHUB_TOKEN`: the App token carries its own write scopes, so the job can commit via the REST contents API, open pull requests, and enable auto-merge — all under the canonical repo's identity. Such a job must carry the same fork guard, otherwise a fork holding the App's private key as a secret could drive those writes against the canonical repo.
+A job that mints a GitHub App installation token (via `actions/create-github-app-token`, matched with its ASCII letters in either case, or referencing `secrets.BUMP_APP_PRIVATE_KEY` as written) is likewise privileged despite declaring a read-only `GITHUB_TOKEN`: the App token carries its own write scopes, so the job can commit via the REST contents API, open pull requests, and enable auto-merge — all under the canonical repo's identity. Such a job must carry the same fork guard, otherwise a fork holding the App's private key as a secret could drive those writes against the canonical repo.
 
 GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every guard-required job must carry the guard in its own `if:` expression. Existing `if:` clauses are AND-ed with the repository check.
 

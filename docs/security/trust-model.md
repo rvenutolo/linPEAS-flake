@@ -223,15 +223,15 @@ Exception for a non-`GITHUB_TOKEN` secret requires documenting here BEFORE relax
 - Keep as first step, before `actions/checkout`, `cachix/install-nix-action`, or any network step. eBPF monitor must install before any I/O.
 - Do not add to composite actions — caller job already has it.
 
-Enforced by `scripts/check-harden-runner-first.sh` via the `lint-workflow-security` CI job (member check `harden-runner-first`) and a pre-commit hook. Lint parses every job in `.github/workflows/*.yml` (or `.yaml`) with `yq` and rejects any job whose first step is not `step-security/harden-runner@<40-hex-sha>`.
+Enforced by `scripts/check-harden-runner-first.sh` via the `lint-workflow-security` CI job (member check `harden-runner-first`) and a pre-commit hook. Lint parses every job in `.github/workflows/*.yml` (or `.yaml`) with `yq` and rejects any job whose first step is not `step-security/harden-runner@<40-hex-sha>`. The owner and repository are matched with their ASCII letters in either case; the SHA is forty lower-case hex digits.
 
-The block-mode contract is enforced by `scripts/check-harden-runner-block.sh` via the same `lint-workflow-security` CI job (member check `harden-runner-block`) and a pre-commit hook: it rejects any harden-runner step that is not `egress-policy: block` with a non-empty `allowed-endpoints:`. A missed host surfaces as a blocked-egress CI failure and is fixed forward by adding the host to that job's allowlist.
+The block-mode contract is enforced by `scripts/check-harden-runner-block.sh` via the same `lint-workflow-security` CI job (member check `harden-runner-block`) and a pre-commit hook: it rejects any harden-runner step that is not `egress-policy: block` with a non-empty `allowed-endpoints:`, and reads a step as harden-runner when its `uses:` holds `step-security/harden-runner@` with its ASCII letters in either case. A missed host surfaces as a blocked-egress CI failure and is fixed forward by adding the host to that job's allowlist.
 
 ### Egress allowlist matches tool inventory
 
 A hand-authored `allowed-endpoints:` list has nothing binding it to what the job's tooling actually reaches. A tool version bumps, a URL changes, or a fallback path activates, and the list is not updated — the resulting failure is latent: it surfaces only when the blocked path is finally exercised, sometimes long after the change that broke it. `scripts/check-egress-allowlist.sh` binds each job's allowlist to its tool inventory with seven assertions, keyed off the job's `uses:` and `run:` text:
 
-1. **Forward rules**, mechanical and exact:
+1. **Forward rules**, mechanical and exact. A rule keyed on a remote action matches its owner and repository with their ASCII letters in either case:
     - `github/codeql-action/init` requires `release-assets.githubusercontent.com` — the CodeQL bundle falls back to a release asset when the toolcache misses, and a `github.com` release-download URL 302s there unconditionally.
     - `aquasecurity/trivy-action` requires `get.trivy.dev`, `mirror.gcr.io`, and `ghcr.io`. The action resolves the release tag against `github.com` but downloads the binary from `get.trivy.dev`, so a job carrying only the database hosts installs nothing and skips every later step. `ghcr.io` is the documented vulnerability-DB fallback; without it a `mirror.gcr.io` outage fails the scan instead of degrading.
     - `anchore/scan-action` requires `get.anchore.io`, `grype.anchore.io`, and `raw.githubusercontent.com` — the first two serve the grype install script and the vulnerability DB, and the install path reaches `raw.githubusercontent.com` non-deterministically across architectures, which makes that gap latent rather than immediate.

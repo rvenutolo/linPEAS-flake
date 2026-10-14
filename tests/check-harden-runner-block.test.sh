@@ -128,4 +128,18 @@ expect_exact 'a job key written as an alias is named by what it stands for (hard
   "DIR/built.yml: job a harden-runner egress-policy audit is not block
 1 harden-runner step(s) not in block mode with non-empty allowed-endpoints"
 
+# Respelling a harden-runner step in another case must not take it out of
+# the lint's reach, so it is read whatever the case of the ASCII letters
+# in its owner and repository.
+expect_exact 'a harden-runner step spelled in mixed case in audit mode is read (harden-runner block) as mixed-case' \
+  'jobs:\n  a:\n    steps: [{uses: Step-Security/Harden-Runner@v2, with: {egress-policy: audit}}]\n' 1 \
+  "DIR/built.yml: job a harden-runner egress-policy audit is not block
+1 harden-runner step(s) not in block mode with non-empty allowed-endpoints"
+expect_exact 'a harden-runner step spelled in upper case with no endpoints is read (harden-runner block) as upper-case' \
+  'jobs:\n  a:\n    steps: [{uses: STEP-SECURITY/HARDEN-RUNNER@v2, with: {egress-policy: block}}]\n' 1 \
+  "DIR/built.yml: job a has block mode but empty allowed-endpoints
+1 harden-runner step(s) not in block mode with non-empty allowed-endpoints"
+expect_exact 'a harden-runner step spelled in mixed case in block mode passes (harden-runner block) as mixed-case' \
+  'jobs:\n  a:\n    steps: [{uses: Step-Security/Harden-Runner@v2, with: {egress-policy: block, allowed-endpoints: "github.com:443"}}]\n' 0 ''
+
 printf 'all tests passed\n'

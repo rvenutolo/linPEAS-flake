@@ -195,4 +195,16 @@ expect_body job-key-alias-guarded.yml $'x-k: &k a\njobs:\n  *k :\n'"${ALIASED_GU
 expect_body job-key-alias-unguarded.yml $'x-k: &k a\njobs:\n  *k :\n'"${ALIASED_WRITE}" 1 \
   "DIR/job-key-alias-unguarded.yml: job \\*k holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
 
+# A job minting an App installation token needs the guard whatever the
+# case of the ASCII letters in the action's owner and repository. The
+# lower-case scenario is the control: neither job names the App's
+# private-key secret.
+readonly TOKEN_JOB_HEAD=$'on:\n  workflow_dispatch:\npermissions: {}\njobs:\n  a:\n    permissions:\n      contents: read\n    steps:\n      - uses: '
+readonly TOKEN_JOB_TAIL=$'@abc\n      - run: echo PAYLOAD_RAN\n'
+expect_body app-token-lower-case.yml "${TOKEN_JOB_HEAD}actions/create-github-app-token${TOKEN_JOB_TAIL}" 1 \
+  "DIR/app-token-lower-case.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body app-token-mixed-case.yml "${TOKEN_JOB_HEAD}Actions/Create-GitHub-App-Token${TOKEN_JOB_TAIL}" 1 \
+  "DIR/app-token-mixed-case.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body app-token-other-action.yml "${TOKEN_JOB_HEAD}actions/cache${TOKEN_JOB_TAIL}" 0 ''
+
 printf 'all tests passed\n'

@@ -14,8 +14,9 @@
 # action or a shell injection in a `run:` — can read the token from
 # the working tree.
 #
-# The check matches `uses:` lines that start with `actions/checkout@`
-# (any ref shape). For each match, `with.persist-credentials` must
+# The check matches a `uses:` that starts with `actions/checkout@`, its
+# ASCII letters in either case (any ref shape), and a finding names the
+# owner and repository as the step spells them. For each match, `with.persist-credentials` must
 # be present and exactly the boolean `false`: a scalar carrying the
 # boolean tag whose text is `false`. Strings ("false"), missing keys,
 # `true` and any other shape all fail, and so does a `with:` that is
@@ -43,6 +44,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
 
@@ -50,6 +53,12 @@ readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
 readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
 readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
+
+# The owner and repository a selected step names, with each ASCII letter
+# in either case, so a respelling does not take a step out of the lint's
+# reach.
+ACTION_RE="$(ascii_fold_regex actions/checkout)"
+readonly ACTION_RE
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -107,7 +116,9 @@ for f in "${selected_files[@]}"; do
 
   # A `steps:` that is not a list holds no step to read; GitHub Actions
   # refuses such a job.
-  # Each row: the step's index; the job id; `with` when the step's
+  # Each row: the step's index; the job id; the owner and repository as
+  # the step spells them, which the selector limits to the action's own
+  # letters and `/`; `with` when the step's
   # `with:` is present but not a map, else `value`; then the kind of
   # that node (`none` when absent), and its tag and text as JSON
   # strings. A tag is free text (a verbatim tag decodes `%7C` to a pipe
@@ -131,49 +142,49 @@ for f in "${selected_files[@]}"; do
   # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
   if ! rows="$(yq eval --no-doc "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) as $k
     | .value | explode(.) | explode(.) | [.steps] | .[] | select(kind == "seq") | to_entries[]
-    | select(.value | explode(.) | explode(.) | explode(.) | (.uses // "") | test("^actions/checkout@"))
-    | (.key | tostring) + "\t" + $k + "\t" + (.value | explode(.) | explode(.) | explode(.) |
+    | select(.value | explode(.) | explode(.) | explode(.) | (.uses // "") | test("^'"${ACTION_RE}"'@"))
+    | (.key | tostring) + "\t" + $k + "\t" + (.value | explode(.) | explode(.) | explode(.) | (.uses | sub("(?s)@.*$"; "")) + "\t" + (
         [.with | select(kind != "map" and tag != "!!null") | "with\t" + kind + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))]
         + [[.with | select(kind == "map") | ."persist-credentials"] | .[] | "value\t" + kind + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))]
-        + ["value\tnone\t\"\"\t\"\""] | .[0])
+        + ["value\tnone\t\"\"\t\"\""] | .[0]))
   ' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
   [[ -n ${rows} ]] || continue
-  while IFS=$'\t' read -r idx job node kind tag val; do
+  while IFS=$'\t' read -r idx job action node kind tag val; do
     [[ -z ${job} ]] && continue
     if [[ ${node} == 'with' ]]; then
-      printf '%s: job %q step[%s] actions/checkout with: has unexpected shape (kind=%s, tag=%s, value=%s); must be a map holding persist-credentials: false\n' \
-        "${f}" "${job}" "${idx}" "${kind}" "${tag}" "${val}" >&2
+      printf '%s: job %q step[%s] %s with: has unexpected shape (kind=%s, tag=%s, value=%s); must be a map holding persist-credentials: false\n' \
+        "${f}" "${job}" "${idx}" "${action}" "${kind}" "${tag}" "${val}" >&2
       failed=$((failed + 1))
       continue
     fi
     case "${kind} ${tag}" in
     'none '* | 'scalar "!!null"')
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
-      printf '%s: job %q step[%s] actions/checkout missing `with.persist-credentials: false`\n' \
-        "${f}" "${job}" "${idx}" >&2
+      printf '%s: job %q step[%s] %s missing `with.persist-credentials: false`\n' \
+        "${f}" "${job}" "${idx}" "${action}" >&2
       failed=$((failed + 1))
       ;;
     'scalar "!!bool"')
       if [[ ${val} != '"false"' ]]; then
         # shellcheck disable=SC2016 # literal backticks in human-readable prose
-        printf '%s: job %q step[%s] actions/checkout has `persist-credentials: %s`; must be `false`\n' \
-          "${f}" "${job}" "${idx}" "$(json_text "${val}")" >&2
+        printf '%s: job %q step[%s] %s has `persist-credentials: %s`; must be `false`\n' \
+          "${f}" "${job}" "${idx}" "${action}" "$(json_text "${val}")" >&2
         failed=$((failed + 1))
       fi
       ;;
     'scalar "!!str"')
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
-      printf '%s: job %q step[%s] actions/checkout has string `persist-credentials: %q`; must be boolean `false`\n' \
-        "${f}" "${job}" "${idx}" "$(json_text "${val}")" >&2
+      printf '%s: job %q step[%s] %s has string `persist-credentials: %q`; must be boolean `false`\n' \
+        "${f}" "${job}" "${idx}" "${action}" "$(json_text "${val}")" >&2
       failed=$((failed + 1))
       ;;
     *)
-      printf '%s: job %q step[%s] actions/checkout persist-credentials has unexpected shape (kind=%s, tag=%s, value=%s); must be boolean false\n' \
-        "${f}" "${job}" "${idx}" "${kind}" "${tag}" "${val}" >&2
+      printf '%s: job %q step[%s] %s persist-credentials has unexpected shape (kind=%s, tag=%s, value=%s); must be boolean false\n' \
+        "${f}" "${job}" "${idx}" "${action}" "${kind}" "${tag}" "${val}" >&2
       failed=$((failed + 1))
       ;;
     esac

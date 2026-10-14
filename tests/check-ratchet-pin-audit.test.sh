@@ -425,4 +425,20 @@ ${ONE_FAILED}"
 expect_merge_order 'a merge list in the check job is read first mapping wins: the reader first passes' \
   '[*read, *write]' 0 ''
 
+# Respelling an action in another case must not take it out of an
+# invariant's reach, so the first-step and checkout invariants read an
+# action whatever the case of the ASCII letters in its owner and repository.
+readonly CHECK_HR='      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: audit\n'
+readonly CHECK_CHECKOUT='      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1\n        with:\n          persist-credentials: false\n'
+readonly CHECK_NIX='      - uses: ./.github/actions/setup-nix'
+# shellcheck disable=SC2059 # the step text is the format
+printf -v CHECK_STEPS -- "${CHECK_HR}${CHECK_CHECKOUT}${CHECK_NIX}"
+readonly CHECK_STEPS
+expect_shape 'a first step spelled in mixed case is harden-runner' \
+  "${CHECK_STEPS}" "${CHECK_HR/step-security\/harden-runner/Step-Security\/Harden-Runner}${CHECK_CHECKOUT}${CHECK_NIX}" '' 0 ''
+expect_shape 'a checkout step spelled in mixed case that keeps credentials is counted' \
+  "${CHECK_STEPS}" "${CHECK_HR}"'      - uses: Actions/Checkout@34e114876b0b11c390a56381ad16ebd13914f8d5\n        with:\n          persist-credentials: true\n'"${CHECK_NIX}" '' 1 \
+  "actions/checkout: 2 steps total, only 1 set persist-credentials: false
+${ONE_FAILED}"
+
 printf 'all tests passed\n'

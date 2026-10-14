@@ -19,7 +19,9 @@
 #
 # Seven assertions per job:
 #
-#   1. Forward rules, keyed on `uses:` and on `run:` text:
+#   1. Forward rules, keyed on `uses:` and on `run:` text. An action's
+#      owner and repository are matched with their ASCII letters in
+#      either case, here and wherever a rule below names a remote action:
 #        github/codeql-action/init  -> release-assets.githubusercontent.com
 #          (the bundle falls back to a release asset when the toolcache misses,
 #           and a github.com release-download URL 302s there unconditionally)
@@ -291,6 +293,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
 
@@ -338,6 +342,21 @@ readonly DECLARATION_REL=".github/actions/${NOTIFY_COMPOSITE}/egress-allowlist.t
 readonly NIX_SETUP_COMPOSITE='./.github/actions/setup-nix'
 readonly NIX_SUBCOMMANDS='build|develop|shell|run|flake|profile|eval|copy|store|search|registry|repl|show-config'
 readonly NIX_EXEMPT_MARKER='egress-nix-exempt:'
+
+# The remote actions the rules below key on, each as a regex matching its
+# owner and repository with every ASCII letter in either case, so a
+# respelling does not take a job out of a rule's reach. A path inside the
+# action's repository (`/init`) and a composite's path in this one are
+# file paths, and are matched as written.
+HARDEN_RUNNER_RE="$(ascii_fold_regex step-security/harden-runner)@"
+CHECKOUT_RE="$(ascii_fold_regex actions/checkout)@"
+FLAKEHUB_CACHE_RE="$(ascii_fold_regex determinatesystems/flakehub-cache-action)"
+CODEQL_INIT_RE="$(ascii_fold_regex github/codeql-action)/init"
+TRIVY_RE="$(ascii_fold_regex aquasecurity/trivy-action)"
+SBOM_RE="$(ascii_fold_regex anchore/sbom-action)"
+SCAN_RE="$(ascii_fold_regex anchore/scan-action)"
+DOCKERHUB_DESCRIPTION_RE="$(ascii_fold_regex peter-evans/dockerhub-description)"
+readonly HARDEN_RUNNER_RE CHECKOUT_RE FLAKEHUB_CACHE_RE CODEQL_INIT_RE TRIVY_RE SBOM_RE SCAN_RE DOCKERHUB_DESCRIPTION_RE
 # The job a key names. `jobs:` written as an alias is read through by
 # `JOBS_NODE` in the job list and in this lookup alike. The key reaches
 # `yq` as data, through `strenv`, and is compared by its base64 text:
@@ -627,7 +646,7 @@ for f in "${selected_files[@]}"; do
     # finds the job through JOB_BY_KEY.
     if ! endpoints="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"'
       | .steps[]
-      | select(.uses // "" | test("step-security/harden-runner@"))
+      | select(.uses // "" | test("'"${HARDEN_RUNNER_RE}"'"))
       | .with."allowed-endpoints" // ""
     ' "${f}" | tr ' ' '\n' | sed '/^$/d')"; then
       printf '%s: cannot read allowed-endpoints for job %q\n' "${f}" "${job}" >&2
@@ -661,16 +680,16 @@ for f in "${selected_files[@]}"; do
 
     # --- Assertion 1: forward rules -------------------------------------
 
-    if [[ ${uses} == *"DeterminateSystems/flakehub-cache-action"* ]]; then
+    if [[ ${uses} =~ ${FLAKEHUB_CACHE_RE} ]]; then
       fail "${f}: job '${job}' uses flakehub-cache-action; the action is banned (flakehub hosts are not part of this repo's egress allowlist)"
     fi
 
-    if [[ ${uses} == *"github/codeql-action/init"* ]]; then
+    if [[ ${uses} =~ ${CODEQL_INIT_RE} ]]; then
       has_host "${endpoints}" "${RELEASE_ASSETS}" ||
         fail "${f}: job '${job}' uses codeql-action/init but does not allowlist ${RELEASE_ASSETS} (the bundle falls back to a release asset, which 302s there)"
     fi
 
-    if [[ ${uses} == *"aquasecurity/trivy-action"* ]]; then
+    if [[ ${uses} =~ ${TRIVY_RE} ]]; then
       has_host "${endpoints}" "get.trivy.dev" ||
         fail "${f}: job '${job}' uses trivy-action but does not allowlist get.trivy.dev (the action resolves the release tag against github.com but downloads the binary from get.trivy.dev; without it Trivy never installs and every later step is skipped)"
       has_host "${endpoints}" "mirror.gcr.io" ||
@@ -684,14 +703,14 @@ for f in "${selected_files[@]}"; do
         fail "${f}: job '${job}' downloads a GitHub release asset but does not allowlist ${RELEASE_ASSETS} (the github.com redirect is unconditional)"
     fi
 
-    if [[ ${uses} == *"anchore/sbom-action"* ]]; then
+    if [[ ${uses} =~ ${SBOM_RE} ]]; then
       has_host "${endpoints}" "raw.githubusercontent.com" ||
         fail "${f}: job '${job}' uses anchore/sbom-action but does not allowlist raw.githubusercontent.com (the syft-install path reaches it, non-deterministically across arches, so the gap is latent)"
       has_host "${endpoints}" "get.anchore.io" ||
         fail "${f}: job '${job}' uses anchore/sbom-action but does not allowlist get.anchore.io (the syft install-script host)"
     fi
 
-    if [[ ${uses} == *"anchore/scan-action"* ]]; then
+    if [[ ${uses} =~ ${SCAN_RE} ]]; then
       has_host "${endpoints}" "get.anchore.io" ||
         fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist get.anchore.io (the grype install-script host)"
       has_host "${endpoints}" "grype.anchore.io" ||
@@ -700,7 +719,7 @@ for f in "${selected_files[@]}"; do
         fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist raw.githubusercontent.com (the grype-install path reaches it, non-deterministically across arches, so the gap is latent)"
     fi
 
-    if [[ ${uses} == *"peter-evans/dockerhub-description"* ]]; then
+    if [[ ${uses} =~ ${DOCKERHUB_DESCRIPTION_RE} ]]; then
       has_host "${endpoints}" "hub.docker.com" ||
         fail "${f}: job '${job}' uses peter-evans/dockerhub-description but does not allowlist hub.docker.com (the action authenticates against and PATCHes the Docker Hub web API to publish the repository README; it never reaches a registry host)"
     fi
@@ -819,17 +838,14 @@ for f in "${selected_files[@]}"; do
       notify_jobs=$((notify_jobs + 1))
 
       # A step carrying no `uses:` — a `run:` step — arrives from yq as an
-      # empty line, so it falls through to the default arm and widens the
+      # empty line, so it matches none of the three steps and widens the
       # job to the extended shape. That is the intent: a job doing work
       # beyond notifying may reach hosts this declaration does not name.
       pure_shape=1
       while IFS= read -r u; do
-        case "${u}" in
-        *"step-security/harden-runner@"*) ;;
-        *"actions/checkout@"*) ;;
-        *"${NOTIFY_COMPOSITE}"*) ;;
-        *) pure_shape=0 ;;
-        esac
+        if [[ ! ${u} =~ ${HARDEN_RUNNER_RE} && ! ${u} =~ ${CHECKOUT_RE} && ${u} != *"${NOTIFY_COMPOSITE}"* ]]; then
+          pure_shape=0
+        fi
       done <<<"${uses}"
 
       for h in "${DECLARED[@]}"; do

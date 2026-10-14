@@ -20,6 +20,9 @@
 # which is a claim about one version's behaviour. A nixpkgs bump that
 # staleifies them now fails a check rather than passing unnoticed.
 #
+# The first-step and checkout invariants match an action's owner and
+# repository with their ASCII letters in either case.
+#
 # Every `yq` read of the workflow passes YQ_MERGE_SPEC, so a merge list
 # (`<<: [*a, *b]`) inside a job is read first mapping wins, as the YAML
 # merge specification says.
@@ -46,6 +49,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
 
@@ -59,6 +64,13 @@ readonly VERSION_DOC="${RATCHET_DOC_OVERRIDE:-${DEFAULT_VERSION_DOC}}"
 # Every site states the version as `ratchet <X.Y.Z>`; one spelling is what
 # makes the set of sites enumerable rather than guessed at.
 readonly VERSION_RE='ratchet[[:space:]]+[0-9]+\.[0-9]+\.[0-9]+'
+
+# The owner and repository of the two actions the step invariants name,
+# with each ASCII letter in either case, so a respelling does not take a
+# step out of an invariant's reach.
+HARDEN_RUNNER_RE="^$(ascii_fold_regex step-security/harden-runner)@"
+CHECKOUT_RE="^$(ascii_fold_regex actions/checkout)@"
+readonly HARDEN_RUNNER_RE CHECKOUT_RE
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -174,16 +186,16 @@ for job in check notify; do
     exit 2
   fi
 
-  if [[ ${first} != step-security/harden-runner@* ]]; then
+  if [[ ! ${first} =~ ${HARDEN_RUNNER_RE} ]]; then
     fail "job ${job}: first step must be step-security/harden-runner (got: ${first})"
   fi
 done
 
 # 5. Every actions/checkout step sets persist-credentials: false.
-if ! checkout_count="$(read_workflow '[.jobs[].steps[] | select(.uses // "" | test("^actions/checkout@"))] | length')"; then
+if ! checkout_count="$(read_workflow '[.jobs[].steps[] | select(.uses // "" | test("'"${CHECKOUT_RE}"'"))] | length')"; then
   exit 2
 fi
-if ! safe_count="$(read_workflow '[.jobs[].steps[] | select(.uses // "" | test("^actions/checkout@")) | select(.with."persist-credentials" == false)] | length')"; then
+if ! safe_count="$(read_workflow '[.jobs[].steps[] | select(.uses // "" | test("'"${CHECKOUT_RE}"'")) | select(.with."persist-credentials" == false)] | length')"; then
   exit 2
 fi
 
