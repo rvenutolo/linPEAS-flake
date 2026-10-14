@@ -5,7 +5,10 @@
 # `unnamed` record for an expression that uses the `secrets` context any
 # other way, an `open` record for a `${{` not closed on its line, nothing
 # for text outside an expression or for `secrets` as a step id, each
-# record with its line number, and exits 2 when grep fails reading.
+# record with its line number, and exits 2 when grep fails reading; and
+# that double_quoted_scalars prints each double-quoted key and value as
+# YAML decodes it, a NUL as a space, no other style, and exits 2 when `yq`
+# cannot read the file.
 set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -111,6 +114,74 @@ function run_scenario() {
   # no use.
   run_scenario 'a grep failure is exit 2' \
     'K: ${{ secrets.FOO }}' '' 2 "${work}/stub"
+}
+
+# The scalar probe writes its argument to a file, runs
+# double_quoted_scalars on it, and prints each line of the output with a
+# `;` after it, then the status.
+# shellcheck disable=SC2016 # the probe's own text
+printf '%s\n' '#!/usr/bin/env bash' \
+  'set -Eeuo pipefail' \
+  "source '${REPO_ROOT}/scripts/lib/ascii-match.sh'" \
+  "source '${REPO_ROOT}/scripts/lib/secret-uses.sh'" \
+  'file="$(mktemp)"' \
+  'printf "%s" "$1" >"${file}"' \
+  'rc=0' \
+  'texts="$(double_quoted_scalars "${file}" 2>/dev/null)" || rc=$?' \
+  'rm --force -- "${file}"' \
+  'while IFS= read -r text; do printf "%s;" "${text}"; done <<<"${texts}"' \
+  'printf " status=%d\n" "${rc}"' \
+  >"${work}/scalar-probe.sh"
+chmod +x "${work}/scalar-probe.sh"
+
+# @description Run the scalar probe on one YAML text and compare the whole
+# of stdout, which starts with the text read.
+# @arg $1 scenario name  @arg $2 YAML text  @arg $3 the expected lines
+# @arg $4 the expected status (default 0)
+function run_scalar_scenario() {
+  local -r name="$1" text="$2" lines="$3" status="${4:-0}"
+  local -r want="yaml=${text@Q} ${lines} status=${status}"
+  local out err outcome rc=0
+  out="$(mktemp)"
+  err="$(mktemp)"
+  outcome="$(mktemp)"
+  {
+    printf 'yaml=%s ' "${text@Q}"
+    env --unset=BASH_ENV "${work}/scalar-probe.sh" "${text}" 2>"${err}"
+  } >"${out}" || rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${outcome}"
+  harness_assert_record "${name}" "${want}" "${outcome}" "${out}" "${err}"
+  if [[ ${rc} -eq 0 && "$(cat -- "${out}")" == "${want}" && ! -s ${err} ]]; then
+    printf 'PASS: %s\n' "${name}"
+  else
+    printf 'FAIL: %s: expected stdout %q; got exit %d, stdout %q, stderr %q\n' \
+      "${name}" "${want}" "${rc}" "$(cat -- "${out}")" "$(cat -- "${err}")" >&2
+    failures=$((failures + 1))
+  fi
+  rm --force -- "${out}" "${err}" "${outcome}"
+}
+
+# A double-quoted scalar, value or key, is printed as YAML decodes it; a
+# plain, single-quoted or block scalar is not printed, since no escape can
+# make its text differ from the file's.
+# shellcheck disable=SC2016 # the workflow expressions are literal text
+{
+  run_scalar_scenario 'an escaped value is printed decoded' \
+    'a: "${{ s\x65crets.A }}"' '${{ secrets.A }};'
+  run_scalar_scenario 'an escaped key is printed decoded' \
+    '"\x24{{ secrets.K }}": v' '${{ secrets.K }};'
+  run_scalar_scenario 'a unicode escape is printed decoded' \
+    'a: "secr\u0065ts"' 'secrets;'
+  run_scalar_scenario 'an escaped line break splits the text' \
+    'a: "one\ntwo"' 'one;two;'
+  run_scalar_scenario 'a NUL is printed as a space' \
+    'a: "x\0y"' 'x y;'
+  run_scalar_scenario 'other styles are not printed' \
+    $'a: plain\nb: \'single\'\nc: |\n  block\n' ';'
+  run_scalar_scenario 'a scalar under an anchor is printed once' \
+    $'a: &x "anchored"\nb: *x\nc: *x\n' 'anchored;'
+  run_scalar_scenario 'yaml yq cannot read is exit 2' \
+    $'a: [\n' ';' 2
 }
 
 harness_assert_verify || failures=$((failures + 1))

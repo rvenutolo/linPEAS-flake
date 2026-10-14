@@ -335,6 +335,37 @@ function main() {
     'other.yml:6: expression not closed on its line'
   rm --recursive --force -- "${dir}"
 
+  # GitHub Actions evaluates an expression in a scalar as YAML decodes it,
+  # so an escape in a double-quoted scalar can hide a token's name from the
+  # file text. Each double-quoted scalar is read again as decoded.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf '      - with:\n          password: "${{ s\\x65crets.DOCKERHUB_TOKEN_DELETE }}"\n' \
+    >>"${dir}/release-on-bump.yml"
+  assert_run 'escaped DELETE token in release fails' "${dir}" 1 \
+    'release-on-bump.yml: consumes secrets.DOCKERHUB_TOKEN_DELETE'
+  rm --recursive --force -- "${dir}"
+
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf 'jobs:\n  a:\n    steps:\n      - env:\n          T: "${{ secrets.DOCKERHUB_T\\x4fKEN_OLD }}"\n' \
+    >"${dir}/other.yml"
+  assert_run 'escaped unsuffixed token fails' "${dir}" 1 \
+    'other.yml: secrets.DOCKERHUB_TOKEN_OLD is not authoritative'
+  rm --recursive --force -- "${dir}"
+
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf 'jobs:\n  a:\n    steps:\n      - env:\n          T: "${{ toJSON(\\x73ecrets) }}"\n' \
+    >"${dir}/other.yml"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  assert_run 'escaped whole context fails' "${dir}" 1 \
+    'other.yml: ${{ toJSON(secrets) }} reads the secrets context without a literal name (the scope split cannot tell which token it reads) (read decoded from a double-quoted scalar)'
+  rm --recursive --force -- "${dir}"
+
   # Markdown: the write-scoped token in a delete snippet. The tree
   # complies today, so this fixture is what proves the branch runs at all.
   dir="$(mktemp --directory)"

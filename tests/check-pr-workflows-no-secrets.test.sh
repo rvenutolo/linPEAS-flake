@@ -122,6 +122,7 @@ function run_body_scenario() {
 # from the text given, and assert one whole line of the stream named.
 # @arg $1 scenario name  @arg $2 file name  @arg $3 file body
 # @arg $4 expected exit code  @arg $5 stdout or stderr  @arg $6 expected line, with FILE standing for the workflow path
+# @arg $7 a line the stream must not hold, with FILE as in $6 (optional)
 function run_text_scenario() {
   local -r name="$1" file="$2" body="$3" expected_exit="$4" stream="$5"
   local tmpdir stderr_file stdout_file outcome_file want_file
@@ -131,6 +132,8 @@ function run_text_scenario() {
   outcome_file="$(mktemp)"
   printf '%s' "${body}" >"${tmpdir}/${file}"
   local -r want="${6//FILE/${tmpdir}/${file}}"
+  local unwanted="${7:-}"
+  unwanted="${unwanted//FILE/${tmpdir}/${file}}"
   local actual_exit=0
   WORKFLOWS_DIR_OVERRIDE="${tmpdir}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
@@ -146,6 +149,11 @@ function run_text_scenario() {
     failures=$((failures + 1))
   elif ! grep --fixed-strings --line-regexp --quiet -- "${want}" "${want_file}"; then
     printf 'FAIL: %s — %s has no line %q\n' "${name}" "${stream}" "${want}" >&2
+    cat -- "${stdout_file}" "${stderr_file}" >&2
+    failures=$((failures + 1))
+  elif [[ -n ${unwanted} ]] &&
+    grep --fixed-strings --line-regexp --quiet -- "${unwanted}" "${want_file}"; then
+    printf 'FAIL: %s — %s holds the line %q\n' "${name}" "${stream}" "${unwanted}" >&2
     cat -- "${stdout_file}" "${stderr_file}" >&2
     failures=$((failures + 1))
   else
@@ -412,6 +420,50 @@ function main() {
   run_spelling_scenario 'text that is not a secret reference is not read' \
     'not-read.yml' 'github.sha }} secrets.OUTSIDE_SECRET ${{ github.ref'$'\t''steps.secrets.outputs.x || inputs.secrets'$'\t''inputs.x || secrets_count || secrets-x' 0 stdout \
     'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 0 secrets.GITHUB_TOKEN reference(s) allowed'
+  # GitHub Actions evaluates an expression in a scalar as YAML decodes it,
+  # so an escape in a double-quoted scalar can hide from the file text the
+  # context's name, the `${{` opener or the `}}` closer. Each double-quoted
+  # scalar, key or value, is read again as decoded, a NUL as a space. A
+  # use the file text already shows is reported once, and escapes that
+  # hide no use (a `\n` in a list of paths) are no finding.
+  # shellcheck disable=SC2016 # the workflow expressions are literal text
+  {
+    run_text_scenario 'an escape in the context name fails' \
+      'escape-name.yml' "${PR_JOB_HEAD}"'          T1: "${{ s\x65crets.ESC_SECRET }}"'$'\n' 1 stderr \
+      'FILE: secrets.ESC_SECRET not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'
+    run_text_scenario 'an escape in the opener fails' \
+      'escape-open.yml' "${PR_JOB_HEAD}"'          T1: "\x24{{ secrets.OPEN_SECRET }}"'$'\n' 1 stderr \
+      'FILE: secrets.OPEN_SECRET not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'
+    run_text_scenario 'an escape in the closer fails' \
+      'escape-close.yml' "${PR_JOB_HEAD}"'          T1: "${{ secrets.CLOSE_SECRET \x7d}"'$'\n' 1 stderr \
+      'FILE: secrets.CLOSE_SECRET not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'
+    run_text_scenario 'a unicode escape in the context name fails' \
+      'escape-unicode.yml' "${PR_JOB_HEAD}"'          T1: "${{ secr\u0065ts.UNICODE_SECRET }}"'$'\n' 1 stderr \
+      'FILE: secrets.UNICODE_SECRET not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'
+    run_text_scenario 'an escape in a double-quoted key fails' \
+      'escape-key.yml' "${PR_JOB_HEAD}"'          "\x24{{ secrets.KEY_SECRET }}": x'$'\n' 1 stderr \
+      'FILE: secrets.KEY_SECRET not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'
+    run_text_scenario 'an escape hiding the whole context fails' \
+      'escape-whole.yml' "${PR_JOB_HEAD}"'          T1: "${{ toJSON(s\x65crets) }}"'$'\n' 1 stderr \
+      'FILE: ${{ toJSON(secrets) }} reads the secrets context without a literal name, not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'
+    run_text_scenario 'an escaped line break inside an expression fails' \
+      'escape-line-break.yml' "${PR_JOB_HEAD}"'          T1: "${{\n secrets.GITHUB_TOKEN }}"'$'\n' 1 stderr \
+      'FILE: expression not closed on its line, not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'
+    run_text_scenario 'a NUL escape beside a hidden reference fails' \
+      'escape-nul.yml' "${PR_JOB_HEAD}"'          T1: "\0${{ s\x65crets.NUL_SECRET }}"'$'\n' 1 stderr \
+      'FILE: secrets.NUL_SECRET not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'
+    run_text_scenario 'a use the file text shows is reported once' \
+      'escape-none.yml' "${PR_JOB_HEAD}"'          T1: "${{ secrets.PLAIN_SECRET }}"'$'\n' 1 stderr \
+      'FILE:8: secrets.PLAIN_SECRET not allowed in PR-triggered workflow' \
+      'FILE: secrets.PLAIN_SECRET not allowed in PR-triggered workflow (read decoded from a double-quoted scalar)'
+    run_text_scenario 'an escaped GITHUB_TOKEN passes and counts once' \
+      'escape-token.yml' "${PR_JOB_HEAD}"'          T1: "${{ s\x65crets.GITHUB_TOKEN }}"'$'\n          T2: ${{ secrets.github_token }}\n          T3: ${{ secrets.github_token }}\n          T4: ${{ secrets.github_token }}\n          T5: ${{ secrets.github_token }}\n' 0 stdout \
+      'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 5 secrets.GITHUB_TOKEN reference(s) allowed'
+    run_text_scenario 'escapes hiding no use pass' \
+      'escape-paths.yml' "${PR_JOB_HEAD}"'          T1: "a.md\nb.md\n${{ github.sha }}"'$'\n          T2: ${{ secrets.GITHUB_TOKEN }}\n          T3: ${{ secrets.GITHUB_TOKEN }}\n          T4: ${{ secrets.GITHUB_TOKEN }}\n          T5: ${{ secrets.GITHUB_TOKEN }}\n' 0 stdout \
+      'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 4 secrets.GITHUB_TOKEN reference(s) allowed'
+  }
+
   # A workflow with no `on:` is not PR-triggered: beside a clean
   # PR-triggered one, it is counted as skipped.
   local no_on_dir no_on_out no_on_err no_on_outcome no_on_exit=0
