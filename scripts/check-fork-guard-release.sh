@@ -30,8 +30,15 @@
 # same as a write-scoped job. GitHub Actions reads a secret's name
 # whatever its case, so `secrets.bump_app_private_key` reads the same key,
 # and reads the index form `secrets['BUMP_APP_PRIVATE_KEY']` as the dot
-# form. A double-quoted index is an expression error GitHub Actions
-# refuses, and is not read.
+# form. Any other use of the `secrets` context in an expression may read
+# the key too, since no name in the text says which secret it reads: the
+# whole context (`toJSON(secrets)`), a name the expression computes
+# (`secrets[format(...)]`, `secrets[env.NAME]`), the object filter
+# (`secrets.*`), a double-quoted index, and the word `secrets` inside a
+# string literal. So does a `${{` not closed on its line, which the lint
+# reads one line at a time. Such a job needs the fork guard as well (see
+# scripts/lib/secret-uses.sh). The job is read as `yq` prints it, so a YAML
+# escape in a double-quoted scalar is read decoded.
 #
 # Without the guard, a fork that inherits these workflows can fire
 # them under its own GITHUB_TOKEN (or repo-scoped secrets, if any
@@ -56,8 +63,8 @@
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow globs match no
 # file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
-# a read of one job's permissions, body or `if:` fails once the job list
-# has been read. An empty scan set is a could-not-run rather than a clean tree;
+# a read of one job's permissions, body, secrets uses or `if:` fails once
+# the job list has been read. An empty scan set is a could-not-run rather than a clean tree;
 # LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
 set -Eeuo pipefail
@@ -68,6 +75,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/ascii-match.sh
 source "${_lib_dir}/lib/ascii-match.sh"
+# shellcheck source=scripts/lib/secret-uses.sh
+source "${_lib_dir}/lib/secret-uses.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
 
@@ -155,6 +164,14 @@ job_needs_fork_guard() {
   fi
   [[ ${body} =~ ${APP_TOKEN_ACTION_RE} ]] && return 0
   [[ ${body} =~ ${APP_KEY_SECRET_RE} ]] && return 0
+  # A use of the `secrets` context that names no secret may read the App's
+  # private key, and so may an expression not closed on its line.
+  local uses
+  if ! uses="$(secret_uses <<<"${body}")"; then
+    printf '%s: could not read the secrets uses of job %q\n' "${file}" "${job}" >&2
+    exit 2
+  fi
+  [[ ${uses} =~ $'\t'(unnamed|open)$'\t' ]] && return 0
   return 1
 }
 

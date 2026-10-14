@@ -16,8 +16,13 @@
 # reference is matched with the ASCII letters of `secrets` and of the name
 # in either case: `secrets.dockerhub_token_rw` is the write-scoped token.
 # It reads the index form as the dot form: `secrets['DOCKERHUB_TOKEN_RW']`
-# is the write-scoped token too. A double-quoted index is an expression
-# error GitHub Actions refuses, and is not read.
+# is the write-scoped token too. In every workflow, any other use of the
+# `secrets` context in an expression is refused, since no name in the text
+# says which token it reads: the whole context (`toJSON(secrets)`), a name
+# the expression computes (`secrets[format(...)]`, `secrets[env.NAME]`),
+# the object filter (`secrets.*`), a double-quoted index, and the word
+# `secrets` inside a string literal. So is a `${{` not closed on its line,
+# which the lint reads one line at a time (see scripts/lib/secret-uses.sh).
 #
 # The same split binds every manual recovery snippet in the docs. A
 # shell-fenced Markdown block that performs a tag delete
@@ -60,6 +65,8 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/md-fence.sh"
 # shellcheck source=scripts/lib/ascii-match.sh
 source "${_lib_dir}/lib/ascii-match.sh"
+# shellcheck source=scripts/lib/secret-uses.sh
+source "${_lib_dir}/lib/secret-uses.sh"
 
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
@@ -153,6 +160,28 @@ for wf in "${workflow_files[@]}"; do
       violation "${wf}: ${match} is not authoritative (only _RW and _DELETE variants are allowed)"
     fi
   done <<<"${matches}"
+done
+
+# Unnamed: a use of the `secrets` context that names no secret may read
+# either token or the unsuffixed one, and so may an expression not closed
+# on its line. Refused in every workflow, since no name in the text says
+# which token it reads.
+for wf in "${workflow_files[@]}"; do
+  if ! uses="$(secret_uses <"${wf}")"; then
+    printf 'dockerhub-token-scope-split lint: grep failed reading %s\n' \
+      "${wf}" >&2
+    exit 2
+  fi
+  while IFS=$'\t' read -r lineno kind text; do
+    case "${kind}" in
+    unnamed)
+      violation "${wf}:${lineno}: ${text} reads the secrets context without a literal name (the scope split cannot tell which token it reads)"
+      ;;
+    open)
+      violation "${wf}:${lineno}: expression not closed on its line (the scope split cannot tell which token it reads)"
+      ;;
+    esac
+  done <<<"${uses}"
 done
 
 # Markdown: a shell-fenced Docker Hub tag delete must carry the

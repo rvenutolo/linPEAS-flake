@@ -20,7 +20,13 @@
 # either case: `${{ secrets.github_token }}` is the same token. The token
 # is required in the dot form: the index form `${{ secrets['GITHUB_TOKEN'] }}`
 # names the same secret to GitHub Actions and is refused as the wrong
-# token.
+# token. So is every other spelling that reads the `secrets` context
+# without that literal name (`toJSON(secrets)`, `secrets[format(...)]`,
+# `secrets[env.NAME]`, `secrets.*`) and an expression broken across lines:
+# the input must equal the one expression once normalized, so a shape
+# that reads some other secret, or an unknown one, never passes. The input
+# is read as `yq` decodes it, so a YAML escape in a double-quoted scalar
+# is read as the text GitHub Actions evaluates.
 #
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
 # counted finding, and the file's jobs are not read.

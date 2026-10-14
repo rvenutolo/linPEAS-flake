@@ -355,8 +355,13 @@ refused. GitHub Actions reads a secret's name whatever its case, so each
 reference is matched with the ASCII letters of `secrets` and of the name
 in either case: `secrets.dockerhub_token_rw` is the write-scoped token.
 It reads the index form as the dot form: `secrets['DOCKERHUB_TOKEN_RW']`
-is the write-scoped token too. A double-quoted index is an expression
-error GitHub Actions refuses, and is not read.
+is the write-scoped token too. In every workflow, any other use of the
+`secrets` context in an expression is refused, since no name in the text
+says which token it reads: the whole context (`toJSON(secrets)`), a name
+the expression computes (`secrets[format(...)]`, `secrets[env.NAME]`),
+the object filter (`secrets.*`), a double-quoted index, and the word
+`secrets` inside a string literal. So is a `${{` not closed on its line,
+which the lint reads one line at a time (see scripts/lib/secret-uses.sh).
 
 The same split binds every manual recovery snippet in the docs. A
 shell-fenced Markdown block that performs a tag delete
@@ -3095,6 +3100,43 @@ writes.
 **Exit codes:**
 
 - `2` — the harness is not inside the work tree, `setsid` is missing, or the copy failed
+
+### scripts/lib/secret-uses.sh
+
+Read the uses of the GitHub Actions `secrets` context in
+workflow text, one line at a time: each secret a `${{ }}` expression
+names, each expression that uses the context without a literal name,
+and each `${{` not closed on its line. Source after `set -Eeuo pipefail`
+and after scripts/lib/ascii-match.sh.
+
+#### secret_uses()
+
+Print one record per use of the `secrets` context in the
+text on stdin (a workflow file or a part of one), as `LINE<TAB>KIND<TAB>TEXT`, in the order of the text:
+
+- `named`: a reference with a literal name, in the dot or the
+    single-quoted index form; TEXT is the reference.
+- `unnamed`: an expression that uses the context in any other way, so no
+    name in the text says which secret it reads: the whole context
+    (`toJSON(secrets)`), a name the expression computes
+    (`secrets[format(...)]`, `secrets[env.NAME]`), the object filter
+    (`secrets.*`), a double-quoted index, or the word `secrets` inside a
+    string literal, which this reader cannot tell from a use. One record per
+    expression, after its `named` records; TEXT is the expression.
+- `open`: a `${{` not closed on its line; TEXT is `${{`. GitHub Actions
+    reads an expression broken across the lines of a block scalar, and
+    this reader reads one line at a time, so whatever the expression reads
+    is unknown.
+    Text outside `${{ }}` is not read.
+
+**Exit codes:**
+
+- `0` — the text was read, whether it holds a use or not
+- `2` — grep failed reading it
+
+**Stdout:**
+
+- the records
 
 ### scripts/lib/temp.sh
 
