@@ -802,18 +802,19 @@ anyway misreads it:
     the jobs it brings in are never reached by `.jobs[]` or `to_entries`.
 
 A lint that lists job keys through the shared reading therefore counts
-a job key that is empty, holds a line break or a tab, is not a scalar, or
-is a merge key as a finding that names the file and the key, and does not
+a job key that is empty, holds a tab, a line break, a carriage return or a
+NUL, is not a scalar, or is a merge key as a finding that names the file and the key, and does not
 read that file's jobs. `check-ci-job-in-summary.sh`
 and `check-prose-ci-names.sh` still list the names they can resolve in
 such a file, so the refusal is its only finding and their other checks do
-not report those names missing. The shared reading also
-refuses a carriage return and a NUL. `yq` counts a lone carriage return
-as a line break and a line-by-line read does not. A lint with a check of
-its own refuses a line break and a tab, most also refuse a NUL, and of
-those only `check-min-permissions.sh`, which also runs the shared
-reading, refuses a carriage return; the others read it as part of the
-name. A
+not report those names missing. The shared reading refuses the
+carriage return and the NUL because `yq` counts a lone carriage return
+as a line break and a line-by-line read does not, and bash drops a NUL
+from the text it reads. A lint with a check of its own refuses a line
+break and a tab, most also refuse a NUL, and of those only
+`check-min-permissions.sh` and `check-egress-allowlist.sh`, which also
+run the shared reading, refuse a carriage return; the others read it as
+part of the name. A
 generator (`refresh-ci-dag.sh`, `refresh-enforcement-matrix.sh`) stops
 with exit 2 and leaves its output untouched instead. The shared reading
 is `first_odd_job_key` and `odd_job_key_message` in

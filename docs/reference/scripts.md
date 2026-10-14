@@ -1110,8 +1110,8 @@ refused, so a change there stops this lint rather than silently changing
 what an arm means.
 
 A workflow whose `jobs:` holds a key GitHub Actions refuses (an empty
-one, one holding a line break or a tab, a non-scalar one, or a merge
-key) is a finding and its jobs are not read: the key would be listed as
+one, one holding a tab, a line break, a carriage return or a NUL, a
+non-scalar one, or a merge key) is a finding and its jobs are not read: the key would be listed as
 other names or as none, hiding a notify job. Every `yq` read of a
 workflow passes YQ_MERGE_SPEC, so a merge list (`<<: [*a, *b]`) inside a
 job is read first mapping wins, as the YAML merge specification says.
@@ -2658,8 +2658,9 @@ reporting the counts.
 
 Shared reading rules for the `jobs:` map of a workflow.
 Several lints list the job keys one per line and read each key back,
-so a key the line cannot carry (an empty one, one holding a line break
-or a tab, one that is not a scalar) is read as other names or as none,
+so a key the line cannot carry (an empty one, one holding a tab, a line
+break, a carriage return or a NUL, one that is not a scalar) is read as
+other names or as none,
 and a merge key (`<<`) directly under `jobs:` lists as the key `<<`
 while the jobs it brings in are never read. GitHub Actions refuses a
 job id outside `[A-Za-z_][A-Za-z0-9_-]*`, so no runnable workflow has

@@ -2,8 +2,9 @@
 #
 # @description Shared reading rules for the `jobs:` map of a workflow.
 # Several lints list the job keys one per line and read each key back,
-# so a key the line cannot carry (an empty one, one holding a line break
-# or a tab, one that is not a scalar) is read as other names or as none,
+# so a key the line cannot carry (an empty one, one holding a tab, a line
+# break, a carriage return or a NUL, one that is not a scalar) is read as
+# other names or as none,
 # and a merge key (`<<`) directly under `jobs:` lists as the key `<<`
 # while the jobs it brings in are never read. GitHub Actions refuses a
 # job id outside `[A-Za-z_][A-Za-z0-9_-]*`, so no runnable workflow has
@@ -64,7 +65,7 @@ function first_odd_job_key() {
 # @arg $1 workflow path
 # @arg $2 the key as JSON, from `first_odd_job_key`
 function odd_job_key_message() {
-  printf '%s: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
+  printf '%s: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: %s)\n' \
     "$1" "$2"
 }
 

@@ -81,8 +81,8 @@
 # what an arm means.
 #
 # A workflow whose `jobs:` holds a key GitHub Actions refuses (an empty
-# one, one holding a line break or a tab, a non-scalar one, or a merge
-# key) is a finding and its jobs are not read: the key would be listed as
+# one, one holding a tab, a line break, a carriage return or a NUL, a
+# non-scalar one, or a merge key) is a finding and its jobs are not read: the key would be listed as
 # other names or as none, hiding a notify job. Every `yq` read of a
 # workflow passes YQ_MERGE_SPEC, so a merge list (`<<: [*a, *b]`) inside a
 # job is read first mapping wins, as the YAML merge specification says.
