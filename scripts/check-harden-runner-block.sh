@@ -9,6 +9,8 @@
 # .github/workflows/*.yml uses egress-policy: block with a non-empty
 # allowed-endpoints list, locking in that posture so no step reverts
 # to audit or ships an empty allowlist — see docs/security/trust-model.md.
+# A step is a harden-runner step when its `uses:` holds
+# `step-security/harden-runner@`, its ASCII letters in either case.
 #
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
 # counted finding, and the file's jobs are not read.
@@ -22,6 +24,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
 
@@ -29,6 +33,12 @@ readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
 readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
 readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
+
+# The owner and repository of a harden-runner step, with each ASCII
+# letter in either case, so a respelling does not take a step out of the
+# lint's reach.
+HARDEN_RUNNER_RE="$(ascii_fold_regex step-security/harden-runner)@"
+readonly HARDEN_RUNNER_RE
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -79,7 +89,7 @@ for f in "${selected_files[@]}"; do
   if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"'
     | to_entries[] as $j
     | $j.value.steps[]
-    | select(.uses // "" | test("step-security/harden-runner@"))
+    | select(.uses // "" | test("'"${HARDEN_RUNNER_RE}"'"))
     | ($j.key | explode(.) | tostring) + "\t" + (.with."egress-policy" // "null") + "\t" + ((.with."allowed-endpoints" // "null") | sub("\n"; " "))
   ' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed, or non-string allowed-endpoints?)\n' "${f}" >&2

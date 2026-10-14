@@ -8,7 +8,9 @@
 # Asserts every job in .github/workflows/*.yml (or .yaml) begins with
 # `step-security/harden-runner@<sha>` as its first step. The eBPF
 # monitor must install before any I/O, so this invariant is binding —
-# see docs/security/trust-model.md.
+# see docs/security/trust-model.md. The owner and repository are matched
+# with their ASCII letters in either case; the ref is forty lower-case
+# hex digits.
 #
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
 # counted finding, and the file's jobs are not read.
@@ -26,6 +28,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
 
@@ -33,6 +37,12 @@ readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
 readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
 readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
+
+# The owner and repository of a harden-runner step, with each ASCII
+# letter in either case, so a respelling does not take a step out of the
+# lint's reach.
+HARDEN_RUNNER_RE="^$(ascii_fold_regex step-security/harden-runner)@"
+readonly HARDEN_RUNNER_RE
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -87,14 +97,14 @@ for f in "${selected_files[@]}"; do
       failed=$((failed + 1))
       continue
     fi
-    if [[ ${first_uses} != step-security/harden-runner@* ]]; then
+    if [[ ! ${first_uses} =~ ${HARDEN_RUNNER_RE} ]]; then
       printf '%s: job %q first step is %q, want step-security/harden-runner@<sha>\n' \
         "${f}" "${job}" "${first_uses}" >&2
       failed=$((failed + 1))
       continue
     fi
     # Hex digits spelled out: a `[0-9a-f]` range follows the locale.
-    if [[ ! ${first_uses} =~ ^step-security/harden-runner@[0123456789abcdef]{40}$ ]]; then
+    if [[ ! ${first_uses} =~ ${HARDEN_RUNNER_RE}[0123456789abcdef]{40}$ ]]; then
       printf '%s: job %q harden-runner ref %q not SHA-pinned\n' \
         "${f}" "${job}" "${first_uses}" >&2
       failed=$((failed + 1))

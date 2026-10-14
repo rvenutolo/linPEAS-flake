@@ -2,13 +2,14 @@
 # scripts/check-upload-artifact-strict.sh
 #
 # @description Lint: every step whose `uses:` starts with
-# `actions/upload-artifact@`, in that lower-case spelling, in every
+# `actions/upload-artifact@`, its ASCII letters in either case, in every
 # workflow under `.github/workflows/*.yml` sets
 # `with.if-no-files-found: error` so empty-glob bugs hard-fail.
 
 # Lint: every step whose `uses:` starts with `actions/upload-artifact@`,
-# in that lower-case spelling, in every workflow under
-# `.github/workflows/*.yml` sets `with.if-no-files-found: error`.
+# its ASCII letters in either case, in every workflow under
+# `.github/workflows/*.yml` sets `with.if-no-files-found: error`. A
+# finding names the owner and repository as the step spells them.
 #
 # The action's default is `warn`, which emits a warning and uploads
 # nothing when the source path doesn't match anything. That hides
@@ -43,6 +44,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
 
@@ -50,6 +53,12 @@ readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
 readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
 readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
+
+# The owner and repository a selected step names, with each ASCII letter
+# in either case, so a respelling does not take a step out of the lint's
+# reach.
+ACTION_RE="$(ascii_fold_regex actions/upload-artifact)"
+readonly ACTION_RE
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -107,7 +116,9 @@ for f in "${selected_files[@]}"; do
 
   # A `steps:` that is not a list holds no step to read; GitHub Actions
   # refuses such a job.
-  # Each row: the step's index; the job id; `with` when the step's
+  # Each row: the step's index; the job id; the owner and repository as
+  # the step spells them, which the selector limits to the action's own
+  # letters, `/` and `-`; `with` when the step's
   # `with:` is present but not a map, else `value`; then the kind of
   # that node (`none` when absent), and its tag and text as JSON
   # strings. A tag is free text (a verbatim tag decodes `%7C` to a pipe
@@ -131,42 +142,42 @@ for f in "${selected_files[@]}"; do
   # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
   if ! rows="$(yq eval --no-doc "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) as $k
     | .value | explode(.) | explode(.) | [.steps] | .[] | select(kind == "seq") | to_entries[]
-    | select(.value | explode(.) | explode(.) | explode(.) | (.uses // "") | test("^actions/upload-artifact@"))
-    | (.key | tostring) + "\t" + $k + "\t" + (.value | explode(.) | explode(.) | explode(.) |
+    | select(.value | explode(.) | explode(.) | explode(.) | (.uses // "") | test("^'"${ACTION_RE}"'@"))
+    | (.key | tostring) + "\t" + $k + "\t" + (.value | explode(.) | explode(.) | explode(.) | (.uses | sub("(?s)@.*$"; "")) + "\t" + (
         [.with | select(kind != "map" and tag != "!!null") | "with\t" + kind + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))]
         + [[.with | select(kind == "map") | ."if-no-files-found"] | .[] | "value\t" + kind + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))]
-        + ["value\tnone\t\"\"\t\"\""] | .[0])
+        + ["value\tnone\t\"\"\t\"\""] | .[0]))
   ' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
-  while IFS=$'\t' read -r idx job node kind tag val; do
+  while IFS=$'\t' read -r idx job action node kind tag val; do
     [[ -z ${job} ]] && continue
     if [[ ${node} == 'with' ]]; then
-      printf '%s: job %q step[%s] actions/upload-artifact with: has unexpected shape (kind=%s, tag=%s, value=%s); must be a map holding if-no-files-found: error\n' \
-        "${f}" "${job}" "${idx}" "${kind}" "${tag}" "${val}" >&2
+      printf '%s: job %q step[%s] %s with: has unexpected shape (kind=%s, tag=%s, value=%s); must be a map holding if-no-files-found: error\n' \
+        "${f}" "${job}" "${idx}" "${action}" "${kind}" "${tag}" "${val}" >&2
       failed=$((failed + 1))
       continue
     fi
     case "${kind} ${tag}" in
     'none '* | 'scalar "!!null"')
       # shellcheck disable=SC2016 # literal backticks in human-readable prose
-      printf '%s: job %q step[%s] actions/upload-artifact missing `with.if-no-files-found: error`\n' \
-        "${f}" "${job}" "${idx}" >&2
+      printf '%s: job %q step[%s] %s missing `with.if-no-files-found: error`\n' \
+        "${f}" "${job}" "${idx}" "${action}" >&2
       failed=$((failed + 1))
       ;;
     'scalar "!!str"')
       if [[ ${val} != '"error"' ]]; then
         # shellcheck disable=SC2016 # literal backticks in human-readable prose
-        printf '%s: job %q step[%s] actions/upload-artifact has `if-no-files-found: %q`; must be `error`\n' \
-          "${f}" "${job}" "${idx}" "$(json_text "${val}")" >&2
+        printf '%s: job %q step[%s] %s has `if-no-files-found: %q`; must be `error`\n' \
+          "${f}" "${job}" "${idx}" "${action}" "$(json_text "${val}")" >&2
         failed=$((failed + 1))
       fi
       ;;
     *)
-      printf '%s: job %q step[%s] actions/upload-artifact if-no-files-found has unexpected shape (kind=%s, tag=%s, value=%s); must be string "error"\n' \
-        "${f}" "${job}" "${idx}" "${kind}" "${tag}" "${val}" >&2
+      printf '%s: job %q step[%s] %s if-no-files-found has unexpected shape (kind=%s, tag=%s, value=%s); must be string "error"\n' \
+        "${f}" "${job}" "${idx}" "${action}" "${kind}" "${tag}" "${val}" >&2
       failed=$((failed + 1))
       ;;
     esac

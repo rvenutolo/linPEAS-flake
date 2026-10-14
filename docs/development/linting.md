@@ -674,6 +674,14 @@ ranges hold ASCII and character classes keep the reading the runner
 gives them, and it leaves `BASH_REMATCH` set. A function that needs a
 byte reading instead declares `local LC_ALL=C`.
 
+A lint that selects a remote action by its owner and repository matches
+them with their ASCII letters in either case, through the regex
+`ascii_fold_regex` in the same library prints: one bracket of the two
+letters (`[aA]`) per letter, for a bash `=~` or a `yq` `test()`. A
+case-insensitive regex flag (`(?i)`) is not used for this, because it
+also folds letters outside ASCII: `yq` reads the Kelvin sign as `k` and
+the long s as `s` under it.
+
 Other matchers measured on this tree do not need this: `[0-9]` is ASCII
 in GNU `grep`, `sed`, `gawk`, `mawk`, `jq` and `yq` in every locale, and
 bash glob patterns read ranges as ASCII while `globasciiranges` is on
