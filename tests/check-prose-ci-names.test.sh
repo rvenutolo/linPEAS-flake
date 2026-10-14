@@ -317,7 +317,7 @@ function main() {
   # (the sentence below would pass), and a merge key must not hide the job
   # it brings in (the sentence names a real job and must stay silent).
   local odd_root odd_refused
-  odd_refused='jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
+  odd_refused='jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read'
   odd_root="$(mktemp --directory)"
   mkdir --parents "${odd_root}/docs" "${odd_root}/workflows"
   git -C "${odd_root}" init --quiet

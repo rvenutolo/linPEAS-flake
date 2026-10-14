@@ -295,25 +295,35 @@ EOF
   fi
   printf 'OK   %s\n' "${name}"
 }
-readonly odd_key='holds a tab or a line break, which the job line read cannot carry'
+# The shared job-key reading of scripts/lib/job-keys.sh refuses the key,
+# naming it as JSON.
+readonly odd_key='jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: '
 expect_job_key job-key-tab-forges-line \
   "b\\tBASH_VERSINFO[\$(>${key_dir}/job-key-tab-forges-line.marker)]" \
-  "job key \"b\\tBASH_VERSINFO[\$(>${key_dir}/job-key-tab-forges-line.marker)]\" ${odd_key}"
+  "${odd_key}\"b\\tBASH_VERSINFO[\$(>${key_dir}/job-key-tab-forges-line.marker)]\")"
 expect_job_key job-key-line-break-forges-line \
   "b\\nc\\tBASH_VERSINFO[\$(>${key_dir}/job-key-line-break-forges-line.marker)]" \
-  "job key \"b\\nc\\tBASH_VERSINFO[\$(>${key_dir}/job-key-line-break-forges-line.marker)]\" ${odd_key}"
-expect_job_key job-key-tab-digits-forges-line 'b\t5' "job key \"b\\t5\" ${odd_key}"
-expect_job_key job-key-digits-line-break-forges-line '7\n5' "job key \"7\\n5\" ${odd_key}"
-expect_job_key job-key-leading-line-break '\nx' "job key \"\\nx\" ${odd_key}"
-expect_job_key job-key-forges-whole-rows 'b\t999\nc' "job key \"b\\t999\\nc\" ${odd_key}"
+  "${odd_key}\"b\\nc\\tBASH_VERSINFO[\$(>${key_dir}/job-key-line-break-forges-line.marker)]\")"
+expect_job_key job-key-tab-digits-forges-line 'b\t5' "${odd_key}\"b\\t5\")"
+expect_job_key job-key-digits-line-break-forges-line '7\n5' "${odd_key}\"7\\n5\")"
+expect_job_key job-key-leading-line-break '\nx' "${odd_key}\"\\nx\")"
+expect_job_key job-key-forges-whole-rows 'b\t999\nc' "${odd_key}\"b\\t999\\nc\")"
 readonly release_finding="job 'build' downloads a GitHub release asset but does not allowlist release-assets.githubusercontent.com (the github.com redirect is unconditional)"
-expect_job_key job-key-empty '' "a job key is empty or null, so that job's allowlist cannot be read"
+expect_job_key job-key-empty '' "${odd_key}\"\")"
+# A NUL, a carriage return and a key that is not a scalar are refused by
+# name too: the NUL would be dropped from the name bash reads, the
+# carriage return read as part of it, and a list or map key read as no
+# name at all.
+expect_job_key job-key-nul 'a\0b' "${odd_key}\"a\\u0000b\")"
+expect_job_key job-key-carriage-return 'a\rb' "${odd_key}\"a\\rb\")"
+expect_job_key job-key-list $'? [a]\n  ' "${odd_key}\"[a]\")" raw
+expect_job_key job-key-map $'? {a: 1}\n  ' "${odd_key}\"{a: 1}\")" raw
 # A key is tested whatever its tag: an integer key is read, and a tag
 # on a key holding a tab does not hide it.
 expect_job_key job-key-integer 5 "${release_finding}" raw
-expect_job_key job-key-tagged-tab '!!int "b\t6"' "job key \"b\\t6\" ${odd_key}" raw
+expect_job_key job-key-tagged-tab '!!int "b\t6"' "${odd_key}\"b\\t6\")" raw
 # Two such keys: the finding names the first.
-expect_job_key job-key-two-odd $'"b\\t7": {}\n  "c\\t8"' "job key \"b\\t7\" ${odd_key}" raw
+expect_job_key job-key-two-odd $'"b\\t7": {}\n  "c\\t8"' "${odd_key}\"b\\t7\")" raw
 
 # A job key is data, never expression text. Each key below closes a
 # quoted segment if spliced into a `yq` expression: it would end the
@@ -752,7 +762,7 @@ function expect_key_finding() {
 readonly EVIL_STEPS=$'    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            evil.example.com:443\n      - run: echo PAYLOAD_RAN\n'
 readonly NIX_HOST_STEPS=$'    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            cache.nixos.org:443\n      - run: echo PAYLOAD_RAN\n'
 readonly EMPTY_KEY_FINDING="a job key is empty or null, so that job's allowlist cannot be read"
-expect_key_finding job-key-empty-string-unread $'  "":\n'"${EVIL_STEPS}" "${EMPTY_KEY_FINDING}"
+expect_key_finding job-key-empty-string-unread $'  "":\n'"${EVIL_STEPS}" "${odd_key}\"\")"
 expect_key_finding job-key-tilde-unread $'  ~:\n'"${EVIL_STEPS}" "${EMPTY_KEY_FINDING}"
 expect_key_finding job-key-plain-null-unread $'  null:\n'"${EVIL_STEPS}" "${EMPTY_KEY_FINDING}"
 expect_key_finding job-key-duplicate-host-first $'  build:\n'"${NIX_HOST_STEPS}"$'  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
@@ -795,7 +805,7 @@ printf '%s\n' "#!${BASH}" \
   'done' \
   "exec ${real_yq@Q} \"\$@\"" >"${key_dir}/stub/yq"
 chmod +x -- "${key_dir}/stub/yq"
-cp -- "${key_dir}/wf/job-key-empty.yml" "${key_dir}/wf/stubbed.yml"
+cp -- "${key_dir}/wf/job-key-integer.yml" "${key_dir}/wf/stubbed.yml"
 # @arg $1 scenario name  @arg $2 STUB_ROWS  @arg $3 STUB_FAIL_KEYS
 # @arg $4 the expected finding line, after the file name
 # @arg $5 STUB_COUNT  @arg $6 STUB_FAIL_COUNT
@@ -826,7 +836,7 @@ expect_stubbed job-line-row-empty-name-ends-read $'\t5\nbuild\tX' '' "a job key 
 # A key is read from the line yq reports for it, after the leading lines
 # yq leaves out; a line that does not hold the key is a finding.
 expect_stubbed job-line-row-wrong-line $'build\t1' '' "job key 'build' is not on line 1, where yq reports it, so its line number cannot be trusted to bound its block"
-# Line 1 of the file is `name: job-key-empty`: a key that appears only
+# Line 1 of the file is `name: job-key-integer`: a key that appears only
 # later in the line, or that is a prefix of a word with no colon after it,
 # is not on that line.
 expect_stubbed job-line-row-key-mid-line $'key\t1' '' "job key 'key' is not on line 1, where yq reports it, so its line number cannot be trusted to bound its block"

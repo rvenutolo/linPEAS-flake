@@ -442,7 +442,7 @@ EOF
       "${SCRIPT}" >"${ok_stdout}" 2>"${ok_err}" || ok_rc=$?
     printf 'harness-assert-outcome: exit=%d\n' "${ok_rc}" >"${ok_outcome}"
     harness_assert_record "ci.yml ${ok_label} job key is refused" \
-      "${ok_dir}/ci.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: ${ok_key})" \
+      "${ok_dir}/ci.yml: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: ${ok_key})" \
       "${ok_outcome}" "${ok_stdout}" "${ok_err}"
     if [[ ${ok_rc} -eq 2 ]] &&
       grep --fixed-strings --quiet -- "which GitHub Actions refuses; its jobs are not read (first: ${ok_key})" "${ok_err}" &&

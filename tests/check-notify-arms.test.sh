@@ -1162,7 +1162,7 @@ and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled
           title: linebreak
           body: "linebreak <!-- notify-arms: linebreak.yml/j k = success -->"'
   run_scenario job-key-line-break-is-a-finding 1 \
-    '.github/workflows/linebreak.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "j\nk")'
+    '.github/workflows/linebreak.yml: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "j\nk")'
 
   fresh_root
   odd_workflow mergekey.yml 'x-jobs: &more
@@ -1184,7 +1184,7 @@ jobs:
       - run: echo PAYLOAD_RAN
   <<: *more'
   run_scenario job-key-merge-key-is-a-finding 1 \
-    '.github/workflows/mergekey.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "<<")'
+    '.github/workflows/mergekey.yml: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "<<")'
 
   fresh_root
   odd_workflow emptykey.yml 'jobs:
@@ -1204,7 +1204,7 @@ jobs:
           title: emptykey
           body: emptykey'
   run_scenario job-key-empty-is-a-finding 1 \
-    '.github/workflows/emptykey.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+    '.github/workflows/emptykey.yml: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
 
   # A job is looked up by its exact key. `yq` reads `*` and `?` in an
   # index as wildcards, so a job keyed `n*` read through one would also
@@ -1303,7 +1303,7 @@ jobs:
   printf '  "":\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
     >>"${ROOT}/.github/workflows/octoscan.yml"
   run_scenario scanner-job-key-refusal-is-a-finding-not-could-not-run 1 \
-    '.github/workflows/octoscan.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+    '.github/workflows/octoscan.yml: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
   refute_stderr 'has no notify-workflow-result job'
   refute_stderr 'which is not a notify-workflow-result job'
   refute_stderr 'has no notify-arms marker'
@@ -1333,7 +1333,7 @@ jobs:
           body: refused'
   printf 'A failed run <!-- notify-arms: refused-marked.yml/notify = failure cancelled -->.\n' >>"${ROOT}/${DOC}"
   run_scenario refused-workflow-doc-marker-is-not-a-second-finding 1 \
-    '.github/workflows/refused-marked.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+    '.github/workflows/refused-marked.yml: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
   refute_stderr 'which is not a notify-workflow-result job'
 
   # Skipping a marker under a refused workflow does not end the scan: a
@@ -1361,7 +1361,7 @@ jobs:
           body: refused'
   printf 'A failed run <!-- notify-arms: refused-marked.yml/notify = failure cancelled -->.\nA ghost run <!-- notify-arms: ghost.yml/notify = failure -->.\n' >>"${ROOT}/${DOC}"
   run_scenario refused-workflow-marker-does-not-end-the-scan 1 \
-    '.github/workflows/refused-marked.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
+    '.github/workflows/refused-marked.yml: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: "")'
   also_expect 'marker names ghost.yml/notify, which is not a notify-workflow-result job'
   refute_stderr 'marker names refused-marked.yml/notify'
 

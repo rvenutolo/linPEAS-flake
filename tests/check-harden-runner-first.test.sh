@@ -126,7 +126,7 @@ function expect_exact() {
   fi
   printf 'OK   %s\n' "${name}"
 }
-readonly ODD_HEAD='DIR/built.yml: jobs: holds a job key that is empty, holds a line break or a tab, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: '
+readonly ODD_HEAD='DIR/built.yml: jobs: holds a job key that is empty, holds a tab, a line break, a carriage return or a NUL, is not a scalar, or is a merge key, which GitHub Actions refuses; its jobs are not read (first: '
 expect_exact 'a workflow yq cannot parse is reported once and counted once' \
   'jobs: [unterminated\n' 1 \
   "Error: YQ
