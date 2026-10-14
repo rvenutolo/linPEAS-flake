@@ -1269,6 +1269,20 @@ jobs:
     "11 body marker(s) and 11 docs marker(s) match the arms of 10 scanner notify job(s) (${TALLY}); scanned 18 workflow(s)"
   refute_stderr 'names markkey.yml/nx'
 
+  # A notify job in a scanner workflow is derived with or without a
+  # marker, so the steps read before its notify step decide its verdict.
+  # Read through a wildcard index, the steps of job `za`, listed before
+  # `z*`, would be read as steps of `z*` and block it.
+  fresh_root
+  printf '%s\n' '  za:' '    runs-on: ubuntu-latest' '    steps:' '      - uses: foo/bar@v1' \
+    '  "z*":' '    needs: analyze' '    if: always()' '    runs-on: ubuntu-latest' '    steps:' \
+    '      - uses: ./.github/actions/notify-workflow-result' '        with:' \
+    '          result: ${{ needs.analyze.result }}' '          label: starkey' \
+    '          title: starkey' '          body: PAYLOAD_RAN text only' >>"${ROOT}/${CQ}"
+  run_scenario job-key-asterisk-reads-only-its-own-steps 1 \
+    '.github/workflows/codeql.yml: job z* has no notify-arms marker in its issue body'
+  refute_stderr 'a step before the notify step can fail and skip it ("foo/bar@v1")'
+
   # A refused scanner workflow is one finding: its missing notify listing
   # is not also a could-not-run, and the docs markers naming its jobs are
   # not reported as naming a non-notify job (its jobs were never read).
