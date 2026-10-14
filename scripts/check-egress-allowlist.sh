@@ -838,7 +838,7 @@ for f in "${selected_files[@]}"; do
       notify_jobs=$((notify_jobs + 1))
 
       # A step carrying no `uses:` — a `run:` step — arrives from yq as an
-      # empty line, so it falls through to the default arm and widens the
+      # empty line, so it matches none of the three steps and widens the
       # job to the extended shape. That is the intent: a job doing work
       # beyond notifying may reach hosts this declaration does not name.
       pure_shape=1
