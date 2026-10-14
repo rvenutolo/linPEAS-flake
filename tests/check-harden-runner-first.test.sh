@@ -159,4 +159,27 @@ expect_exact 'a job key written as an alias is named by what it stands for (hard
   'x-k: &k a\njobs:\n  *k :\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
   "${NO_FIRST_STEP}"
 
+# The first step is read as harden-runner whatever the case of the ASCII
+# letters in its owner and repository, as the block-mode lint reads it.
+# The ref keeps its reading: forty lower-case hex digits.
+readonly HR_SHA40='0123456789abcdef0123456789abcdef01234567'
+expect_exact 'a pinned first step spelled in mixed case passes (harden-runner first) as mixed-case' \
+  "jobs:\n  a:\n    steps:\n      - uses: Step-Security/Harden-Runner@${HR_SHA40}\n" 0 ''
+expect_exact 'a pinned first step spelled in upper case passes (harden-runner first) as upper-case' \
+  "jobs:\n  a:\n    steps:\n      - uses: STEP-SECURITY/HARDEN-RUNNER@${HR_SHA40}\n" 0 ''
+expect_exact 'an unpinned first step spelled in mixed case is named as written (harden-runner first) as mixed-case' \
+  'jobs:\n  a:\n    steps:\n      - uses: Step-Security/Harden-Runner@v2\n' 1 \
+  'DIR/built.yml: job a harden-runner ref Step-Security/Harden-Runner@v2 not SHA-pinned
+1 job(s) missing harden-runner as first step'
+expect_exact 'a ref in upper-case hex is not SHA-pinned (harden-runner first) as upper-case' \
+  'jobs:\n  a:\n    steps:\n      - uses: step-security/harden-runner@0123456789ABCDEF0123456789abcdef01234567\n' 1 \
+  'DIR/built.yml: job a harden-runner ref step-security/harden-runner@0123456789ABCDEF0123456789abcdef01234567 not SHA-pinned
+1 job(s) missing harden-runner as first step'
+# The long s folds to `s` under a case-insensitive match; it is no ASCII
+# letter, and no repository name holds it.
+expect_exact 'a non-ASCII letter that folds to an ASCII one is no harden-runner step (harden-runner first)' \
+  "jobs:\n  a:\n    steps:\n      - uses: \xc5\xbftep-security/harden-runner@${HR_SHA40}\n" 1 \
+  "DIR/built.yml: job a first step is $(printf '%q' $'\xc5\xbf'"tep-security/harden-runner@${HR_SHA40}"), want step-security/harden-runner@<sha>
+1 job(s) missing harden-runner as first step"
+
 printf 'all tests passed\n'

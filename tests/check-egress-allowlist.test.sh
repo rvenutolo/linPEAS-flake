@@ -53,6 +53,18 @@ expect bad-scorecard-missing-osv.yml 1 "api.osv.dev"
 expect bad-scorecard-missing-deps-dev.yml 1 "api.deps.dev"
 expect bad-attestation-verify-missing-tuf.yml 1 "tuf-repo.github.com"
 
+# Respelling an action in another case must not take a job out of a
+# rule's reach, so each rule keyed on a remote action reads it whatever
+# the case of the ASCII letters in its owner and repository. Each fixture
+# is one of those above with one `uses:` respelled.
+expect bad-mixed-case-harden-runner.yml 1 "does not allowlist get.trivy.dev"
+expect bad-mixed-case-trivy.yml 1 "uses trivy-action but does not allowlist get.trivy.dev"
+expect bad-mixed-case-flakehub.yml 1 "uses flakehub-cache-action; the action is banned"
+expect bad-mixed-case-codeql.yml 1 "uses codeql-action/init but does not allowlist release-assets.githubusercontent.com"
+expect bad-mixed-case-sbom.yml 1 "uses anchore/sbom-action but does not allowlist get.anchore.io"
+expect bad-mixed-case-scan.yml 1 "uses anchore/scan-action but does not allowlist grype.anchore.io"
+expect bad-mixed-case-dockerhub-description.yml 1 "uses peter-evans/dockerhub-description but does not allowlist hub.docker.com"
+
 # The mirror of assertion 7: a job that runs the setup-nix composite must carry
 # both nix hosts. Proven per host rather than all-or-nothing — the second
 # fixture carries cache.nixos.org and is still a violation, and its single
@@ -77,6 +89,10 @@ expect no-such-workflow.yml 2 'selected 0 of'
 expect good-notify-parity.yml 0 ""
 expect bad-notify-missing-host.yml 1 "github.com:443"
 expect bad-notify-extra-host.yml 1 "cache.nixos.org"
+# A harden-runner or checkout step spelled in mixed case is still one of
+# the pure shape's three steps, so the extra host is still refused.
+expect bad-mixed-case-notify-checkout.yml 1 "composite and nothing else, yet allowlists cache.nixos.org"
+expect bad-mixed-case-notify-harden-runner.yml 1 "composite and nothing else, yet allowlists cache.nixos.org"
 expect good-notify-sha-pinned.yml 0 ""
 # The SHA-pinned self-reference has to be discovered, not merely tolerated: a
 # clean run over the matching pinned job says nothing about whether the job

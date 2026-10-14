@@ -171,4 +171,22 @@ ${ONE}"
 expect_built 'a merge list inside a step with: is read first mapping wins: an error first passes' \
   'x-a: &A {if-no-files-found: warn}\nx-b: &B {if-no-files-found: error}\non: push\njobs:\n  ml:\n    steps:\n      - uses: actions/upload-artifact@abc\n        with: {<<: [*B, *A]}\n' 0 ''
 
+# Respelling a step in another case must not take it out of the lint's
+# reach, so a step is selected whatever the case of the ASCII letters
+# before the `@`, and the finding names it as written.
+expect_built 'a step spelled in mixed case is an upload step, named as written' \
+  'on: push\njobs:\n  mixed:\n    steps:\n      - uses: Actions/Upload-Artifact@abc\n' 1 \
+  "%W: job mixed step[0] Actions/Upload-Artifact missing ${BT}with.if-no-files-found: error${BT}
+${ONE}"
+expect_built 'a step spelled in upper case holding a bad value is read' \
+  'on: push\njobs:\n  upper:\n    steps:\n      - uses: ACTIONS/UPLOAD-ARTIFACT@abc\n        with:\n          if-no-files-found: warn\n' 1 \
+  "%W: job upper step[0] ACTIONS/UPLOAD-ARTIFACT has ${BT}if-no-files-found: warn${BT}; must be ${BT}error${BT}
+${ONE}"
+expect_built 'a step spelled in mixed case that sets error passes' \
+  'on: push\njobs:\n  mixedok:\n    steps:\n      - uses: Actions/Upload-Artifact@abc\n        with:\n          if-no-files-found: error\n' 0 ''
+# The long s folds to `s` under a case-insensitive regex flag; it is no
+# ASCII letter, and no repository name holds it.
+expect_built 'a non-ASCII letter that folds to an ASCII one is no upload step' \
+  'on: push\njobs:\n  longs:\n    steps:\n      - uses: action\xc5\xbf/upload-artifact@abc\n' 0 ''
+
 printf 'all tests passed\n'
