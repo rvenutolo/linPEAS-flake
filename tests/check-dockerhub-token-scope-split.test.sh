@@ -199,6 +199,57 @@ function main() {
     'dockerhub-sync.yml: consumes secrets.DOCKERHUB_TOKEN_RW'
   rm --recursive --force -- "${dir}"
 
+  # GitHub Actions reads a property through the index form as well, so
+  # each rule reads `secrets['NAME']` as it reads `secrets.NAME`, with
+  # spaces inside the brackets, and inside a YAML single-quoted scalar
+  # that writes each quote twice.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  printf "      - with:\n          password: \${{ secrets['DOCKERHUB_TOKEN_DELETE'] }}\n" \
+    >>"${dir}/release-on-bump.yml"
+  assert_run 'index-form DELETE token in release fails' "${dir}" 1 \
+    'release-on-bump.yml: consumes secrets.DOCKERHUB_TOKEN_DELETE'
+  rm --recursive --force -- "${dir}"
+
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  printf "      - env:\n          X: '\${{ Secrets[ ''DockerHub_Token_Rw'' ] }}'\n" \
+    >>"${dir}/dockerhub-sync.yml"
+  assert_run 'index-form RW token in a single-quoted scalar in sync fails' "${dir}" 1 \
+    'dockerhub-sync.yml: consumes secrets.DOCKERHUB_TOKEN_RW'
+  rm --recursive --force -- "${dir}"
+
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  printf "      - env:\n          X: \${{ SECRETS['DOCKERHUB_TOKEN_RW'] }}\n" \
+    >>"${dir}/verify-latest-release.yml"
+  assert_run 'index-form RW token in verify fails' "${dir}" 1 \
+    'verify-latest-release.yml: consumes secrets.DOCKERHUB_TOKEN_RW'
+  rm --recursive --force -- "${dir}"
+
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  printf "      - env:\n          Y: \${{ secrets['DOCKERHUB_TOKEN'] }}\n" \
+    >>"${dir}/release-on-bump.yml"
+  assert_run 'index-form unsuffixed token fails' "${dir}" 1 \
+    "release-on-bump.yml: secrets['DOCKERHUB_TOKEN'] is not authoritative"
+  rm --recursive --force -- "${dir}"
+
+  # The producers in the index form still consume their tokens, and a
+  # suffix in the index form is authoritative in a workflow of its own.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  printf "jobs:\n  push:\n    steps:\n      - env:\n          DOCKERHUB_TOKEN: \${{ secrets['DOCKERHUB_TOKEN_RW'] }}\n" \
+    >"${dir}/release-on-bump.yml"
+  printf "jobs:\n  sync:\n    steps:\n      - with:\n          password: \${{ SECRETS[ 'DockerHub_Token_Delete' ] }}\n" \
+    >"${dir}/dockerhub-sync.yml"
+  printf "jobs:\n  other:\n    steps:\n      - env:\n          Z: \${{ secrets['dockerhub_token_rw'] }}\n" \
+    >"${dir}/other.yml"
+  printf "jobs:\n  other:\n    steps:\n      - env:\n          Z: '\${{ secrets[''DOCKERHUB_TOKEN_DELETE''] }}'\n" \
+    >"${dir}/other-quoted.yml"
+  assert_run 'producers in the index form pass' "${dir}" 0 ''
+  rm --recursive --force -- "${dir}"
+
   dir="$(mktemp --directory)"
   write_baseline "${dir}"
   # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion

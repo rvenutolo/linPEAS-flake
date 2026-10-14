@@ -225,4 +225,20 @@ for spelling in secrets.BUMP_APP_PRIVATE_KEY secrets.bump_app_private_key Secret
 done
 expect_body app-key-other-secret.yml "${KEY_JOB_HEAD}secrets.bump_app_other_key${KEY_JOB_TAIL}" 0 ''
 
+# GitHub Actions reads a property through the index form as well:
+# `secrets['BUMP_APP_PRIVATE_KEY']` names the same key, with spaces inside
+# the brackets, or inside a YAML single-quoted scalar that writes each
+# quote twice. A double-quoted index is an expression error GitHub
+# refuses, so it is no reference, and another secret in the index form
+# is the control.
+expect_body app-key-index.yml "${KEY_JOB_HEAD}secrets['BUMP_APP_PRIVATE_KEY']${KEY_JOB_TAIL}" 1 \
+  "DIR/app-key-index.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body app-key-index-mixed-case.yml "${KEY_JOB_HEAD}Secrets[ 'Bump_App_Private_Key' ]${KEY_JOB_TAIL}" 1 \
+  "DIR/app-key-index-mixed-case.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+# shellcheck disable=SC2016 # the workflow expression is literal text
+expect_body app-key-index-yaml-single-quoted.yml "${KEY_JOB_HEAD%'${{ '}'\${{ secrets[''BUMP_APP_PRIVATE_KEY''] }}'"$'\n' 1 \
+  "DIR/app-key-index-yaml-single-quoted.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body app-key-index-double-quoted.yml "${KEY_JOB_HEAD}secrets[\"BUMP_APP_PRIVATE_KEY\"]${KEY_JOB_TAIL}" 0 ''
+expect_body app-key-index-other-secret.yml "${KEY_JOB_HEAD}secrets['bump_app_other_key']${KEY_JOB_TAIL}" 0 ''
+
 printf 'all tests passed\n'
