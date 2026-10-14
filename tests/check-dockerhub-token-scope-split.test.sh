@@ -391,7 +391,7 @@ function main() {
     "$(command -v grep)" >"${dir}/stub/grep"
   chmod +x -- "${dir}/stub/grep"
   ASSERT_PATH_PREFIX="${dir}/stub" assert_run 'grep failing on the decoded text is a could-not-run' "${dir}" 2 \
-    'grep failed reading the decoded scalars of'
+    'could not grep the decoded scalars of'
   rm --recursive --force -- "${dir}"
 
   # Markdown: the write-scoped token in a delete snippet. The tree

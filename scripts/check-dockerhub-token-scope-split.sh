@@ -136,7 +136,7 @@ function consumes_secret() {
   rc=0
   LC_ALL=C grep --extended-regexp --quiet -- "${ref_re}" <<<"${decoded}" || rc=$?
   if ((rc > 1)); then
-    printf 'dockerhub-token-scope-split lint: grep failed reading the decoded scalars of %s\n' \
+    printf 'dockerhub-token-scope-split lint: could not grep the decoded scalars of %s\n' \
       "${file}" >&2
     exit 2
   fi
@@ -192,7 +192,7 @@ for wf in "${workflow_files[@]}"; do
   decoded_matches="$(LC_ALL=C grep --extended-regexp --only-matching -- \
     "${DOCKERHUB_TOKEN_REF_RE}" <<<"${decoded}")" || matches_rc=$?
   if ((matches_rc > 1)); then
-    printf 'dockerhub-token-scope-split lint: grep failed reading the decoded scalars of %s\n' \
+    printf 'dockerhub-token-scope-split lint: could not grep the decoded scalars of %s\n' \
       "${wf}" >&2
     exit 2
   fi
@@ -227,7 +227,7 @@ for wf in "${workflow_files[@]}"; do
   fi
   decoded="$(decoded_scalars "${wf}")" || exit 2
   if ! decoded_uses="$(secret_uses <<<"${decoded}")"; then
-    printf 'dockerhub-token-scope-split lint: grep failed reading the decoded scalars of %s\n' \
+    printf 'dockerhub-token-scope-split lint: could not grep the decoded scalars of %s\n' \
       "${wf}" >&2
     exit 2
   fi
