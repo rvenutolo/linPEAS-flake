@@ -71,7 +71,8 @@
 # item is an alias of the job's name). So is
 # a job whose notify step has an
 # `if:` of its own, follows a step other than step-security/harden-runner
-# or actions/checkout, runs the composite twice, or reaches it by any
+# or actions/checkout (each owner and repository read with its ASCII
+# letters in either case), runs the composite twice, or reaches it by any
 # other `uses:` than ./.github/actions/notify-workflow-result. The
 # composite's own result handling (failure and cancelled file, success
 # closes, skipped does nothing) is taken as fixed: its text from `runs:`
@@ -120,6 +121,8 @@ source "${_lib_dir}/lib/temp.sh"
 source "${_lib_dir}/lib/repo.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 
 require_tool git
 require_tool yq
@@ -129,6 +132,12 @@ require_tool sha256sum
 
 REPO_ROOT="$(repo_toplevel)"
 readonly REPO_ROOT
+
+# The steps a notify job may run before the notify step, by owner and
+# repository with each ASCII letter in either case, as GitHub resolves an
+# action's name.
+MODELLED_PRIOR_STEP_RE="^($(ascii_fold_regex step-security/harden-runner)|$(ascii_fold_regex actions/checkout))@"
+readonly MODELLED_PRIOR_STEP_RE
 
 # Env override (test-only):
 #   SCAN_ROOT_OVERRIDE — alternate root holding the prose to scan, its
@@ -763,7 +772,7 @@ function main() {
           die2 "cannot read the steps of ${WORKFLOWS_REL}/${base} job ${job}: yq exited $?"
         while IFS= read -r step; do
           [[ -n ${step} ]] || continue
-          [[ ${step} == step-security/harden-runner@* || ${step} == actions/checkout@* ]] && continue
+          ascii_match "${step}" "${MODELLED_PRIOR_STEP_RE}" && continue
           job_block["${key}"]="job ${job}: a step before the notify step can fail and skip it (\"${step}\"); only step-security/harden-runner and actions/checkout are modelled there"
           break
         done <<<"${prior}"

@@ -15,6 +15,10 @@
 # HTTP 401 under runner-IP-pool contention. See
 # docs/security/workflow-hardening.md.
 #
+# GitHub Actions reads a secret's name whatever its case, so the token is
+# matched with the ASCII letters of `secrets` and of `GITHUB_TOKEN` in
+# either case: `${{ secrets.github_token }}` is the same token.
+#
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
 # counted finding, and the file's jobs are not read.
 #
@@ -29,6 +33,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -36,6 +42,10 @@ readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
 readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
 # shellcheck disable=SC2016  # single quotes intentional: literal string, no expansion wanted
 readonly EXPECTED_TOKEN='${{ secrets.GITHUB_TOKEN }}'
+# The token once normalized, the ASCII letters of `secrets` and of the
+# name in either case.
+EXPECTED_TOKEN_RE="^\\\$\\{\\{ $(ascii_fold_regex secrets)\\.$(ascii_fold_regex github_token) \\}\\}\$"
+readonly EXPECTED_TOKEN_RE
 readonly COMPOSITE="./.github/actions/setup-nix"
 # Nix-installer actions a workflow must not call directly. Matched
 # case-insensitively against the action path (the part before `@`).
@@ -133,7 +143,7 @@ for f in "${selected_files[@]}"; do
       continue
     fi
     norm="$(normalize_expr "${token}")"
-    if [[ ${norm} != "${EXPECTED_TOKEN}" ]]; then
+    if ! ascii_match "${norm}" "${EXPECTED_TOKEN_RE}"; then
       printf '%s: job %q: setup-nix caller has wrong github-token (got %q, want %q)\n' \
         "${f}" "${job}" "${norm}" "${EXPECTED_TOKEN}" >&2
       failed=$((failed + 1))

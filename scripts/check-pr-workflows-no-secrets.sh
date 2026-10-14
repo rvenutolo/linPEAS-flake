@@ -13,6 +13,11 @@
 # if a future maintainer wires a non-GITHUB_TOKEN secret into a
 # PR-triggered workflow's env.
 #
+# GitHub Actions reads a secret's name whatever its case, so a reference
+# is read with the ASCII letters of `secrets` and of the name in either
+# case: `SECRETS.FOO` is refused, and `secrets.github_token` is the
+# GITHUB_TOKEN and allowed.
+#
 # Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the
 # test harness can point at a temp dir with a single fixture.
 #
@@ -27,6 +32,13 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/temp.sh
 source "${_lib_dir}/lib/temp.sh"
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
+
+# `secrets.` and the name after it, the context's ASCII letters in either
+# case, as a grep -E regex.
+SECRET_REF_RE="$(ascii_fold_regex secrets)\\.[A-Za-z0-9_]+"
+readonly SECRET_REF_RE
 
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
@@ -95,8 +107,8 @@ function scan_secrets() {
   local -r file="$1"
   local tmp
   tmp="$(make_temp)"
-  grep --extended-regexp --line-number \
-    '\$\{\{[[:space:]]*secrets\.[A-Za-z0-9_]+[[:space:]]*\}\}' \
+  LC_ALL=C grep --extended-regexp --line-number \
+    "\\\$\\{\\{[[:space:]]*${SECRET_REF_RE}[[:space:]]*\\}\\}" \
     "${file}" >"${tmp}" || true
 
   local line
@@ -106,12 +118,14 @@ function scan_secrets() {
     local rest="${line#*:}"
     local tokens_file
     tokens_file="$(make_temp)"
-    grep --extended-regexp --only-matching \
-      'secrets\.[A-Za-z0-9_]+' >"${tokens_file}" <<<"${rest}" || true
+    LC_ALL=C grep --extended-regexp --only-matching \
+      "${SECRET_REF_RE}" >"${tokens_file}" <<<"${rest}" || true
     local token
     while IFS= read -r token; do
       [[ -z ${token} ]] && continue
-      if [[ ${token} == 'secrets.GITHUB_TOKEN' ]]; then
+      # Under LC_ALL=C the token holds ASCII only, so upper-casing it
+      # folds nothing else.
+      if [[ ${token^^} == 'SECRETS.GITHUB_TOKEN' ]]; then
         allowed=$((allowed + 1))
         continue
       fi

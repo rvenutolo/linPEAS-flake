@@ -267,7 +267,9 @@ third path there is no such issue: close the
     metadata; `Read, Write`-only PAT returns `403`) — and by the manual
     recovery snippets in this runbook.
 
-Binding:
+Binding (in workflows, each `secrets.` reference is matched with the ASCII
+letters of `secrets` and of the name in either case, as GitHub Actions
+reads a secret's name whatever its case):
 
 1. `secrets.DOCKERHUB_TOKEN_RW` must never be consumed in `dockerhub-sync.yml`
     or the anonymous/read-only `verify-latest-release.yml` (the write-scoped
