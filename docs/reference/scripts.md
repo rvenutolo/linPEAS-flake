@@ -351,7 +351,9 @@ anonymous/read-only verify-latest-release.yml, and refuses the
 write-scoped token in dockerhub-sync.yml and verify-latest-release.yml.
 It does not check other workflows for either token. In every workflow, a
 secrets.DOCKERHUB_TOKEN reference without the \_RW or \_DELETE suffix is
-refused.
+refused. GitHub Actions reads a secret's name whatever its case, so each
+reference is matched with the ASCII letters of `secrets` and of the name
+in either case: `secrets.dockerhub_token_rw` is the write-scoped token.
 
 The same split binds every manual recovery snippet in the docs. A
 shell-fenced Markdown block that performs a tag delete
@@ -1098,7 +1100,8 @@ tag (read through an alias, including an alias of a list whose one
 item is an alias of the job's name). So is
 a job whose notify step has an
 `if:` of its own, follows a step other than step-security/harden-runner
-or actions/checkout, runs the composite twice, or reaches it by any
+or actions/checkout (each owner and repository read with its ASCII
+letters in either case), runs the composite twice, or reaches it by any
 other `uses:` than ./.github/actions/notify-workflow-result. The
 composite's own result handling (failure and cancelled file, success
 closes, skipped does nothing) is taken as fixed: its text from `runs:`
