@@ -342,6 +342,15 @@ function main() {
   run_spelling_scenario 'secret after a closing-brace pair in a string literal fails' \
     'literal-braces.yml' "format('{{ {0} }}', secrets.LITERAL_SECRET)" 1 stderr \
     'FILE:8: secrets.LITERAL_SECRET not allowed in PR-triggered workflow'
+  # A YAML single-quoted scalar writes each quote of the expression twice,
+  # and the file text is what the guard reads: a reference after a `}}`
+  # or a `{0}` in such a literal is still read.
+  run_spelling_scenario 'secret after a brace pair in a doubled-quote literal fails' \
+    'doubled-braces.yml' "format(''}}'', secrets.DOUBLED_SECRET)" 1 stderr \
+    'FILE:8: secrets.DOUBLED_SECRET not allowed in PR-triggered workflow'
+  run_spelling_scenario 'secret after a format placeholder in a doubled-quote literal fails' \
+    'doubled-placeholder.yml' "format(''{0}'', secrets.PLACEHOLDER_SECRET)" 1 stderr \
+    'FILE:8: secrets.PLACEHOLDER_SECRET not allowed in PR-triggered workflow'
   # None of these is a reference GitHub Actions reads: text outside
   # `${{ }}`, a double-quoted index (an expression error GitHub Actions
   # refuses), and `secrets` as a step id or a property inside a longer
