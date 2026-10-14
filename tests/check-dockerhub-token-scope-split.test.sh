@@ -209,7 +209,8 @@ function main() {
   rm --recursive --force -- "${dir}"
 
   # The producers spelled in lower and mixed case still consume their
-  # tokens, and a suffix in any case is authoritative.
+  # tokens, and a suffix in any case is authoritative, in a workflow of
+  # its own too.
   dir="$(mktemp --directory)"
   write_baseline "${dir}"
   # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
@@ -218,6 +219,9 @@ function main() {
   # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
   printf 'jobs:\n  sync:\n    steps:\n      - with:\n          password: ${{ SECRETS.DockerHub_Token_Delete }}\n' \
     >"${dir}/dockerhub-sync.yml"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf 'jobs:\n  other:\n    steps:\n      - env:\n          Z: ${{ secrets.DockerHub_Token_Rw }}\n' \
+    >"${dir}/other.yml"
   assert_run 'producers in lower and mixed case pass' "${dir}" 0 ''
   rm --recursive --force -- "${dir}"
 

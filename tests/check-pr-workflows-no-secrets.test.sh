@@ -119,20 +119,26 @@ function run_body_scenario() {
 }
 
 # @description Run the guard against one pull_request workflow written at
-# run time whose one job reads the secret reference given, spelled as
-# given, and assert one whole line of the stream named.
-# @arg $1 scenario name  @arg $2 file name  @arg $3 the reference, as `secrets.NAME` in any case
+# run time whose one job reads each secret reference given, spelled as
+# given, one per line from line 8, and assert one whole line of the
+# stream named.
+# @arg $1 scenario name  @arg $2 file name  @arg $3 the references, as `secrets.NAME` in any case, separated by spaces
 # @arg $4 expected exit code  @arg $5 stdout or stderr  @arg $6 expected line, with FILE standing for the workflow path
 function run_spelling_scenario() {
   local -r name="$1" file="$2" ref="$3" expected_exit="$4" stream="$5"
-  local tmpdir stderr_file stdout_file outcome_file want_file
+  local tmpdir stderr_file stdout_file outcome_file want_file each i=0
+  local -a refs
   tmpdir="$(mktemp --directory)"
   stderr_file="$(mktemp)"
   stdout_file="$(mktemp)"
   outcome_file="$(mktemp)"
-  # shellcheck disable=SC2016 # the workflow expression is literal text
-  printf 'on: pull_request\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: echo\n        env:\n          T: ${{ %s }}\n' \
-    "${ref}" >"${tmpdir}/${file}"
+  IFS=' ' read -r -a refs <<<"${ref}"
+  printf 'on: pull_request\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: echo\n        env:\n' >"${tmpdir}/${file}"
+  for each in "${refs[@]}"; do
+    i=$((i + 1))
+    # shellcheck disable=SC2016 # the workflow expression is literal text
+    printf '          T%d: ${{ %s }}\n' "${i}" "${each}" >>"${tmpdir}/${file}"
+  done
   local -r want="${6//FILE/${tmpdir}/${file}}"
   local actual_exit=0
   WORKFLOWS_DIR_OVERRIDE="${tmpdir}" \
@@ -301,12 +307,11 @@ function main() {
   run_spelling_scenario 'mixed-case secrets context with secret fails' \
     'mixed-context.yml' 'Secrets.super_secret' 1 stderr \
     'FILE:8: Secrets.super_secret not allowed in PR-triggered workflow'
-  run_spelling_scenario 'lower-case GITHUB_TOKEN is allowed' \
-    'lower-token.yml' 'secrets.github_token' 0 stdout \
-    'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 1 secrets.GITHUB_TOKEN reference(s) allowed'
-  run_spelling_scenario 'mixed-case GITHUB_TOKEN is allowed' \
-    'mixed-token.yml' 'Secrets.GitHub_Token' 0 stdout \
-    'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 1 secrets.GITHUB_TOKEN reference(s) allowed'
+  # Each spelling of GITHUB_TOKEN is counted as allowed: the count is the
+  # number of spellings.
+  run_spelling_scenario 'GITHUB_TOKEN in lower, mixed and upper case is allowed' \
+    'any-case-token.yml' 'secrets.github_token Secrets.GitHub_Token SECRETS.GITHUB_TOKEN' 0 stdout \
+    'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 3 secrets.GITHUB_TOKEN reference(s) allowed'
   # A workflow with no `on:` is not PR-triggered: beside a clean
   # PR-triggered one, it is counted as skipped.
   local no_on_dir no_on_out no_on_err no_on_outcome no_on_exit=0
