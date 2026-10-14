@@ -639,7 +639,7 @@ Every workflow job that holds a guard-required write scope includes a fork-guard
 
 Guard-required write scopes are any of: `contents: write`, `packages: write`, `id-token: write`, `attestations: write`, `actions: write`. A fork that inherits these workflows can otherwise fire them under its own `GITHUB_TOKEN` (or repo-scoped secrets, if any were configured) — accidentally cutting a release, pushing to the fork's container registry, minting OIDC tokens, or (for `actions: write`) deleting the fork's own Actions caches and re-running its failed jobs on triggers the fork owner never asked for. The repository check pins execution to the canonical repo.
 
-A job that mints a GitHub App installation token (via `actions/create-github-app-token`, or referencing `secrets.BUMP_APP_PRIVATE_KEY`, each matched with its ASCII letters in either case, as GitHub Actions reads a secret's name whatever its case) is likewise privileged despite declaring a read-only `GITHUB_TOKEN`: the App token carries its own write scopes, so the job can commit via the REST contents API, open pull requests, and enable auto-merge — all under the canonical repo's identity. Such a job must carry the same fork guard, otherwise a fork holding the App's private key as a secret could drive those writes against the canonical repo.
+A job that mints a GitHub App installation token (via `actions/create-github-app-token`, or referencing `secrets.BUMP_APP_PRIVATE_KEY` in the dot or the index form `secrets['BUMP_APP_PRIVATE_KEY']`, each matched with its ASCII letters in either case, as GitHub Actions reads a secret's name whatever its case) is likewise privileged despite declaring a read-only `GITHUB_TOKEN`: the App token carries its own write scopes, so the job can commit via the REST contents API, open pull requests, and enable auto-merge — all under the canonical repo's identity. Such a job must carry the same fork guard, otherwise a fork holding the App's private key as a secret could drive those writes against the canonical repo.
 
 GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every guard-required job must carry the guard in its own `if:` expression. Existing `if:` clauses are AND-ed with the repository check.
 
@@ -743,7 +743,9 @@ Nix-installer action from a workflow is forbidden — `cachix/install-nix-action
 `nixbuild/nix-quick-install-action` are named explicitly, and the lint
 also matches unlisted actions of the same family. The token is matched
 with the ASCII letters of `secrets` and of `GITHUB_TOKEN` in either case,
-as GitHub Actions reads a secret's name whatever its case.
+as GitHub Actions reads a secret's name whatever its case. It is required
+in the dot form: the index form `secrets['GITHUB_TOKEN']` is refused as the
+wrong token.
 {% endraw %}
 
 **Why.** Unauthenticated `api.github.com` tarball fetches are capped

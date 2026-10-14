@@ -119,10 +119,10 @@ function run_body_scenario() {
 }
 
 # @description Run the guard against one pull_request workflow written at
-# run time whose one job reads each secret reference given, spelled as
-# given, one per line from line 8, and assert one whole line of the
+# run time whose one job reads each expression given, written as given
+# inside `${{ }}`, one per line from line 8, and assert one whole line of the
 # stream named.
-# @arg $1 scenario name  @arg $2 file name  @arg $3 the references, as `secrets.NAME` in any case, separated by spaces
+# @arg $1 scenario name  @arg $2 file name  @arg $3 the expressions, each the text inside one `${{ }}`, separated by tabs
 # @arg $4 expected exit code  @arg $5 stdout or stderr  @arg $6 expected line, with FILE standing for the workflow path
 function run_spelling_scenario() {
   local -r name="$1" file="$2" ref="$3" expected_exit="$4" stream="$5"
@@ -132,7 +132,7 @@ function run_spelling_scenario() {
   stderr_file="$(mktemp)"
   stdout_file="$(mktemp)"
   outcome_file="$(mktemp)"
-  IFS=' ' read -r -a refs <<<"${ref}"
+  IFS=$'\t' read -r -a refs <<<"${ref}"
   printf 'on: pull_request\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: echo\n        env:\n' >"${tmpdir}/${file}"
   for each in "${refs[@]}"; do
     i=$((i + 1))
@@ -310,8 +310,55 @@ function main() {
   # Each spelling of GITHUB_TOKEN is counted as allowed: the count is the
   # number of spellings.
   run_spelling_scenario 'GITHUB_TOKEN in lower, mixed and upper case is allowed' \
-    'any-case-token.yml' 'secrets.github_token Secrets.GitHub_Token SECRETS.GITHUB_TOKEN' 0 stdout \
+    'any-case-token.yml' $'secrets.github_token\tSecrets.GitHub_Token\tSECRETS.GITHUB_TOKEN' 0 stdout \
     'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 3 secrets.GITHUB_TOKEN reference(s) allowed'
+  # GitHub Actions reads a property through the index form as well, so
+  # `secrets['NAME']` is the secret `secrets.NAME` is: another secret is
+  # refused, spaces inside the brackets or not, and GITHUB_TOKEN allowed.
+  run_spelling_scenario 'index-form secret fails' \
+    'index-form.yml' "secrets['SUPER_SECRET']" 1 stderr \
+    "FILE:8: secrets['SUPER_SECRET'] not allowed in PR-triggered workflow"
+  run_spelling_scenario 'index-form secret with spaces in the brackets fails' \
+    'index-spaces.yml' "Secrets[ 'super_secret' ]" 1 stderr \
+    "FILE:8: Secrets[ 'super_secret' ] not allowed in PR-triggered workflow"
+  run_spelling_scenario 'index-form GITHUB_TOKEN is allowed' \
+    'index-token.yml' "secrets['GITHUB_TOKEN']"$'\t'"SECRETS[ 'github_token' ]" 0 stdout \
+    'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 2 secrets.GITHUB_TOKEN reference(s) allowed'
+  # A reference is read wherever it sits inside `${{ }}`, not only alone
+  # there: beside an operator, as a function argument, or in the second
+  # expression on a line.
+  run_spelling_scenario 'secret beside an operator fails' \
+    'operator.yml' "secrets.OPERATOR_SECRET || 'fallback'" 1 stderr \
+    'FILE:8: secrets.OPERATOR_SECRET not allowed in PR-triggered workflow'
+  run_spelling_scenario 'index-form secret as a function argument fails' \
+    'function-arg.yml' "format('{0}', secrets['ARG_SECRET'])" 1 stderr \
+    "FILE:8: secrets['ARG_SECRET'] not allowed in PR-triggered workflow"
+  # shellcheck disable=SC2016 # the workflow expression is literal text
+  run_spelling_scenario 'secret in the second expression on a line fails' \
+    'second-expr.yml' 'secrets.GITHUB_TOKEN }} ${{ secrets.SECOND_SECRET' 1 stderr \
+    'FILE:8: secrets.SECOND_SECRET not allowed in PR-triggered workflow'
+  # A `}}` inside a string literal does not end the expression: a
+  # reference after it is still read.
+  run_spelling_scenario 'secret after a closing-brace pair in a string literal fails' \
+    'literal-braces.yml' "format('{{ {0} }}', secrets.LITERAL_SECRET)" 1 stderr \
+    'FILE:8: secrets.LITERAL_SECRET not allowed in PR-triggered workflow'
+  # A YAML single-quoted scalar writes each quote of the expression twice,
+  # and the file text is what the guard reads: a reference after a `}}`
+  # or a `{0}` in such a literal is still read.
+  run_spelling_scenario 'secret after a brace pair in a doubled-quote literal fails' \
+    'doubled-braces.yml' "format(''}}'', secrets.DOUBLED_SECRET)" 1 stderr \
+    'FILE:8: secrets.DOUBLED_SECRET not allowed in PR-triggered workflow'
+  run_spelling_scenario 'secret after a format placeholder in a doubled-quote literal fails' \
+    'doubled-placeholder.yml' "format(''{0}'', secrets.PLACEHOLDER_SECRET)" 1 stderr \
+    'FILE:8: secrets.PLACEHOLDER_SECRET not allowed in PR-triggered workflow'
+  # None of these is a reference GitHub Actions reads: text outside
+  # `${{ }}`, a double-quoted index (an expression error GitHub Actions
+  # refuses), and `secrets` as a step id or a property inside a longer
+  # path.
+  # shellcheck disable=SC2016 # the workflow expression is literal text
+  run_spelling_scenario 'text that is not a secret reference is not read' \
+    'not-read.yml' 'github.sha }} secrets.OUTSIDE_SECRET ${{ github.ref'$'\t''secrets["DOUBLE_SECRET"]'$'\t''steps.secrets.outputs.x || inputs.secrets' 0 stdout \
+    'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 0 secrets.GITHUB_TOKEN reference(s) allowed'
   # A workflow with no `on:` is not PR-triggered: beside a clean
   # PR-triggered one, it is counted as skipped.
   local no_on_dir no_on_out no_on_err no_on_outcome no_on_exit=0

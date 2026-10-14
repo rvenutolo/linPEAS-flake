@@ -137,6 +137,12 @@ done
 # shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
 expect_built 'github-token naming a longer secret fails' \
   'jobs:\n  a: {runs-on: x, steps: [{uses: ./.github/actions/setup-nix, with: {github-token: "${{ secrets.github_token_x }}"}}]}\n' 1 'has wrong github-token'
+# The token is required in the dot form: the index form names the same
+# secret to GitHub Actions, and the lint refuses it as the wrong token.
+expect_exact 'github-token in the index form is refused' \
+  "jobs:\n  a: {runs-on: x, steps: [{uses: ./.github/actions/setup-nix, with: {github-token: \"\${{ secrets['GITHUB_TOKEN'] }}\"}}]}\n" 1 \
+  "DIR/built.yml: job a: setup-nix caller has wrong github-token (got \\\$\\{\\{\\ secrets\\[\\'GITHUB_TOKEN\\'\\]\\ \\}\\}, want \\\$\\{\\{\\ secrets.GITHUB_TOKEN\\ \\}\\})
+check-setup-nix-required: 1 violation(s)"
 
 # `jobs:` written as an alias, and a job key written as an alias, are read
 # through: a clean job passes and an installer step is named by the job's

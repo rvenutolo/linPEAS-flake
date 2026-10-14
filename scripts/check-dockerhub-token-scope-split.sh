@@ -15,6 +15,9 @@
 # refused. GitHub Actions reads a secret's name whatever its case, so each
 # reference is matched with the ASCII letters of `secrets` and of the name
 # in either case: `secrets.dockerhub_token_rw` is the write-scoped token.
+# It reads the index form as the dot form: `secrets['DOCKERHUB_TOKEN_RW']`
+# is the write-scoped token too. A double-quoted index is an expression
+# error GitHub Actions refuses, and is not read.
 #
 # The same split binds every manual recovery snippet in the docs. A
 # shell-fenced Markdown block that performs a tag delete
@@ -58,10 +61,6 @@ source "${_lib_dir}/lib/md-fence.sh"
 # shellcheck source=scripts/lib/ascii-match.sh
 source "${_lib_dir}/lib/ascii-match.sh"
 
-# `secrets.`, its ASCII letters in either case, as a grep -E regex.
-SECRETS_DOT_RE="$(ascii_fold_regex secrets)\\."
-readonly SECRETS_DOT_RE
-
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
 if [[ ! -d ${WORKFLOWS_DIR} ]]; then
@@ -83,9 +82,10 @@ function violation() {
   failed=$((failed + 1))
 }
 
-# @description Return 0 if the file consumes secrets.<name>, else 1, with
-# the ASCII letters of `secrets` and of the name in either case. A
-# missing file returns 1 (treated as "does not consume").
+# @description Return 0 if the file consumes secrets.<name>, in the dot or
+# the index form, else 1, with the ASCII letters of `secrets` and of the
+# name in either case. A missing file returns 1 (treated as "does not
+# consume").
 # @arg $1 workflow file path
 # @arg $2 bare secret name (e.g. DOCKERHUB_TOKEN_RW)
 function consumes_secret() {
@@ -94,7 +94,7 @@ function consumes_secret() {
   [[ -f ${file} ]] || return 1
   name_re="$(ascii_fold_regex "${name,,}")"
   LC_ALL=C grep --extended-regexp --quiet \
-    "${SECRETS_DOT_RE}${name_re}([^A-Za-z0-9_]|\$)" "${file}"
+    "$(secret_ref_regex "${name_re}")([^A-Za-z0-9_]|\$)" "${file}"
 }
 
 # Absence: delete-scoped token must not leak into release/verify workflows.
@@ -118,13 +118,14 @@ if consumes_secret "${VERIFY_WF}" 'DOCKERHUB_TOKEN_RW'; then
   violation "${VERIFY_WF}: consumes secrets.DOCKERHUB_TOKEN_RW (verify is read-only; the write-scoped token is release-only)"
 fi
 
-# Suffix: every secrets.DOCKERHUB_TOKEN* reference must be _RW or _DELETE,
-# each read with its ASCII letters in either case.
+# Suffix: every secrets.DOCKERHUB_TOKEN* reference, in the dot or the
+# index form, must be _RW or _DELETE, each read with its ASCII letters in
+# either case.
 # A workflows dir that exists but holds no YAML leaves this whole check with
 # nothing to read, and the run then exits 0 having asserted nothing about
 # any suffix. That is a could-not-run, not a clean split.
-DOCKERHUB_TOKEN_RE="$(ascii_fold_regex dockerhub_token)"
-readonly DOCKERHUB_TOKEN_RE
+DOCKERHUB_TOKEN_REF_RE="$(secret_ref_regex "$(ascii_fold_regex dockerhub_token)[A-Za-z0-9_]*")"
+readonly DOCKERHUB_TOKEN_REF_RE
 declare -a workflow_files=()
 glob_into workflow_files 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
 for wf in "${workflow_files[@]}"; do
@@ -134,7 +135,7 @@ for wf in "${workflow_files[@]}"; do
   # of every suffix violation it carries.
   matches_rc=0
   matches="$(LC_ALL=C grep --extended-regexp --only-matching -- \
-    "${SECRETS_DOT_RE}${DOCKERHUB_TOKEN_RE}[A-Za-z0-9_]*" "${wf}")" || matches_rc=$?
+    "${DOCKERHUB_TOKEN_REF_RE}" "${wf}")" || matches_rc=$?
   if ((matches_rc > 1)); then
     printf 'dockerhub-token-scope-split lint: grep failed reading %s\n' \
       "${wf}" >&2
@@ -144,10 +145,11 @@ for wf in "${workflow_files[@]}"; do
   matches="$(sort --unique <<<"${matches}")"
   while IFS= read -r match; do
     [[ -z ${match} ]] && continue
-    # Under LC_ALL=C the match holds ASCII only, so upper-casing it
+    # Under LC_ALL=C the match holds ASCII only, so upper-casing its name
     # folds nothing else.
-    if [[ ${match^^} != 'SECRETS.DOCKERHUB_TOKEN_RW' &&
-      ${match^^} != 'SECRETS.DOCKERHUB_TOKEN_DELETE' ]]; then
+    name="$(secret_ref_name "${match}")"
+    if [[ ${name^^} != 'DOCKERHUB_TOKEN_RW' &&
+      ${name^^} != 'DOCKERHUB_TOKEN_DELETE' ]]; then
       violation "${wf}: ${match} is not authoritative (only _RW and _DELETE variants are allowed)"
     fi
   done <<<"${matches}"

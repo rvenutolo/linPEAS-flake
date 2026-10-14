@@ -16,7 +16,14 @@
 # GitHub Actions reads a secret's name whatever its case, so a reference
 # is read with the ASCII letters of `secrets` and of the name in either
 # case: `SECRETS.FOO` is refused, and `secrets.github_token` is the
-# GITHUB_TOKEN and allowed.
+# GITHUB_TOKEN and allowed. It reads the index form as the dot form:
+# `secrets['FOO']` is refused too. A reference is read wherever it sits
+# inside a `${{ }}` expression on one line, beside an operator or as a
+# function argument as well as alone, and past a `}}` inside a string
+# literal. Not read: text outside `${{ }}`, an expression broken
+# across lines, a double-quoted index (an expression error GitHub Actions
+# refuses), a name the expression computes (`secrets[format(...)]`), and
+# the whole context (`toJSON(secrets)`).
 #
 # Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the
 # test harness can point at a temp dir with a single fixture.
@@ -35,10 +42,21 @@ source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/ascii-match.sh
 source "${_lib_dir}/lib/ascii-match.sh"
 
-# `secrets.` and the name after it, the context's ASCII letters in either
-# case, as a grep -E regex.
-SECRET_REF_RE="$(ascii_fold_regex secrets)\\.[A-Za-z0-9_]+"
+# A secret reference in the dot or the index form, with any name, the
+# context's ASCII letters in either case, as a grep -E regex. The one
+# character before it must not continue a name or a path: `secrets` as a
+# step id (`steps.secrets.outputs.x`) or an input is no secret reference.
+# A match therefore starts with that character, which the reader drops.
+SECRET_REF_RE="[^A-Za-z0-9_.-]$(secret_ref_regex '[A-Za-z0-9_]+')"
 readonly SECRET_REF_RE
+# One `${{ }}` expression on a line. A `}}` may sit inside a run of text
+# between single quotes, as in a format string's escaped brace, and a
+# quote may also stand alone; grep takes the longest match, so the span
+# runs to the last `}}` it can reach that way. That reaches past a `}}`
+# in a literal whether its quotes are written once or, in a YAML
+# single-quoted scalar, twice. Text between two expressions on a line is
+# read too when quotes on either side pair across it.
+readonly EXPRESSION_RE="\\\$\\{\\{([^}]|\\}[^}]|'[^']*')*\\}\\}"
 
 readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 
@@ -107,9 +125,8 @@ function scan_secrets() {
   local -r file="$1"
   local tmp
   tmp="$(make_temp)"
-  LC_ALL=C grep --extended-regexp --line-number \
-    "\\\$\\{\\{[[:space:]]*${SECRET_REF_RE}[[:space:]]*\\}\\}" \
-    "${file}" >"${tmp}" || true
+  LC_ALL=C grep --extended-regexp --line-number --only-matching \
+    "${EXPRESSION_RE}" "${file}" >"${tmp}" || true
 
   local line
   while IFS= read -r line; do
@@ -123,9 +140,12 @@ function scan_secrets() {
     local token
     while IFS= read -r token; do
       [[ -z ${token} ]] && continue
-      # Under LC_ALL=C the token holds ASCII only, so upper-casing it
-      # folds nothing else.
-      if [[ ${token^^} == 'SECRETS.GITHUB_TOKEN' ]]; then
+      token="${token:1}"
+      # Under LC_ALL=C the token holds ASCII only, so upper-casing its
+      # name folds nothing else.
+      local name
+      name="$(secret_ref_name "${token}")"
+      if [[ ${name^^} == 'GITHUB_TOKEN' ]]; then
         allowed=$((allowed + 1))
         continue
       fi
