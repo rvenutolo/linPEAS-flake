@@ -17,7 +17,10 @@
 #
 # GitHub Actions reads a secret's name whatever its case, so the token is
 # matched with the ASCII letters of `secrets` and of `GITHUB_TOKEN` in
-# either case: `${{ secrets.github_token }}` is the same token.
+# either case: `${{ secrets.github_token }}` is the same token. The token
+# is required in the dot form: the index form `${{ secrets['GITHUB_TOKEN'] }}`
+# names the same secret to GitHub Actions and is refused as the wrong
+# token.
 #
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
 # counted finding, and the file's jobs are not read.

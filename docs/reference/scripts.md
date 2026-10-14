@@ -354,6 +354,9 @@ secrets.DOCKERHUB_TOKEN reference without the \_RW or \_DELETE suffix is
 refused. GitHub Actions reads a secret's name whatever its case, so each
 reference is matched with the ASCII letters of `secrets` and of the name
 in either case: `secrets.dockerhub_token_rw` is the write-scoped token.
+It reads the index form as the dot form: `secrets['DOCKERHUB_TOKEN_RW']`
+is the write-scoped token too. A double-quoted index is an expression
+error GitHub Actions refuses, and is not read.
 
 The same split binds every manual recovery snippet in the docs. A
 shell-fenced Markdown block that performs a tag delete
@@ -2283,9 +2286,10 @@ checks even if one fails; exits 1 if any failed, 2 on config error.
 
 ### scripts/lib/ascii-match.sh
 
-Bash regex matching whose ranges hold ASCII only, and a
-regex that matches a text with its ASCII letters in either case. Source
-after `set -Eeuo pipefail`.
+Bash regex matching whose ranges hold ASCII only, a regex
+that matches a text with its ASCII letters in either case, and a regex
+that matches a secret reference in either form GitHub Actions reads.
+Source after `set -Eeuo pipefail`.
 
 #### ascii_match()
 
@@ -2330,6 +2334,44 @@ does not.
 **Stdout:**
 
 - the regex, unanchored
+
+#### secret_ref_regex()
+
+Print a grep -E regex matching a reference to a secret
+whose name the given regex matches, in both forms GitHub Actions reads:
+`secrets.NAME` and the index form `secrets['NAME']`, with spaces inside
+the brackets. The ASCII letters of `secrets` match in either case. Each
+quote of the index form may be written twice, as a YAML single-quoted
+scalar writes it. A double-quoted index is not matched: GitHub Actions
+refuses a double-quoted string as an expression error. Nor is a name
+the expression computes (`secrets[format(...)]`) or the whole context
+(`toJSON(secrets)`). The dot form carries no bound after the name; a
+caller matching a whole name adds one.
+
+**Args:**
+
+- `$1` — regex matching the name, without anchors
+
+**Stdout:**
+
+- the regex, unanchored
+
+#### secret_ref_name()
+
+Print the secret name a reference matched by
+secret_ref_regex holds, in either form.
+
+**Args:**
+
+- `$1` — the reference
+
+**Exit codes:**
+
+- `1` — the text holds no name
+
+**Stdout:**
+
+- the name
 
 ### scripts/lib/awk-path.sh
 

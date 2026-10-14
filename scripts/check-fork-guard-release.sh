@@ -28,7 +28,10 @@
 # action or to the `secrets.BUMP_APP_PRIVATE_KEY` signing key, each with
 # its ASCII letters in either case, and must carry the fork guard the
 # same as a write-scoped job. GitHub Actions reads a secret's name
-# whatever its case, so `secrets.bump_app_private_key` reads the same key.
+# whatever its case, so `secrets.bump_app_private_key` reads the same key,
+# and reads the index form `secrets['BUMP_APP_PRIVATE_KEY']` as the dot
+# form. A double-quoted index is an expression error GitHub Actions
+# refuses, and is not read.
 #
 # Without the guard, a fork that inherits these workflows can fire
 # them under its own GITHUB_TOKEN (or repo-scoped secrets, if any
@@ -81,9 +84,10 @@ readonly GUARD_NEEDLE="github.repository == '${REPO_SLUG}'"
 # take a job out of the lint's reach.
 APP_TOKEN_ACTION_RE="$(ascii_fold_regex actions/create-github-app-token)"
 readonly APP_TOKEN_ACTION_RE
-# The App's private-key secret, with each ASCII letter of the context and
-# of the name in either case, as GitHub Actions reads a secret's name.
-APP_KEY_SECRET_RE="$(ascii_fold_regex secrets)\\.$(ascii_fold_regex bump_app_private_key)"
+# The App's private-key secret in the dot or the index form, with each
+# ASCII letter of the context and of the name in either case, as GitHub
+# Actions reads a secret's name.
+APP_KEY_SECRET_RE="$(secret_ref_regex "$(ascii_fold_regex bump_app_private_key)")"
 readonly APP_KEY_SECRET_RE
 # The job a key names. `jobs:` written as an alias is read through by
 # `JOBS_NODE` in the job list and in this lookup alike. The key reaches
