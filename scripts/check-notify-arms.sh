@@ -205,6 +205,17 @@ function notify_jobs() {
   ' "$1"
 }
 
+# One job, found by the key the notify listing printed for it. The key
+# reaches `yq` as data, through `strenv`, and is compared by its base64
+# text: `yq` reads `*` and `?` in an index or an `==` comparison as
+# wildcards, which base64 text never holds, so a job keyed `n*` is not
+# also handed job `nx`. The whole `jobs:` map goes through
+# `RESOLVE_JOB_ALIASES` first, because the listing prints a key written
+# as an alias as the text it stands for, and `to_entries` follows neither
+# an alias nor a merge key. The last match is read, as `yq`'s own index
+# reads a key written twice.
+readonly JOB_BY_KEY="(${JOBS_NODE}) | ${RESOLVE_JOB_ALIASES}"' | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
+
 # @description Print, one per line, the `uses:` of every step a job runs
 #              before its first notify step, `-` for a `run:` step.
 # @arg $1 workflow path
@@ -215,8 +226,8 @@ function steps_before_notify() {
   # notify step while yq is still writing the steps after it gets yq
   # killed by SIGPIPE, which pipefail turns into a failed read.
   local uses step
-  uses="$(JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) | ${RESOLVE_JOB_ALIASES}"'
-    | .[strenv(JOB)].steps // [] | .[] | (.uses // "-") | tostring
+  uses="$(JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"'
+    | .steps // [] | .[] | (.uses // "-") | tostring
   ' "$1")" || return
   while IFS= read -r step; do
     [[ ${step} == *notify-workflow-result* ]] && break
@@ -267,8 +278,8 @@ function workflow_events() {
 # @arg $1 workflow path
 # @arg $2 job id
 function notify_body() {
-  JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) | ${RESOLVE_JOB_ALIASES}"'
-    | .[strenv(JOB)].steps[]
+  JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"'
+    | .steps[]
     | select((.uses // "") | test("^\\./\\.github/actions/notify-workflow-result$"))
     | .with.body // ""
   ' "$1"
@@ -280,7 +291,7 @@ function notify_body() {
 # @arg $2 job id
 # @stdout true or false
 function declares_has_finding() {
-  JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) | ${RESOLVE_JOB_ALIASES}"' | .[strenv(JOB)].outputs // {} | keys | map(downcase) | any_c(. == "has-finding")' "$1"
+  JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .outputs // {} | keys | map(downcase) | any_c(. == "has-finding")' "$1"
 }
 
 # The gate evaluator. It tokenizes the `if:` expression once, then

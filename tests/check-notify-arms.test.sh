@@ -802,7 +802,7 @@ on: [push]' '*n'
   # A failed read of a job's steps names the command and its status, so a
   # killed or failing yq is not mistaken for anything about the workflow.
   fresh_root
-  yq_stub '.[strenv(JOB)].steps // []' 7
+  yq_stub '.steps // [] | .[] | (.uses' 7
   PATH="${STUB_DIR}:${PATH}" run_scenario steps-read-failure-names-yq-exits-2 2 \
     'cannot read the steps of .github/workflows/codeql.yml job notify-finding: yq exited 7'
   rm --recursive --force -- "${STUB_DIR}"
