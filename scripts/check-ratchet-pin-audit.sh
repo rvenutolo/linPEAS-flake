@@ -35,10 +35,12 @@
 # Exits 0 on full coverage, 1 on any drift, 2 when the check cannot run
 # — `yq` or `ratchet` absent from PATH, the workflow file itself missing,
 # a workflow expression yq cannot evaluate, an unreadable version site, or
-# a `ratchet --version` string carrying no X.Y.Z. The `on:` reads stop the
-# run on the workflow's own content too: a root giving `on` twice, an
-# `on:` holding an alias nested too deep to resolve, or a merge key in
-# `on:` that `yq` cannot resolve (see ON_NODE). A file `yq` reads as
+# a `ratchet --version` string carrying no X.Y.Z. The workflow reads stop
+# the run on the workflow's own content too: a root giving `on`, `jobs`,
+# `permissions` or `concurrency` twice (each key is read as GitHub
+# Actions reads one written as an alias), an `on:` holding an alias
+# nested too deep to resolve, or a merge key in `on:` that `yq` cannot
+# resolve (see ON_NODE). A file `yq` reads as
 # several YAML documents, or whose root is not a map, is one finding. With no workflow to
 # parse there is no invariant to score, and counting that as a failed
 # invariant would report drift in a file the check never read.
@@ -121,6 +123,9 @@ readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == 
 # twice stops the run like any read `yq` cannot evaluate (exit 2).
 readonly PERMS_NODE="${ROOT_KEY_NODE//@KEY@/permissions}"
 
+# The `concurrency:` node, read the same way. `jobs:` is `JOBS_NODE`.
+readonly CONC_NODE="${ROOT_KEY_NODE//@KEY@/concurrency}"
+
 failed=0
 fail() {
   printf '%s\n' "$*" >&2
@@ -169,7 +174,7 @@ fi
 
 # 3. Both jobs declare timeout-minutes.
 for job in check notify; do
-  if ! t="$(read_workflow ".jobs.\"${job}\".\"timeout-minutes\" // \"\"")"; then
+  if ! t="$(read_workflow "${JOBS_NODE} | .\"${job}\".\"timeout-minutes\" // \"\"" "the timeout-minutes of job ${job}")"; then
     exit 2
   fi
 
@@ -180,7 +185,7 @@ done
 
 # 4. harden-runner is the first step of every job.
 for job in check notify; do
-  if ! first="$(read_workflow ".jobs.\"${job}\".steps[0].uses // \"\"")"; then
+  if ! first="$(read_workflow "${JOBS_NODE} | .\"${job}\".steps[0].uses // \"\"" "the first step of job ${job}")"; then
     exit 2
   fi
 
@@ -190,10 +195,10 @@ for job in check notify; do
 done
 
 # 5. Every actions/checkout step sets persist-credentials: false.
-if ! checkout_count="$(read_workflow '[.jobs[].steps[] | select(.uses // "" | test("'"${CHECKOUT_RE}"'"))] | length')"; then
+if ! checkout_count="$(read_workflow "[${JOBS_NODE}"' | .[].steps[] | select(.uses // "" | test("'"${CHECKOUT_RE}"'"))] | length' 'the checkout steps')"; then
   exit 2
 fi
-if ! safe_count="$(read_workflow '[.jobs[].steps[] | select(.uses // "" | test("'"${CHECKOUT_RE}"'")) | select(.with."persist-credentials" == false)] | length')"; then
+if ! safe_count="$(read_workflow "[${JOBS_NODE}"' | .[].steps[] | select(.uses // "" | test("'"${CHECKOUT_RE}"'")) | select(.with."persist-credentials" == false)] | length' 'the checkout steps')"; then
   exit 2
 fi
 
@@ -220,7 +225,7 @@ if [[ ${disp} != "true" ]]; then
 fi
 
 # 7. concurrency.group is exactly ratchet-pin-audit.
-if ! group="$(read_workflow '.concurrency.group // ""')"; then
+if ! group="$(read_workflow "${CONC_NODE}"' | .group // ""' 'the concurrency group')"; then
   exit 2
 fi
 
@@ -229,7 +234,7 @@ if [[ ${group} != "ratchet-pin-audit" ]]; then
 fi
 
 # 8. Notify body contains all four reason tokens.
-if ! body="$(read_workflow '.jobs.notify.steps[] | select(.uses == "./.github/actions/notify-workflow-result") | .with.body // ""')"; then
+if ! body="$(read_workflow "${JOBS_NODE}"' | .notify.steps[] | select(.uses == "./.github/actions/notify-workflow-result") | .with.body // ""' 'the notify body')"; then
   exit 2
 fi
 
@@ -250,14 +255,14 @@ if [[ -z ${WORKFLOW_PATH_OVERRIDE:-} ]]; then
 fi
 
 # 10. Per-job permissions are exactly what's expected.
-if ! check_perms="$(read_workflow '.jobs.check.permissions | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")')"; then
+if ! check_perms="$(read_workflow "${JOBS_NODE}"' | .check.permissions | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")' 'the permissions of job check')"; then
   exit 2
 fi
 
 if [[ ${check_perms} != "contents:read" ]]; then
   fail "job check: permissions must be exactly { contents: read } (got: ${check_perms})"
 fi
-if ! notify_perms="$(read_workflow '.jobs.notify.permissions | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")')"; then
+if ! notify_perms="$(read_workflow "${JOBS_NODE}"' | .notify.permissions | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")' 'the permissions of job notify')"; then
   exit 2
 fi
 

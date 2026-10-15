@@ -61,7 +61,10 @@
 #
 # Every `yq` read of the workflow passes YQ_MERGE_SPEC, so a merge list
 # (`<<: [*a, *b]`) inside the verify job is read first mapping wins, as
-# the YAML merge specification says.
+# the YAML merge specification says. Each reads `jobs:` as `JOBS_NODE`
+# (scripts/lib/job-keys.sh), so a root key written as an alias of `jobs`
+# is read as GitHub Actions reads it, and one given twice, plain and as
+# an alias, is an unparsable workflow.
 #
 # Env overrides (test-only):
 #   VERIFY_WORKFLOW_OVERRIDE  — alternate workflow path
@@ -121,7 +124,7 @@ fi
 # status is not propagated under `set -Eeuo pipefail`, so an unparsable
 # workflow would yield empty input and every assertion below would pass
 # over nothing.
-if ! step_ids="$(yq eval "${YQ_MERGE_SPEC[@]}" '.jobs.verify.steps[] | select(has("id")) | .id' "${WORKFLOW}")"; then
+if ! step_ids="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | .verify.steps[] | select(has("id")) | .id' "${WORKFLOW}")"; then
   printf '%s: could not evaluate workflow with yq (malformed?)\n' "${WORKFLOW}" >&2
   exit 2
 fi
@@ -131,7 +134,7 @@ if [[ -z ${step_ids} ]]; then
 fi
 
 if ! env_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" \
-  ".jobs.verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .env | to_entries[] | .key + \"\t\" + .value" \
+  "${JOBS_NODE} | .verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .env | to_entries[] | .key + \"\t\" + .value" \
   "${WORKFLOW}")"; then
   printf '%s: could not evaluate the attribution step env block with yq\n' "${WORKFLOW}" >&2
   exit 2
@@ -143,7 +146,7 @@ if [[ -z ${env_rows} ]]; then
 fi
 
 if ! ladder_body="$(yq eval "${YQ_MERGE_SPEC[@]}" \
-  ".jobs.verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .run" \
+  "${JOBS_NODE} | .verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .run" \
   "${WORKFLOW}")"; then
   printf '%s: could not evaluate the attribution step run body with yq\n' "${WORKFLOW}" >&2
   exit 2

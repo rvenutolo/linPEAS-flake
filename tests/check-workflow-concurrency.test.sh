@@ -136,12 +136,12 @@ expect_unparsable 'concurrency: [\n' 'bad-unparsable.yml: could not evaluate'
 
 # Every read after a workflow's first is held to the run-stopping line,
 # on a workflow that holds the fault the read is for and on one that
-# does not. The group read is `eval .concurrency.group` followed by the
-# fixture's absolute path, which the shape read does not hold.
-expect_failed_read good.yml '.concurrency.group | kind' 7 'the concurrency group shape'
-expect_failed_read bad-seq-group.yml '.concurrency.group | kind' 9 'the concurrency group shape'
-expect_failed_read good.yml 'eval .concurrency.group /' 11 'the concurrency group'
-expect_failed_read bad-empty-group.yml 'eval .concurrency.group /' 13 'the concurrency group'
+# does not. The group read ends `| .group` followed by the fixture's
+# absolute path, which the shape read does not hold.
+expect_failed_read good.yml '.group | kind' 7 'the concurrency group shape'
+expect_failed_read bad-seq-group.yml '.group | kind' 9 'the concurrency group shape'
+expect_failed_read good.yml '| .group /' 11 'the concurrency group'
+expect_failed_read bad-empty-group.yml '| .group /' 13 'the concurrency group'
 
 # The map and the group are read by kind: a map carrying a tag of its
 # own is still read, a list carrying a string tag is no string, and the
@@ -170,6 +170,11 @@ expect_body conc-alias-key-empty-group.yml $'name: &k concurrency\n*k :\n  group
   "DIR/conc-alias-key-empty-group.yml: top-level concurrency ${Q}group:${Q} is empty${ONE}"
 expect_body conc-given-twice.yml $'name: &k concurrency\nconcurrency: {group: g}\n*k :\n  group: h\n' 1 \
   $'Error: concurrency: is given more than once\nDIR/conc-given-twice.yml: could not evaluate workflow with yq (malformed?)'"${ONE}"
+# A root merge list is read first mapping wins: the first mapping's
+# `concurrency:` is a map holding a group, so the file passes.
+expect_body conc-merge-list.yml $'a: &a {concurrency: {group: g}}\nb: &b {concurrency: 7}\n<<: [*a, *b]\n' 0 ''
+expect_body conc-merge-list-scalar-first.yml $'a: &a {concurrency: 7}\nb: &b {concurrency: {group: g}}\n<<: [*a, *b]\n' 1 \
+  "DIR/conc-merge-list-scalar-first.yml: ${TOP} (kind=scalar, tag=!!int); expected map${ONE}"
 expect_body several-docs.yml $'concurrency:\n  group: g\n---\non: push\n' 1 \
   "DIR/several-docs.yml: holds several YAML documents; a workflow file must hold one${ONE}"
 

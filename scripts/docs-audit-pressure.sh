@@ -160,12 +160,14 @@ function job_ids_at() {
   # Each workflow is written to a file and read from it, with each status
   # tested before its ids join the set. The file carries the bytes git
   # printed: a shell variable would drop a NUL and hand `yq` a workflow
-  # that is not the one at the ref. A workflow with no `jobs:` reads as
-  # no ids through `// {}`, a `jobs:` that is no map holds no keys (a
-  # sequence would list its indices), and `RESOLVE_JOB_ALIASES`, given
-  # `jobs:` alone, reads one written as an alias, and a key written as an
-  # alias, as the names they stand for, so a failure is a workflow
-  # whose job ids this run does not have. Dropping that workflow instead
+  # that is not the one at the ref. `jobs:` is `JOBS_NODE`, so a root key
+  # written as an alias of `jobs` is read, and one given twice fails the
+  # read. A workflow with no `jobs:` reads as no ids through `// {}`, a
+  # `jobs:` that is no map holds no keys (a sequence would list its
+  # indices), and `RESOLVE_JOB_ALIASES`, given `jobs:` alone, reads one
+  # written as an alias, and a key written as an alias, as the names they
+  # stand for, so a failure is a workflow whose job ids this run does not
+  # have. Dropping that workflow instead
   # leaves the set short by its jobs: at the audit point they are
   # reported as added since, at HEAD as removed.
   local blob_file ids odd_key id record_path status all_ids=''
@@ -182,7 +184,7 @@ function job_ids_at() {
     }
     # The cost of `explode` is a stated limit: docs/development/linting.md,
     # section "YAML aliases in workflow reads".
-    ids="$(yq "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | select(kind == "map") | keys | .[]' "${blob_file}")" || {
+    ids="$(yq "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE} // {}) | ${RESOLVE_JOB_ALIASES}"' | select(kind == "map") | keys | .[]' "${blob_file}")" || {
       status=$?
       rm --force -- "${blob_file}"
       log_err "cannot read job ids from ${path} at ${ref}: yq exited ${status}"

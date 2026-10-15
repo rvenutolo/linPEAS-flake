@@ -20,6 +20,11 @@
 # Source-parsed rather than evaluated: `files` and `entry` are literal in
 # the hook module, and each workflow's lists are literal YAML.
 #
+# A workflow's `jobs:` and `env:` are read as GitHub Actions reads a root
+# key written as an alias (`ROOT_KEY_NODE` in scripts/lib/job-keys.sh);
+# a workflow giving one twice, plain and as an alias, is one that could
+# not be read.
+#
 # Honors ROOT_OVERRIDE for fixtures (default: the repo root). Exits 0 on
 # agreement, 1 on a set mismatch, 2 when an input could not be read.
 
@@ -149,6 +154,9 @@ declare -a workflow_files=()
 glob_into workflow_files '.github/workflows YAML' \
   "${ROOT}/.github/workflows/*.yml" "${ROOT}/.github/workflows/*.yaml"
 
+# The workflow-level `env:` node.
+readonly ENV_NODE="${ROOT_KEY_NODE//@KEY@/env}"
+
 # Three facts from one parse. Reading the whole directory costs a fifth
 # of a second, so no textual pre-filter stands between this lint and the
 # syntax tree: a pre-filter would also be unsound against a folded run
@@ -156,11 +164,15 @@ glob_into workflow_files '.github/workflows YAML' \
 # value joins it back together. A job's merge list is read first mapping
 # wins (YQ_MERGE_SPEC), the way the YAML merge specification reads it, so
 # a step list a later mapping would override is not the one searched.
+# `jobs:` and the workflow `env:` are read as `ROOT_KEY_NODE` reads a root
+# key, so one written as an alias is read as GitHub Actions reads it, and
+# one given twice, plain and as an alias, fails the parse.
 function workflow_facts() {
-  yq eval "${YQ_MERGE_SPEC[@]}" '[
-      ([.jobs[]?.steps[]?.run // ""] | map(select(test("nix flake update"))) | length > 0),
-      ((.env.LOCK_DERIVED_GENERATORS // "") != ""),
-      ((.env.COMMITTABLE_PATHS // "") != "")
+  # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+  yq eval "${YQ_MERGE_SPEC[@]}" "(${ENV_NODE}) as \$env | (${JOBS_NODE}) as \$jobs"' | [
+      ([$jobs | .[]?.steps[]?.run // ""] | map(select(test("nix flake update"))) | length > 0),
+      (($env.LOCK_DERIVED_GENERATORS // "") != ""),
+      (($env.COMMITTABLE_PATHS // "") != "")
     ] | map(tostring) | join(",")' -- "$1"
 }
 
@@ -168,7 +180,7 @@ function workflow_facts() {
 # a workflow whose fact line already reported the key non-empty, so an
 # empty result here is a parse fault rather than an absent key.
 function workflow_list() {
-  yq eval "${YQ_MERGE_SPEC[@]}" --exit-status ".env.${2} // \"\"" -- "$1"
+  yq eval "${YQ_MERGE_SPEC[@]}" --exit-status "${ENV_NODE} | .${2} // \"\"" -- "$1"
 }
 
 declare -a lock_writing=()

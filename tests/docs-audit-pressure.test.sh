@@ -303,7 +303,7 @@ run_scenario 'removed job and member are reported' 0 \
 # @arg $1 exit status for the failing read
 # @arg $2 text the failing read's input holds, or `-`
 # @arg $3 text of the failing read's expression (default: the job-id read's
-#         `| keys`; `to_entries` is the job-key read's)
+#         `| keys`; `to_json` is the job-key read's)
 function yq_stub() {
   local real_yq
   real_yq="$(command -v yq)"
@@ -368,7 +368,7 @@ PATH="${STUB_DIR}:${PATH}" run_scenario 'failed job-id read at HEAD stops the ru
 rm --recursive --force -- "${STUB_DIR}"
 
 # The job-key read of the same workflow is a separate read and fails alone.
-yq_stub 9 rollout to_entries
+yq_stub 9 rollout to_json
 PATH="${STUB_DIR}:${PATH}" run_scenario 'failed job-key read at HEAD stops the run' 2 \
   --expect-err 'cannot read job keys from .github/workflows/a.yml at HEAD: yq exited 9' \
   --forbid 'PRESSURE='
