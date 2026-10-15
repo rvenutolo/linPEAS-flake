@@ -29,7 +29,16 @@
 # from a use. A `${{` not closed on its own line is refused as well: GitHub
 # Actions reads an expression broken across the lines of a block scalar,
 # and the guard reads one line at a time. Not read: text outside `${{ }}`.
-# The reader is scripts/lib/secret-uses.sh.
+#
+# GitHub Actions evaluates an expression in the scalar as YAML decodes it,
+# and in a double-quoted scalar an escape (`s\x65crets`, `\x24{{`, `\x7d}`,
+# `\u0065`, `\n`) can hide a use's name, its `${{` or its `}}` from the file
+# text. So the decoded text of each double-quoted scalar, tagged or not,
+# key or value, is read too, and a use found there that the file text did not show is
+# reported with the file but no line: `yq` does not give a scalar's file
+# line reliably. In the tally, an allowed GITHUB_TOKEN reference read
+# there counts once when its text differs from every reference the file
+# text showed. The reader is scripts/lib/secret-uses.sh.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the
 # test harness can point at a temp dir with a single fixture.
@@ -109,44 +118,77 @@ function is_pr_triggered() {
   grep --extended-regexp --line-regexp --quiet 'pull_request|pull_request_target' <<<"${triggers}"
 }
 
+# @description Report one secrets use read from a PR-triggered workflow,
+# unless it is an allowed GITHUB_TOKEN reference. Increments the global
+# failed counter and prints the violation to stderr.
+# @arg $1 where the use was read: `FILE:LINE`, or `FILE` for a decoded scalar
+# @arg $2 the record's kind  @arg $3 the record's text
+# @arg $4 text after the message (empty for the file text)
+# @exitcode 0 the use was reported  @exitcode 1 it is an allowed reference
+function report_use() {
+  local -r at="$1" kind="$2" text="$3" suffix="$4"
+  local name
+  case "${kind}" in
+  open)
+    printf '%s: expression not closed on its line, not allowed in PR-triggered workflow%s\n' \
+      "${at}" "${suffix}" >&2
+    ;;
+  named)
+    # Under LC_ALL=C the reference holds ASCII only, so upper-casing its
+    # name folds nothing else.
+    name="$(secret_ref_name "${text}")"
+    if [[ ${name^^} == 'GITHUB_TOKEN' ]]; then
+      return 1
+    fi
+    printf '%s: %s not allowed in PR-triggered workflow%s\n' \
+      "${at}" "${text}" "${suffix}" >&2
+    ;;
+  unnamed)
+    printf '%s: %s reads the secrets context without a literal name, not allowed in PR-triggered workflow%s\n' \
+      "${at}" "${text}" "${suffix}" >&2
+    ;;
+  esac
+  failed=$((failed + 1))
+}
+
 # @description Scan a PR-triggered workflow for disallowed secrets uses
-# and for expressions not closed on their line. Increments the global
-# failed counter and prints violations to stderr.
+# and for expressions not closed on their line: first the file text, then
+# the decoded text of its double-quoted scalars, where a use the file text
+# already showed is not reported again. Increments the global failed
+# counter and prints violations to stderr.
 # @arg $1 path to workflow YAML
 function scan_secrets() {
   local -r file="$1"
-  local uses
+  local uses decoded decoded_uses
   if ! uses="$(secret_uses <"${file}")"; then
     printf '%s: grep failed reading the workflow\n' "${file}" >&2
     exit 2
   fi
-  local lineno kind text name
+  if ! decoded="$(double_quoted_scalars "${file}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
+    exit 2
+  fi
+  if ! decoded_uses="$(secret_uses <<<"${decoded}")"; then
+    printf '%s: grep failed reading the decoded scalars\n' "${file}" >&2
+    exit 2
+  fi
+  local lineno kind text
+  local -A seen=()
   while IFS=$'\t' read -r lineno kind text; do
-    case "${kind}" in
-    open)
-      printf '%s:%s: expression not closed on its line, not allowed in PR-triggered workflow\n' \
-        "${file}" "${lineno}" >&2
-      failed=$((failed + 1))
-      ;;
-    named)
-      # Under LC_ALL=C the reference holds ASCII only, so upper-casing its
-      # name folds nothing else.
-      name="$(secret_ref_name "${text}")"
-      if [[ ${name^^} == 'GITHUB_TOKEN' ]]; then
-        allowed=$((allowed + 1))
-        continue
-      fi
-      printf '%s:%s: %s not allowed in PR-triggered workflow\n' \
-        "${file}" "${lineno}" "${text}" >&2
-      failed=$((failed + 1))
-      ;;
-    unnamed)
-      printf '%s:%s: %s reads the secrets context without a literal name, not allowed in PR-triggered workflow\n' \
-        "${file}" "${lineno}" "${text}" >&2
-      failed=$((failed + 1))
-      ;;
-    esac
+    [[ -z ${kind} ]] && continue
+    seen["${kind}"$'\t'"${text}"]=1
+    if ! report_use "${file}:${lineno}" "${kind}" "${text}" ''; then
+      allowed=$((allowed + 1))
+    fi
   done <<<"${uses}"
+  while IFS=$'\t' read -r lineno kind text; do
+    [[ -z ${kind} ]] && continue
+    [[ -n ${seen["${kind}"$'\t'"${text}"]:-} ]] && continue
+    seen["${kind}"$'\t'"${text}"]=1
+    if ! report_use "${file}" "${kind}" "${text}" ' (read decoded from a double-quoted scalar)'; then
+      allowed=$((allowed + 1))
+    fi
+  done <<<"${decoded_uses}"
 }
 
 failed=0

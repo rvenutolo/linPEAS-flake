@@ -362,6 +362,10 @@ the expression computes (`secrets[format(...)]`, `secrets[env.NAME]`),
 the object filter (`secrets.*`), a double-quoted index, and the word
 `secrets` inside a string literal. So is a `${{` not closed on its line,
 which the lint reads one line at a time (see scripts/lib/secret-uses.sh).
+GitHub Actions evaluates an expression in a scalar as YAML decodes it,
+and in a double-quoted scalar an escape (`s\x65crets`, `\x24{{`) can hide
+a reference from the file text, so each rule also reads the decoded text
+of every double-quoted scalar, tagged or not, key or value.
 
 The same split binds every manual recovery snippet in the docs. A
 shell-fenced Markdown block that performs a tag delete
@@ -3106,8 +3110,9 @@ writes.
 Read the uses of the GitHub Actions `secrets` context in
 workflow text, one line at a time: each secret a `${{ }}` expression
 names, each expression that uses the context without a literal name,
-and each `${{` not closed on its line. Source after `set -Eeuo pipefail`
-and after scripts/lib/ascii-match.sh.
+and each `${{` not closed on its line; and the decoded text of a YAML
+file's double-quoted scalars, which a reader of the file text misses.
+Source after `set -Eeuo pipefail` and after scripts/lib/ascii-match.sh.
 
 #### secret_uses()
 
@@ -3138,6 +3143,34 @@ is not read. The kinds:
 **Stdout:**
 
 - the records
+
+#### double_quoted_scalars()
+
+Print the text of each double-quoted scalar in a YAML file
+as `yq` decodes it, keys and values alike, each on its own lines. GitHub
+Actions evaluates an expression in the decoded text, and a double-quoted
+scalar is the one YAML style whose escapes (`\x65`, `e`, `\n`, an
+escaped line break) make that text differ from the file's: an escape can
+hide a use's name, its `${{` or its `}}` from a reader of the file text.
+A tagged scalar is printed too, whatever its style: `yq` reports the
+style of a tagged scalar as `tagged` or `<unknown>`, never `double`, so
+every scalar is printed but an untagged plain, single-quoted, literal or
+folded one, the styles that hold no escape. A NUL is printed as a space, since grep reads text holding a NUL as
+binary and prints no match, and a NUL continues no name. A scalar written
+once under an anchor is printed once, however many aliases repeat it.
+
+**Args:**
+
+- `$1` — workflow file path
+
+**Exit codes:**
+
+- `0` — the file was read, whether it holds such a scalar or not
+- `2` — `yq` could not read the file
+
+**Stdout:**
+
+- the decoded texts
 
 ### scripts/lib/temp.sh
 
