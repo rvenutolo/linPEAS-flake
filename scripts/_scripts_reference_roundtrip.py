@@ -23,6 +23,7 @@ import importlib
 import os
 import re
 import sys
+from typing import Any
 
 # Python puts this script's own directory first on the import path, so an
 # extension or `!!python/name:` in mkdocs.yml could otherwise import a file
@@ -59,29 +60,38 @@ BOUND_OPENER = re.compile(r"^# @description(?![A-Za-z-])")
 # Indented: two or more leading blanks, or a leading tab.
 INDENTED = re.compile(r"^(?: {2,}|\t| +\t)[ \t]*\S")
 
+# A page block: (region, kind, text), as PageText records it.
+Block = tuple[str, str, str]
+# Header text the page cannot reach: (section key, file line, message).
+Unreached = tuple[str, int, str]
 
-def comment_body(raw):
+
+def comment_body(raw: str) -> str:
     return re.sub(r"^#[ \t]?", "", raw, count=1)
 
 
-def blank(text):
+def blank(text: str) -> bool:
     return text.strip() == ""
 
 
 class Unit:
-    def __init__(self, tag, head, line):
-        self.tag, self.head, self.line, self.lines = tag, head, line, []
+    def __init__(self, tag: str, head: str, line: int) -> None:
+        self.tag, self.head, self.line = tag, head, line
+        self.lines: list[str] = []
         # The file line of the head and of each later line, in step with them.
         self.nos = [line]
+        # A description paragraph that resumes after a blank line closed an
+        # annotation; dropped when it never gets any text.
+        self.resumed = False
 
-    def add(self, text, no):
+    def add(self, text: str, no: int) -> None:
         self.lines.append(text)
         self.nos.append(no)
 
-    def closes_on_blank(self):
+    def closes_on_blank(self) -> bool:
         return self.tag in ("arg", "option", "exitcode", "stdout")
 
-    def expected(self):
+    def expected(self) -> str:
         """The text a reader must be able to see for this unit.
 
         Prose is Markdown on the page, so its code spans show without their
@@ -101,13 +111,14 @@ class Unit:
             return " ".join(text for text, _ in self.pieces())
         return prose([self.head] + self.lines)
 
-    def pieces(self):
+    def pieces(self) -> list[tuple[str, int | None]]:
         """A description as (text, table line) pieces in source order. A
         fenced run is shown as written; a table shows its cells' text; the
         rest is prose, where a list item's marker renders as a bullet. The
         table line is the file line of a table's header row, else None."""
         lines = [self.head] + self.lines
-        out, i = [], 0
+        out: list[tuple[str, int | None]] = []
+        i = 0
         for start, end, fenced in run_spans(lines):
             if not fenced:
                 continue
@@ -117,9 +128,10 @@ class Unit:
         out += prose_pieces(lines[i:], self.nos[i:])
         return out
 
-    def table_spans(self):
+    def table_spans(self) -> list[tuple[int, int, int]]:
         """(first word, end word, table line) of each table in expected()."""
-        spans, at = [], 0
+        spans: list[tuple[int, int, int]] = []
+        at = 0
         for text, table in self.pieces():
             n = len(normalize(text).split(" ")) if normalize(text) else 0
             if table is not None:
@@ -127,7 +139,7 @@ class Unit:
             at += n
         return spans
 
-    def example_lines(self):
+    def example_lines(self) -> list[str]:
         """The lines an @example's fence must hold: its body as written,
         with the blank lines at either edge dropped as the fence drops them.
         Text on the tag line itself is required too; the generator does not
@@ -140,18 +152,21 @@ class Unit:
         # python-markdown expands a tab to the next four-column stop.
         return [x.rstrip().expandtabs(4) for x in lines]
 
-    def label(self):
+    def label(self) -> str:
         return "@" + self.tag if self.tag != "?" else "header text"
 
 
-def units_of(run, findings, rel):
+def units_of(run: list[tuple[int, str]], findings: list[Unreached], rel: str) -> list[Unit]:
     """Split one comment run into units. run: [(lineno, raw)]."""
-    units, cur, started = [], None, False
+    units: list[Unit] = []
+    # The unit later lines join. None until the first tag line, which
+    # always sets it: re.split returns at least one segment, and each
+    # segment either opens a unit or joins the current one.
+    cur: Unit | None = None
     for no, raw in run:
         if SHELLCHECK.match(raw):
             continue
         if TAG_LINE.match(raw):
-            started = True
             text = raw[2:]
             for seg in TAG_SPLIT.split(text):
                 m = TAG.match(seg)
@@ -171,7 +186,7 @@ def units_of(run, findings, rel):
                     units.append(cur)
             continue
         body = comment_body(raw)
-        if not started:
+        if cur is None:
             text = body.strip()
             # The path line and the shebang are not prose.
             if text and text != rel and not (no == 1 and raw.startswith("#!")):
@@ -184,16 +199,16 @@ def units_of(run, findings, rel):
             cur.resumed = True
             units.append(cur)
             continue
-        if getattr(cur, "resumed", False) and not cur.lines:
+        if cur.resumed and not cur.lines:
             if blank(body):
                 continue
             # A resumed paragraph is reported at its first line of text.
             cur.line = no
         cur.add(body, no)
-    return [u for u in units if not (getattr(u, "resumed", False) and not "".join(u.lines).strip())]
+    return [u for u in units if not (u.resumed and not "".join(u.lines).strip())]
 
 
-def read_lines(path):
+def read_lines(path: str) -> list[str]:
     try:
         with open(path, encoding="utf-8") as fh:
             return fh.read().split("\n")
@@ -205,7 +220,7 @@ def read_lines(path):
         sys.exit(2)
 
 
-def extract(path, library, findings):
+def extract(path: str, library: bool, findings: list[Unreached]) -> list[tuple[str, Unit]]:
     """Return [(section key, unit)] for one file; append unreached text to findings."""
     lines = read_lines(path)
     numbered = list(enumerate(lines, 1))
@@ -231,7 +246,8 @@ def extract(path, library, findings):
     while j < len(rest):
         no, raw = rest[j]
         if BOUND_OPENER.match(raw):
-            block, k = [], j
+            block: list[tuple[int, str]] = []
+            k = j
             while k < len(rest) and (rest[k][1].startswith("#") or blank(rest[k][1])):
                 if rest[k][1].startswith("#"):
                     block.append(rest[k])
@@ -263,15 +279,20 @@ class PageText(html.parser.HTMLParser):
     LABELS = {"Args:": "arg", "Options:": "option", "Exit codes:": "exitcode", "Stdout:": "stdout"}
     BLOCKS = ("p", "li", "pre", "th", "td")
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.entries = {}
-        self.key, self.script, self.region = None, None, "description"
-        self.heading, self.heading_text = None, []
-        self.block, self.block_text = None, []
-        self.in_strong, self.strong_text = False, []
+        self.entries: dict[str, list[Block]] = {}
+        self.key: str | None = None
+        self.script: str | None = None
+        self.region = "description"
+        self.heading: str | None = None
+        self.heading_text: list[str] = []
+        self.block: str | None = None
+        self.block_text: list[str] = []
+        self.in_strong = False
+        self.strong_text: list[str] = []
 
-    def handle_starttag(self, tag, attrs):
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in ("h2", "h3", "h4"):
             self.heading, self.heading_text = tag, []
         elif tag in self.BLOCKS and self.block is None:
@@ -280,7 +301,7 @@ class PageText(html.parser.HTMLParser):
         elif tag == "strong":
             self.in_strong = True
 
-    def handle_endtag(self, tag):
+    def handle_endtag(self, tag: str) -> None:
         if tag == "strong":
             self.in_strong = False
         if tag == self.heading:
@@ -308,7 +329,7 @@ class PageText(html.parser.HTMLParser):
                 self.entries[self.key].append((self.region, tag, text))
             self.block = None
 
-    def handle_data(self, data):
+    def handle_data(self, data: str) -> None:
         if self.heading:
             self.heading_text.append(data)
         elif self.block is not None:
@@ -323,16 +344,16 @@ class SiteLoader(yaml.SafeLoader):
     markdown_extensions is used."""
 
 
-def _python_name(loader, suffix, node):
+def _python_name(loader: SiteLoader, suffix: str, node: yaml.Node) -> Any:
     module, _, attr = suffix.rpartition(".")
     return getattr(importlib.import_module(module), attr)
 
 
-def _env(loader, node):
+def _env(loader: SiteLoader, node: yaml.Node) -> Any:
     """mkdocs's `!ENV`: a variable name, or a list of names whose last item
     is the default when the list holds more than one. The first set variable
     is read as a plain YAML scalar, so `true` is a boolean."""
-    default = None
+    default: Any = None
     if isinstance(node, yaml.ScalarNode):
         names = [loader.construct_scalar(node)]
     else:
@@ -348,12 +369,16 @@ def _env(loader, node):
     return default
 
 
+def _unknown_tag(loader: SiteLoader, suffix: str, node: yaml.Node) -> None:
+    return None
+
+
 SiteLoader.add_multi_constructor("tag:yaml.org,2002:python/name:", _python_name)
 SiteLoader.add_constructor("!ENV", _env)
-SiteLoader.add_multi_constructor("!", lambda loader, suffix, node: None)
+SiteLoader.add_multi_constructor("!", _unknown_tag)
 
 
-def site_extensions(mkdocs_yml):
+def site_extensions(mkdocs_yml: str) -> tuple[list[str], dict[str, Any]]:
     """The extensions and configs mkdocs.yml loads, read as mkdocs reads
     them. Several rewrite text, not just markup — inlinehilite, details and
     tabbed rewrite their own syntax, and snippets replaces a line with a
@@ -371,7 +396,8 @@ def site_extensions(mkdocs_yml):
     if not isinstance(entries, list) or not entries:
         print(f"{PROG}: {mkdocs_yml} lists no markdown_extensions", file=sys.stderr)
         sys.exit(2)
-    names, configs = [], {}
+    names: list[str] = []
+    configs: dict[str, Any] = {}
     for entry in entries:
         if isinstance(entry, str):
             names.append(entry)
@@ -388,7 +414,7 @@ def site_extensions(mkdocs_yml):
     return names, configs
 
 
-def render(doc, mkdocs_yml):
+def render(doc: str, mkdocs_yml: str) -> dict[str, list[Block]]:
     names, configs = site_extensions(mkdocs_yml)
     lines = read_lines(doc)
     try:
@@ -421,7 +447,7 @@ OPTIONAL = "\x01"
 MARKER = re.compile(r"^([ \t]*)((?:[-*+]|[0-9]+[.)]))(?=[ \t]+\S)")
 
 
-def optional_markers(lines):
+def optional_markers(lines: list[str]) -> list[str]:
     return [MARKER.sub(lambda m: m.group(1) + OPTIONAL + m.group(2), line) for line in lines]
 
 
@@ -430,26 +456,27 @@ def optional_markers(lines):
 EITHER, OR, SPACE = "\x02", "\x03", "\x04"
 
 
-def either(first, second):
+def either(first: str, second: str) -> str:
     return EITHER + OR.join(re.sub(r"\s+", SPACE, normalize(t)) for t in (first, second))
 
 
-def readings(word):
+def readings(word: str) -> list[str]:
     return [r.replace(SPACE, " ") for r in word[1:].split(OR)]
 
 
-def shown(text):
+def shown(text: str) -> str:
     """Text for a diagnostic, without the optional-marker flags; a run read
     two ways shows its first reading."""
     words = [readings(w)[0] if w.startswith(EITHER) else w for w in text.split(" ")]
     return " ".join(words).replace(OPTIONAL, "")
 
 
-def prose(lines):
+def prose(lines: list[str]) -> str:
     """Header prose as the page shows it: a code span loses its backticks
     and the blanks at its edges. A backtick that opens no span stays. A code
     span never crosses a blank line, so each paragraph is read on its own."""
-    paragraphs, cur = [], []
+    paragraphs: list[list[str]] = []
+    cur: list[str] = []
     for line in lines:
         if blank(line):
             paragraphs.append(cur)
@@ -483,11 +510,11 @@ LOOSE_DELIMITER_CELL = re.compile(r"^[ :-]*$")
 ENDS_TABLE = re.compile(r"^[ \t]*(?:(?:[-*+]|[0-9]{1,9}[.)])(?:[ \t]|$)|```+[^`]*$|~~~)")
 
 
-def indent_of(line):
+def indent_of(line: str) -> int:
     return len(line.expandtabs(4)) - len(line.expandtabs(4).lstrip(" "))
 
 
-def cells(row, code_pipes=False):
+def cells(row: str, code_pipes: bool = False) -> list[str]:
     """A table row's cells, the pipes at its edges dropped. With code_pipes,
     a pipe inside a code span is cell text, as python-markdown splits."""
     text = row.strip()
@@ -498,7 +525,8 @@ def cells(row, code_pipes=False):
     if not code_pipes:
         return PIPE.split(text)
     spans = [m.span() for m in CODE_SPAN.finditer(text)]
-    out, at = [], 0
+    out: list[str] = []
+    at = 0
     for m in PIPE.finditer(text):
         if not any(a <= m.start() < b for a, b in spans):
             out.append(text[at:m.start()])
@@ -507,7 +535,7 @@ def cells(row, code_pipes=False):
     return out
 
 
-def table_end(lines, k):
+def table_end(lines: list[str], k: int) -> tuple[int, bool] | None:
     """(end, both) for the table whose header row is lines[k], or None when
     no table starts there. both is true when only python-markdown reads a
     table there, so the run may show as a table or as text."""
@@ -531,17 +559,18 @@ def table_end(lines, k):
     return end, both
 
 
-def unescape_pipes(text):
+def unescape_pipes(text: str) -> str:
     r"""Outside a code span a pipe's backslash is removed twice: GFM's table
     split turns `\|` into `|`, then the inline escape does the same, so
     `\\|` shows as `|` too."""
     return text.replace("\\|", "|").replace("\\|", "|")
 
 
-def cell_text(cell):
+def cell_text(cell: str) -> str:
     """A cell as the page shows it: a code span loses its backticks and keeps
     a backslash before a pipe; outside one, the backslash goes."""
-    out, at = [], 0
+    out: list[str] = []
+    at = 0
     for m in CODE_SPAN.finditer(cell):
         out.append(unescape_pipes(cell[at:m.start()]))
         out.append(m.group(2).strip())
@@ -550,14 +579,15 @@ def cell_text(cell):
     return "".join(out)
 
 
-def table_cells_text(rows, code_pipes=False):
+def table_cells_text(rows: list[str], code_pipes: bool = False) -> str:
     return " ".join(cell_text(c) for row in rows for c in cells(row, code_pipes))
 
 
-def prose_pieces(lines, nos):
+def prose_pieces(lines: list[str], nos: list[int]) -> list[tuple[str, int | None]]:
     """Prose lines as (text, table line) pieces: each table is its cells'
     text, pipes and delimiter row dropped; the rest is prose."""
-    out, i, k = [], 0, 0
+    out: list[tuple[str, int | None]] = []
+    i = k = 0
     while k < len(lines):
         found = table_end(lines, k)
         if found is None:
@@ -576,17 +606,17 @@ def prose_pieces(lines, nos):
     return out
 
 
-def normalize(text):
+def normalize(text: str) -> str:
     # Text is compared as words, so line-join, indent and fence markers fall
     # away. The same transform runs on both sides.
     return re.sub(r"\s+", " ", text).strip()
 
 
-def contains(have, want, start=0):
+def contains(have: str, want: str, start: int = 0) -> int:
     """Offset just past `want` found as whole words in `have`, or -1. A
     word flagged as an optional list marker may be absent, and a run read
     two ways matches either reading."""
-    def word(w):
+    def word(w: str) -> str:
         if w.startswith(OPTIONAL):
             return f"(?:{re.escape(w[1:])} )?"
         if w.startswith(EITHER):
@@ -597,11 +627,12 @@ def contains(have, want, start=0):
     return -1 if m is None else m.end() - 1
 
 
-def run_spans(lines):
+def run_spans(lines: list[str]) -> list[tuple[int, int, bool]]:
     """(start, end, colon_led) for every indented run; a blank line inside a
     run belongs to it. A run is a deliberate block when the last non-blank
     line before it ends in a colon."""
-    spans, i = [], 0
+    spans: list[tuple[int, int, bool]] = []
+    i = 0
     while i < len(lines):
         if not INDENTED.match(lines[i]):
             i += 1
@@ -625,21 +656,21 @@ def run_spans(lines):
     return spans
 
 
-def colon_led_runs(unit):
+def colon_led_runs(unit: Unit) -> list[list[str]]:
     """Each deliberate block as the lines its fence must hold: a tab in the
     indent is two spaces and an odd indent rounds up to even, which is how
     the generator writes a fence."""
     lines = [unit.head] + unit.lines
-    runs = []
+    runs: list[list[str]] = []
     for start, end, fenced in run_spans(lines):
         if not fenced:
             continue
-        run = []
+        run: list[str] = []
         for line in lines[start:end]:
             if blank(line):
                 run.append("")
                 continue
-            lead = re.match(r"^[ \t]*", line).group(0)
+            lead = line[:len(line) - len(line.lstrip(" \t"))]
             indent = lead.replace("\t", "  ")
             if len(indent) % 2:
                 indent = " " + indent
@@ -650,7 +681,7 @@ def colon_led_runs(unit):
     return runs
 
 
-def pre_lines(text):
+def pre_lines(text: str) -> list[str]:
     """A fence's lines, interior blank lines kept, edge blank lines dropped."""
     lines = [x.rstrip() for x in text.split("\n")]
     while lines and not lines[0]:
@@ -660,7 +691,7 @@ def pre_lines(text):
     return lines
 
 
-def first_divergence(want, have):
+def first_divergence(want: str, have: str) -> tuple[int, int, str]:
     words = want.split(" ")
     lo, hi = 0, len(words)
     # Longest prefix still present; presence is monotone in prefix length.
@@ -673,11 +704,13 @@ def first_divergence(want, have):
     return lo, len(words), shown(" ".join(words[lo:lo + 12]))
 
 
-def main(argv):
+def main(argv: list[str]) -> int:
     if len(argv) < 2:
         print(f"usage: {PROG} DOC MKDOCS --entry F... --lib F...", file=sys.stderr)
         return 2
-    doc, mkdocs_yml, files, mode = argv[1], argv[2] if len(argv) > 2 else "", [], None
+    doc, mkdocs_yml = argv[1], argv[2] if len(argv) > 2 else ""
+    files: list[tuple[str, bool]] = []
+    mode: str | None = None
     for arg in argv[3:]:
         if arg in ("--entry", "--lib"):
             mode = arg
@@ -694,16 +727,18 @@ def main(argv):
         print("check-scripts-reference-roundtrip: ok — 0 file(s), 0 annotation unit(s), 0 indented block(s), 0 table(s) published intact")
         return 0
 
-    findings, n_units, n_runs, n_tables = [], 0, 0, 0
+    findings: list[str] = []
+    n_units = n_runs = n_tables = 0
     for path, library in files:
-        unreached = []
+        unreached: list[Unreached] = []
         units = extract(path, library, unreached)
         findings += [f"{key}:{no}: {msg}" for key, no, msg in unreached]
         has_example = {key for key, unit in units if unit.tag == "example"}
-        desc_from = {}  # key -> offset the next description unit must start at
+        desc_from: dict[str, int] = {}  # key -> offset the next description unit must start at
         # Each list item and each description fence is matched at most once,
         # so two units cannot share one item, and fences match in order.
-        items_left, pre_from = {}, {}
+        items_left: dict[tuple[str, str], list[str]] = {}
+        pre_from: dict[str, int] = {}
         for key, unit in units:
             want = normalize(unit.expected())
             if not want:
