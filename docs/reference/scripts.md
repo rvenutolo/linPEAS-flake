@@ -397,9 +397,10 @@ Honors WORKFLOWS_DIR_OVERRIDE (defaults to .github/workflows) so the test
 harness can point at a temp dir, PATHS_OVERRIDE (newline-separated file
 list) for the Markdown scan set, and LINT_ALLOW_EMPTY_SCAN=1 to accept a
 workflows dir holding no YAML or an empty Markdown scan set. Exits 0 if
-the split holds, 1 on a violation, 2 when the workflows dir is not there
-to read, holds no workflow to read, holds one that could not be read, or
-the Markdown scan set could not be enumerated.
+the split holds, 1 on a violation, 2 when the lint could not run: yq is
+not on PATH, the workflows dir is missing or holds no workflow, a
+workflow or a doc could not be read, or the Markdown scan set is empty
+or could not be enumerated, for example.
 
 ### scripts/check-egress-allowlist.sh
 
@@ -3156,7 +3157,7 @@ is not read. The kinds:
 Print the text of each double-quoted scalar in a YAML file
 as `yq` decodes it, keys and values alike, each on its own lines. GitHub
 Actions evaluates an expression in the decoded text, and a double-quoted
-scalar is the one YAML style whose escapes (`\x65`, `e`, `\n`, an
+scalar is the one YAML style whose escapes (`\x65`, `\u0065`, `\n`, an
 escaped line break) make that text differ from the file's: an escape can
 hide a use's name, its `${{` or its `}}` from a reader of the file text.
 A tagged scalar is printed too, whatever its style: `yq` reports the
