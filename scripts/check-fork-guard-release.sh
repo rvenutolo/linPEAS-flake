@@ -40,6 +40,13 @@
 # scripts/lib/secret-uses.sh). The job is read as `yq` prints it, so a YAML
 # escape in a double-quoted scalar is read decoded.
 #
+# Every job inherits the workflow-level `env:`, so a read of the key there,
+# named or not, or an expression there not closed on its line, puts every
+# job in the file under the guard. It is read the same way, through its
+# aliases and merge keys. No other workflow-level key can read a secret:
+# GitHub Actions makes the `secrets` context available to `env:` alone
+# among them (`run-name`, `concurrency` and `defaults` cannot read it).
+#
 # Without the guard, a fork that inherits these workflows can fire
 # them under its own GITHUB_TOKEN (or repo-scoped secrets, if any
 # were configured). The repository check pins execution to the
@@ -63,8 +70,9 @@
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow globs match no
 # file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
-# a read of one job's permissions, body, secrets uses or `if:` fails once
-# the job list has been read. An empty scan set is a could-not-run rather than a clean tree;
+# a read of the workflow-level `env:` or its secrets uses, or of one job's
+# permissions, body, secrets uses or `if:`, fails once the job list has
+# been read. An empty scan set is a could-not-run rather than a clean tree;
 # LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
 set -Eeuo pipefail
@@ -163,16 +171,28 @@ job_needs_fork_guard() {
     exit 2
   fi
   [[ ${body} =~ ${APP_TOKEN_ACTION_RE} ]] && return 0
-  [[ ${body} =~ ${APP_KEY_SECRET_RE} ]] && return 0
-  # A use of the `secrets` context that names no secret may read the App's
-  # private key, and so may an expression not closed on its line.
-  local uses
-  if ! uses="$(secret_uses <<<"${body}")"; then
+  if ! reads_app_key "${body}"; then
     printf '%s: could not read the secrets uses of job %q\n' "${file}" "${job}" >&2
     exit 2
   fi
-  [[ ${uses} =~ $'\t'(unnamed|open)$'\t' ]] && return 0
+  ((app_key_read)) && return 0
   return 1
+}
+
+# @description Set the global `app_key_read` to 1 when workflow text may
+# read the App's private key, else to 0: a reference naming it, a use of
+# the `secrets` context that names no secret, or an expression not closed
+# on its line.
+# @arg $1 the text, as `yq` prints it
+# @exitcode 1 its secrets uses could not be read
+function reads_app_key() {
+  local -r text="$1"
+  local uses
+  app_key_read=1
+  [[ ${text} =~ ${APP_KEY_SECRET_RE} ]] && return 0
+  uses="$(secret_uses <<<"${text}")" || return 1
+  [[ ${uses} =~ $'\t'(unnamed|open)$'\t' ]] && return 0
+  app_key_read=0
 }
 
 failed=0
@@ -221,9 +241,21 @@ for f in "${selected_files[@]}"; do
     continue
   fi
   [[ -n ${rows} ]] || continue
+  # Every job inherits the workflow-level `env:`, the one workflow-level
+  # key GitHub Actions lets read the `secrets` context, so a read of the
+  # App's private key there puts every job under the guard.
+  if ! env_text="$(yq eval "${YQ_MERGE_SPEC[@]}" '.env | explode(.)' "${f}")"; then
+    printf 'cannot read the workflow env: from %s\n' "${f}" >&2
+    exit 2
+  fi
+  if ! reads_app_key "${env_text}"; then
+    printf '%s: could not read the secrets uses of the workflow env:\n' "${f}" >&2
+    exit 2
+  fi
+  env_reads_app_key="${app_key_read}"
   while IFS= read -r job; do
     [[ -z ${job} ]] && continue
-    if ! job_needs_fork_guard "${f}" "${job}"; then
+    if ((! env_reads_app_key)) && ! job_needs_fork_guard "${f}" "${job}"; then
       continue
     fi
     if ! if_clause="$(read_workflow "${f}" "${JOB_BY_KEY}"' | .if // ""' "${job}" 'if:')"; then
