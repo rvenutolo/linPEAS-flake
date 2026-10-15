@@ -184,6 +184,7 @@ Hooks (alphabetical):
 | `manifest-hook-watches-nix`         | Every hook reaching the Nix hook manifest watches nix/hooks in its files filter.                                                                         |
 | `markdownlint`                      | Markdown style + structure.                                                                                                                              |
 | `min-permissions`                   | Top-level workflow permissions empty; each job declares its own scopes.                                                                                  |
+| `mypy-strict`                       | Strict type check of the repo's Python (files and options in mypy.ini).                                                                                  |
 | `nix-run-pinned`                    | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                                                                                   |
 | `nixfmt`                            | Nix file formatting.                                                                                                                                     |
 | `nixpkgs-hammering`                 | nixpkgs idiom checker for the linpeas derivation.                                                                                                        |
