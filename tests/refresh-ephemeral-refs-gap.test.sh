@@ -19,6 +19,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "${REPO_ROOT}/scripts/lib/enumerate.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/refresh-ephemeral-refs-gap.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/ephemeral-refs-gap"
 
@@ -351,15 +353,16 @@ function main() {
   #     locally. The regex is read from the hook's source and matched with
   #     Python's `re.search`, as pre-commit matches it; the page and the
   #     two scripts the block derives from must match it as well.
-  local -a hook_paths=()
+  local -a tracked=() hook_paths=()
   local src
   # shellcheck source=scripts/lib/ephemeral-refs-scope.sh
   source "${REPO_ROOT}/scripts/lib/ephemeral-refs-scope.sh"
-  while IFS= read -r -d '' src; do
+  enumerate_into tracked 'git ls-files' git -C "${REPO_ROOT}" ls-files -z
+  for src in "${tracked[@]}"; do
     [[ $(language_of "${src}") == 'other' ]] || continue
     is_allowlisted "${src}" && continue
     hook_paths+=("${src}")
-  done < <(git -C "${REPO_ROOT}" ls-files -z)
+  done
   hook_paths+=(docs/development/linting.md scripts/refresh-ephemeral-refs-gap.sh
     scripts/lib/ephemeral-refs-scope.sh)
   rc=0
