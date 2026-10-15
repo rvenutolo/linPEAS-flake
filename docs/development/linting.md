@@ -28,7 +28,7 @@ into the Nix store and is `.gitignore`d. Edits go in the hook modules
 under `nix/hooks/`, not the symlink target.
 
 Representative hooks: actionlint, check-jsonschema, commitlint
-(commit-msg), deadnix, editorconfig-checker, markdownlint, nixfmt,
+(commit-msg), deadnix, editorconfig-checker, markdownlint, mypy-strict, nixfmt,
 octoscan, statix, typos, yamllint, shellcheck (skipping `justfile`),
 treefmt, zizmor (`--min-severity=low`), flake-show-fresh,
 uses-sha-pinned. The full list is generated from the hook manifests —
@@ -267,7 +267,7 @@ the enumerated planning and review labels above are blocked.
     <!-- BEGIN ephemeral-refs-gap -->
 
     File types no extractor claims and that carry `#` comments:
-    `.awk`, `.envrc`, `.gitignore`, `.py`, `.toml`, `.txt`, `docs-audit-state`, `justfile`.
+    `.awk`, `.envrc`, `.gitignore`, `.ini`, `.py`, `.toml`, `.txt`, `docs-audit-state`, `justfile`.
     No blocking shape appears in any of them.
 
     <!-- END ephemeral-refs-gap -->
@@ -1071,7 +1071,8 @@ the backslash inside the code span.
 It runs in the `lint-doc-invariants` group and as the
 `check-scripts-reference-roundtrip` pre-commit hook. Both run it with the
 Python bound in `nix/renderer-python.nix`, which carries python-markdown,
-Pygments, pymdown-extensions and PyYAML itself. The hook puts that Python
+Pygments, pymdown-extensions and PyYAML itself, plus the type checker in
+[Python type checking](#python-type-checking). The hook puts that Python
 first on its own `PATH`. The group runs in `devShells.default`, where other
 inputs propagate their own `python3`, so the shell lists the bound Python as
 its first `buildInputs` entry and its interpreter leads `PATH`; listed later,
@@ -1079,6 +1080,30 @@ a propagated `python3` would run the check instead.
 `checks.devshell-renderer-python` fails `nix flake check` when it is not
 first. A `python3` that cannot import
 python-markdown or PyYAML makes the check exit 2.
+
+## Python type checking
+
+The `mypy-strict` pre-commit hook runs `mypy --strict` over every `.py` file
+under `scripts/` and `docs/_data/`, and fails on any error. A Python file
+elsewhere in the tree is not checked until its directory is added to
+`files` in `mypy.ini`. `mypy.ini` holds the file list and every option, and
+the hook runs bare `mypy`, so a local `mypy` in the devShell checks the same
+files the same way.
+
+The hook's interpreter is the round-trip check's own Python from
+`nix/renderer-python.nix`, which also carries mypy and the `types-Markdown`
+and `types-PyYAML` stubs: the code is checked against the python-markdown
+and PyYAML versions it runs with. The hook writes no cache
+(`cache_dir = /dev/null`), needs no network, and has no `NIX_BUILD_TOP`
+guard, so it runs inside `nix flake check` too, which is how the CI
+`flake-check` job enforces it.
+
+The PyYAML stubs leave some loader methods unannotated, among them
+`construct_object`, `resolve` and `add_multi_constructor`, and strict mode
+rejects a call to any of them. mypy names such a call by the receiver's
+class, so `untyped_calls_exclude` names the checker's own `SiteLoader`,
+which declares no methods of its own: only the methods it inherits from
+PyYAML are exempt.
 
 ## Payload shape-gate scenario coverage
 

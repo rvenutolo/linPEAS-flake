@@ -4,6 +4,12 @@
   treefmtWrapper,
   ...
 }:
+let
+  # mypy and the stubs it reads ride in the round-trip check's own Python,
+  # so the type check sees the markdown and PyYAML versions the checker
+  # runs with.
+  rendererPython = import ../renderer-python.nix { inherit pkgs-unstable; };
+in
 {
   actionlint = {
     enable = true;
@@ -128,6 +134,21 @@
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-jsonschema.sh
     ''}";
     files = "^(renovate\\.json|\\.markdownlint\\.json|\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/check-jsonschema\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
+  # `mypy --strict` over the repo's Python, with the file list and options
+  # in mypy.ini, so bare `mypy` in the devShell checks exactly what this
+  # hook does. No NIX_BUILD_TOP guard: the check is offline and writes no
+  # cache, so it also runs inside `nix flake check`, which is how CI's
+  # flake-check job enforces it. flake.lock is watched because a lock bump
+  # can bring a newer mypy or newer stubs.
+  mypy-strict = {
+    enable = true;
+    name = "mypy-strict";
+    description = "Strict type check of the repo's Python (files and options in mypy.ini).";
+    entry = "${rendererPython}/bin/mypy";
+    files = "^(.*\\.py|mypy\\.ini|flake\\.lock|nix/renderer-python\\.nix)$";
     pass_filenames = false;
     language = "system";
   };

@@ -4,10 +4,17 @@
 # check's pre-commit hook and by `devShells.default` (where the
 # `lint-doc-invariants` group runs it), so the two cannot carry
 # different library sets.
+#
+# mypy and the `markdown` / PyYAML stubs ride in the same binding so the
+# `mypy-strict` hook type-checks against the library versions the check
+# runs with, and a local `mypy` in the devShell agrees with the hook.
 { pkgs-unstable }:
 pkgs-unstable.python3.withPackages (ps: [
   ps.markdown
+  ps.mypy
   ps.pygments
   ps.pymdown-extensions
   ps.pyyaml
+  ps.types-markdown
+  ps.types-pyyaml
 ])

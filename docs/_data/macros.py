@@ -7,6 +7,6 @@ minimal makes templates predictable.
 """
 
 
-def define_env(env):  # noqa: D401, ARG001
+def define_env(env: object) -> None:  # noqa: D401, ARG001
     """Register no extra macros. `include_yaml` handles data injection."""
     return None
