@@ -486,6 +486,10 @@ function main() {
       'inherit-merge-key.yml' $'x: &b\n  secrets: inherit\n'"${call_head}"$'    <<: *b\n' 1 stderr "${inherit_line}"
     run_text_scenario 'secrets: inherit in a job written as an alias fails' \
       'inherit-job-alias.yml' $'x: &j\n  uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n  secrets: inherit\non: pull_request\njobs:\n  a: *j\n' 1 stderr "${inherit_line}"
+    run_text_scenario 'secrets: inherit as an alias in a job written as an alias fails' \
+      'inherit-nested-alias.yml' $'x-s: &s inherit\nx: &j\n  uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n  secrets: *s\non: pull_request\njobs:\n  a: *j\n' 1 stderr "${inherit_line}"
+    run_text_scenario 'secrets: inherit in a job a merge key under jobs: brings in fails' \
+      'inherit-jobs-merge-key.yml' $'x: &js\n  a:\n    uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n    secrets: inherit\non: pull_request\njobs:\n  <<: *js\n' 1 stderr "${inherit_line}"
     run_text_scenario 'a secret in an explicit secrets: map fails' \
       'inherit-map.yml' "${call_head}"$'    secrets:\n      K: ${{ secrets.MAP_SECRET }}\n' 1 stderr \
       'FILE:6: secrets.MAP_SECRET not allowed in PR-triggered workflow'

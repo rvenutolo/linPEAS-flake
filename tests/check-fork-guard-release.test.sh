@@ -286,4 +286,26 @@ expect_body workflow-env-other-secret.yml "${WF_ENV_HEAD}secrets.BUMP_APP_OTHER_
 expect_body workflow-env-unread.yml "${WF_ENV_HEAD}secrets.BUMP_APP_OTHER_KEY${WF_ENV_TAIL}" 2 \
   'cannot read the workflow env: from DIR/workflow-env-unread.yml' '.env'
 
+# A job calling a reusable workflow with `secrets: inherit` hands it the
+# App's private key with every other secret, though no `${{ }}` names one,
+# so it needs the guard. It is read through `yq`, so a quoted or aliased
+# value, or a job written as an alias, is read the same. A job naming the
+# key in an explicit `secrets:` map is read through that expression. A
+# call passing no secrets, an empty `secrets:`, and a guarded inheriting
+# job are the controls.
+readonly CALL_HEAD=$'on: push\njobs:\n  a:\n    uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n'
+for case in 'plain|    secrets: inherit' "quoted|    \"secrets\": !!str 'inherit'" \
+  $'map|    secrets:\n      K: ${{ secrets.BUMP_APP_PRIVATE_KEY }}'; do
+  label="${case%%|*}" shape="${case#*|}"
+  expect_body "inherit-${label}.yml" "${CALL_HEAD}${shape}"$'\n' 1 \
+    "DIR/inherit-${label}.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+done
+expect_body inherit-alias.yml $'x-s: &s inherit\nx: &j\n  uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n  secrets: *s\non: push\njobs:\n  a: *j\n' 1 \
+  "DIR/inherit-alias.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body inherit-none.yml "${CALL_HEAD}" 0 ''
+expect_body inherit-null.yml "${CALL_HEAD}"$'    secrets:\n' 0 ''
+expect_body inherit-guarded.yml "${CALL_HEAD}"$'    if: github.repository == \'rvenutolo/linPEAS-flake\'\n    secrets: inherit\n' 0 ''
+expect_body inherit-unread.yml "${CALL_HEAD}"$'    secrets: inherit\n' 2 \
+  'cannot read the secrets: of job a from DIR/inherit-unread.yml' '.secrets'
+
 printf 'all tests passed\n'
