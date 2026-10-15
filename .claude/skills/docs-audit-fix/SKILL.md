@@ -1,6 +1,7 @@
 ---
 name: docs-audit-fix
 description: Fix pass for a docs-correctness-audit findings report — works the findings on a branch, records a paragraph ledger, runs a separate-agent gate, and opens the PR only when check-fix-ledger.sh passes. Invoke ONLY via the /docs-fix slash command. Do NOT auto-trigger on natural-language mentions of fixing docs or audit findings.
+user-invocable: false
 ---
 
 # Docs-audit fix pass
