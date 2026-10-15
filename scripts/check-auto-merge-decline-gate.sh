@@ -21,7 +21,9 @@
 # `CLOSED|MERGED` token co-located with `exit 1`.
 #
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
-# finding and that workflow's jobs are not read. A merge list inside a
+# finding and that workflow's jobs are not read. `jobs:` is read as
+# `JOBS_NODE`, so a root key written as an alias of `jobs` is read, and
+# one given twice is a workflow `yq` cannot evaluate. A merge list inside a
 # job is read first mapping wins, as the YAML merge specification says
 # (`YQ_MERGE_SPEC`).
 #
@@ -80,7 +82,7 @@ for f in "${selected_files[@]}"; do
   # output cannot round-trip through "$(...)" (bash command substitution
   # strips embedded NUL bytes), hence the temp file.
   runs_file="$(make_temp)"
-  if ! yq eval "${YQ_MERGE_SPEC[@]}" -0 '.jobs[].steps[].run // ""' "${f}" >"${runs_file}"; then
+  if ! yq eval "${YQ_MERGE_SPEC[@]}" -0 "${JOBS_NODE}"' | .[].steps[].run // ""' "${f}" >"${runs_file}"; then
     rm --force -- "${runs_file}"
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))

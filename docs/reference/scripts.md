@@ -2763,8 +2763,9 @@ Print the finding for a refused job key.
 
 Print the first key of the job ids a script lists that the
 list cannot carry, as a JSON string, or nothing when every key is
-carriable. The keys are those the job-id read returns: `jobs:` and the
-keys in it are resolved through `RESOLVE_JOB_ALIASES` first, so a merge
+carriable. The keys are those the job-id read returns: `jobs:` is the
+`JOBS_NODE`, and it and the keys in it are resolved through
+`RESOLVE_JOB_ALIASES` first, so a merge
 key brings in the jobs it names, which are checked, and is not itself a
 key. A key is refused when it is not a scalar, is empty, or holds a tab,
 a line break, a carriage return or a NUL.

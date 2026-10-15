@@ -119,14 +119,13 @@ function expect_unearned_exempt() {
   rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
-# @description Run the script under en_US.UTF-8 on the good workflow
-# rewritten by one sed program, and compare exit code and the whole of
-# stderr. In that locale a bash range such as `[A-Za-z0-9_]` also matches
-# non-ASCII letters.
+# @description Run the script on the good workflow rewritten by one sed
+# program, and compare exit code and the whole of stderr.
 # @arg $1 scenario name  @arg $2 sed program  @arg $3 expected exit
 # @arg $4 the whole expected stderr, with DIR for the temp directory
-function expect_en_us() {
-  local -r name="$1" program="$2" want_exit="$3"
+# @arg $5 optional locale the script runs under
+function expect_rewritten() {
+  local -r name="$1" program="$2" want_exit="$3" locale="${5:-${LC_ALL:-}}"
   local dir stderr_file stdout_file outcome_file want
   dir="$(mktemp --directory)"
   stderr_file="$(mktemp)"
@@ -136,7 +135,7 @@ function expect_en_us() {
   want="${4//DIR/${dir}}"
 
   local got_exit=0
-  LC_ALL=en_US.UTF-8 VERIFY_WORKFLOW_OVERRIDE="${dir}/workflow.yml" \
+  LC_ALL="${locale}" VERIFY_WORKFLOW_OVERRIDE="${dir}/workflow.yml" \
     VERIFICATION_DOC_OVERRIDE="${FIXTURES}/good/verification.md" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || got_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
@@ -149,9 +148,19 @@ function expect_en_us() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${got_exit}"
   fi
 
-  harness_assert_record "${name}" "${want#"${dir}/"}" \
+  # The recorded substring is the first line, as one may not hold a line
+  # break.
+  local record="${want%%$'\n'*}"
+  harness_assert_record "${name}" "${record#"${dir}/"}" \
     "${outcome_file}" "${stdout_file}" "${stderr_file}"
   rm --recursive --force -- "${dir}" "${stderr_file}" "${stdout_file}" "${outcome_file}"
+}
+
+# @description Run the script under en_US.UTF-8 on the good workflow
+# rewritten by one sed program, as `expect_rewritten` does. In that locale
+# a bash range such as `[A-Za-z0-9_]` also matches non-ASCII letters.
+function expect_en_us() {
+  expect_rewritten "$1" "$2" "$3" "$4" en_US.UTF-8
 }
 
 # @description A merge list inside the verify job is read first mapping
@@ -315,7 +324,7 @@ function main() {
   expect_unearned_exempt
 
   expect 'malformed' 'bad-malformed.yml' 2 \
-    'could not evaluate'
+    'bad-malformed.yml: could not evaluate'
 
   require_locale_gap en_US.UTF-8 || exit 1
   expect_en_us 'non-ASCII letter in an env key is not a shell identifier under en_US.UTF-8' \
@@ -327,6 +336,15 @@ function main() {
   expect_en_us 'non-ASCII letter in a step id is not read as an outcome reference under en_US.UTF-8' \
     's/step-charlie/step-charlié/g' 1 \
     'DIR/workflow.yml: step id step-charlié has no steps.<id>.outcome entry in the attribution env'
+  # A root key written as an alias of `jobs` is `jobs:`, as GitHub Actions
+  # reads it, for every read of the verify job; one given twice, plain and
+  # as an alias, is a workflow the check cannot read.
+  expect_rewritten 'a jobs: key written as an alias is read' \
+    's/^name: fixture-verify$/name: \&k jobs/; s/^jobs:$/*k :/; /^ *STEP_CHARLIE:/d' 1 \
+    'DIR/workflow.yml: step id step-charlie has no steps.<id>.outcome entry in the attribution env'
+  expect_rewritten 'a jobs: key given twice is unreadable' \
+    's/^name: fixture-verify$/name: \&k jobs\njobs: {}/; s/^jobs:$/*k :/' 2 \
+    $'Error: jobs: is given more than once\nDIR/workflow.yml: could not evaluate workflow with yq (malformed?)'
   expect_merge_order 'a merge list in the verify job is read first mapping wins: the step the env misses first is refused' \
     '[*with-bravo, *without-bravo]' 1 \
     'step id step-bravo has no steps.<id>.outcome entry in the attribution env'

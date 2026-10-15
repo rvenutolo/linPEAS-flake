@@ -376,6 +376,19 @@ expect_jobs 'ci.yml aliased job key inside an aliased jobs map' \
   $'name: &k foo\nx: &j\n  *k :\n    runs-on: ubuntu-latest\njobs: *j\n' $'foo: A\n' '' 0 ''
 expect_jobs 'other workflow aliased job key inside an aliased jobs map' \
   "${ONE_JOB}" $'foo: A\nnested-key-job: B\n' $'name: &k nested-key-job\nx: &j\n  *k :\n    runs-on: ubuntu-latest\njobs: *j\n' 0 ''
+# A root key written as an alias of `jobs` is `jobs:`, as GitHub Actions
+# reads it, in ci.yml and in any other workflow; one given twice, plain
+# and as an alias, is a job list this run cannot read.
+expect_jobs 'ci.yml jobs: key written as an alias' \
+  $'name: &k jobs\n*k :\n  foo:\n    runs-on: ubuntu-latest\n' $'foo: A\n' '' 0 ''
+expect_jobs 'other workflow jobs: key written as an alias' \
+  "${ONE_JOB}" $'foo: A\nroot-alias-job: B\n' $'name: &k jobs\n*k :\n  root-alias-job:\n    runs-on: ubuntu-latest\n' 0 ''
+expect_jobs 'ci.yml jobs: key given twice' \
+  $'name: &k jobs\njobs: {bar: {runs-on: x}}\n*k :\n  foo:\n    runs-on: ubuntu-latest\n' $'foo: A\n' '' 2 \
+  'cannot read job keys from DIR/ci.yml'
+expect_jobs 'other workflow jobs: key given twice' \
+  "${ONE_JOB}" $'foo: A\n' $'name: &k jobs\njobs: {bar: {runs-on: x}}\n*k :\n  baz:\n    runs-on: ubuntu-latest\n' 2 \
+  'cannot read job keys from DIR/other.yml: yq exited 1'
 # A merge key whose value is not a mapping cannot be resolved; the refusal
 # is the verdict, not a could-not-read exit.
 expect_jobs 'ci.yml merge key holding a scalar' \
@@ -436,6 +449,9 @@ expect_exact 'ci.yml merge key is one drift entry' \
   "DIR/ci.yml: jobs: ${REFUSED} (first: \"<<\")"$'\n'"${ONE_ENTRY}"
 expect_exact 'ci.yml refused key beside an aliased job key inside an aliased jobs map' \
   $'name: &k foo\nx: &j\n  *k :\n    runs-on: ubuntu-latest\n  "":\n    runs-on: ubuntu-latest\njobs: *j\n' $'foo: A\n' \
+  "DIR/ci.yml: jobs: ${REFUSED} (first: \"\")"$'\n'"${ONE_ENTRY}"
+expect_exact 'ci.yml refused key beside a job under a jobs: key written as an alias' \
+  $'name: &k jobs\n*k :\n  foo:\n    runs-on: ubuntu-latest\n  "":\n    runs-on: ubuntu-latest\n' $'foo: A\n' \
   "DIR/ci.yml: jobs: ${REFUSED} (first: \"\")"$'\n'"${ONE_ENTRY}"
 expect_exact 'ci.yml line-break key is one drift entry' \
   $'jobs:\n  "a\\nb":\n    runs-on: ubuntu-latest\n' $'x: A\n' \

@@ -332,6 +332,42 @@ function main() {
     "${work}/workflow-unparsable" 2 \
     'could not parse .github/workflows/update-flake-lock.yml'
 
+  # (k2) GOOD: a root key written as an alias of `env` or `jobs` is that
+  # key, as GitHub Actions reads it, so the lists and the lock update under
+  # it are read. One given twice, plain and as an alias, is a workflow the
+  # lint cannot read. Each case scans its own count of workflows, and a
+  # given-twice workflow carries its case's name, so no two outputs match.
+  local alias_case alias_key alias_extra alias_wf
+  for alias_case in env-alias env-twice jobs-alias jobs-twice; do
+    alias_key="${alias_case%%-*}"
+    alias_extra=''
+    write_tree "${work}/${alias_case}" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+      '    scripts/refresh-alpha.sh' \
+      $'    flake.lock\n    docs/reference/alpha.md'
+    case "${alias_case}" in
+    jobs-alias)
+      write_workflow "${work}/${alias_case}" 'idle-three.yml' 'false' 'omit' 'omit'
+      ;&
+    env-alias)
+      write_workflow "${work}/${alias_case}" 'idle-two.yml' 'false' 'omit' 'omit'
+      write_workflow "${work}/${alias_case}" 'idle-one.yml' 'false' 'omit' 'omit'
+      ;;
+    *) alias_extra="${alias_key}: {}" ;;
+    esac
+    alias_wf="${work}/${alias_case}/.github/workflows/${alias_case}.yml"
+    mv -- "${work}/${alias_case}/.github/workflows/update-flake-lock.yml" "${alias_wf}"
+    sed --in-place \
+      --expression="s/^permissions: {}$/permissions: {}\nx-key: \&k ${alias_key}\n${alias_extra}/" \
+      --expression="s/^${alias_key}:$/*k :/" \
+      -- "${alias_wf}"
+  done
+  expect 'agree: an env key written as an alias is read' "${work}/env-alias" 0 ''
+  expect 'agree: a jobs key written as an alias is read' "${work}/jobs-alias" 0 ''
+  expect 'tooling: an env key given twice is a could-not-run' "${work}/env-twice" 2 \
+    'Error: env: is given more than once'
+  expect 'tooling: a jobs key given twice is a could-not-run' "${work}/jobs-twice" 2 \
+    'Error: jobs: is given more than once'
+
   # (l) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' "${REPO_ROOT}" 0 ''
 

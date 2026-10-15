@@ -17,7 +17,12 @@
 # Each shape is read by its kind, with the tag beside it: a map carrying
 # a tag of its own is still a map, a list or a map is no string whatever
 # tag it carries, and a scalar is a string only with the string tag. An
-# alias is reported by its kind, unresolved. GitHub Actions reads a
+# alias is reported by its kind, unresolved. The key itself is read the
+# way GitHub Actions reads it, so one written as an alias of
+# `concurrency` is that key, and one given twice, plain and as an alias,
+# is a workflow that does not parse. Every read passes YQ_MERGE_SPEC, so
+# a root merge list is read first mapping wins, as the YAML merge
+# specification says. GitHub Actions reads a
 # workflow file as one YAML document and refuses one holding several, so
 # a file that `yq` reads as several is a finding and is read no further.
 #
@@ -41,11 +46,21 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIR=".github/workflows"
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
 readonly FILE_FILTER="${WORKFLOW_FILE_FILTER:-}"
 readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
+
+# The top-level `concurrency:` node: the one root key that is
+# `concurrency` or an alias of it, as GitHub Actions reads a root key
+# written as an alias. Its value is left as written, so a value written
+# as an alias is reported by its kind. A root holding the key more than
+# once makes `yq` fail, which the first read reports as a workflow that
+# does not parse.
+readonly CONC_NODE="${ROOT_KEY_RAW_NODE//@KEY@/concurrency}"
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -66,7 +81,7 @@ fi
 function read_workflow() {
   local -r file="$1" expr="$2"
   local value
-  if ! value="$(yq eval "${expr}" "${file}")"; then
+  if ! value="$(yq eval "${YQ_MERGE_SPEC[@]}" "${expr}" "${file}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
     return 1
   fi
@@ -104,7 +119,7 @@ for f in "${selected_files[@]}"; do
   # document, and GitHub Actions refuses a file holding several, so such a
   # file is a finding and is read no further. An alias is reported by its
   # kind, unresolved.
-  if ! conc_shape="$(read_workflow "${f}" '.concurrency | kind + " " + tag')"; then
+  if ! conc_shape="$(read_workflow "${f}" "${CONC_NODE}"' | kind + " " + tag')"; then
     failed=$((failed + 1))
     continue
   fi
@@ -131,7 +146,7 @@ for f in "${selected_files[@]}"; do
 
   # The group is a string: a scalar carrying the string tag. A list or a
   # map is no string whatever tag it carries.
-  group_shape="$(yq eval '.concurrency.group | kind + " " + tag' "${f}")" ||
+  group_shape="$(yq eval "${YQ_MERGE_SPEC[@]}" "${CONC_NODE}"' | .group | kind + " " + tag' "${f}")" ||
     die_unread 'the concurrency group shape' "${f}" "$?"
   case "${group_shape}" in
   'scalar !!null')
@@ -140,7 +155,7 @@ for f in "${selected_files[@]}"; do
     failed=$((failed + 1))
     ;;
   'scalar !!str')
-    group_val="$(yq eval '.concurrency.group' "${f}")" ||
+    group_val="$(yq eval "${YQ_MERGE_SPEC[@]}" "${CONC_NODE} | .group" "${f}")" ||
       die_unread 'the concurrency group' "${f}" "$?"
     if [[ -z ${group_val} ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose

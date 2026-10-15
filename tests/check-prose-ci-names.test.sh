@@ -497,6 +497,33 @@ function main() {
     printf 'FAIL: %s — the aliased job listed-key-job is reported as a ghost\n' "${LAST_NAME}" >&2
     failures=$((failures + 1))
   fi
+  # A root key written as an alias of `jobs` is `jobs:`, as GitHub Actions
+  # reads it: a sentence naming its job is not a ghost, and beside a
+  # refused key its names are still listed. One given twice, plain and as
+  # an alias, is a job list this run cannot read.
+  printf 'The %sroot-alias-job%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'name: &k jobs\n*k :\n  root-alias-job:\n    runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'root-jobs-alias-key-resolves' 0 '' '' \
+    "${odd_root}/workflows" "${odd_root}"
+  printf 'The %sroot-alias-job%s job runs on every PR.\nThe %sroot-absent%s job runs too.\n' \
+    "${bt}" "${bt}" "${bt}" "${bt}" >"${odd_root}/docs/x.md"
+  printf 'name: &k jobs\n*k :\n  root-alias-job:\n    runs-on: ubuntu-latest\n  "":\n    runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'root-jobs-alias-key-beside-a-refused-key-is-listed' 1 \
+    "${odd_root}/workflows/ci.yml: ${odd_refused} (first: \"\")" '' \
+    "${odd_root}/workflows" "${odd_root}"
+  also_expect 'docs/x.md:2: ghost: root-absent'
+  if grep --fixed-strings --quiet -- 'ghost: root-alias-job' "${LAST_STDERR}"; then
+    printf 'FAIL: %s — the job under the aliased jobs: key is reported as a ghost\n' "${LAST_NAME}" >&2
+    failures=$((failures + 1))
+  fi
+  printf 'name: &k jobs\njobs: {foo: {runs-on: x}}\n*k :\n  bar:\n    runs-on: ubuntu-latest\n' \
+    >"${odd_root}/workflows/ci.yml"
+  run_scenario 'root-jobs-key-given-twice-exits-2' 2 \
+    'Error: jobs: is given more than once' '' \
+    "${odd_root}/workflows" "${odd_root}"
+  also_expect 'prose-ci-names: could not read workflow job names'
   printf 'The %sfoo%s job runs on every PR.\n' "${bt}" "${bt}" >"${odd_root}/docs/x.md"
   # A directory named like a workflow matches the glob and is not read.
   rm --force -- "${odd_root}/workflows/ci.yml"

@@ -23,7 +23,9 @@
 #      opened one last.
 #
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
-# violation and that workflow's jobs are not read. A merge list inside a
+# violation and that workflow's jobs are not read. `jobs:` is read as
+# `JOBS_NODE`, so a root key written as an alias of `jobs` is read, and
+# one given twice is a workflow `yq` cannot parse. A merge list inside a
 # job is read first mapping wins, as the YAML merge specification says
 # (`YQ_MERGE_SPEC`).
 #
@@ -87,7 +89,7 @@ function main() {
       continue
     fi
     if ! out="$(yq eval "${YQ_MERGE_SPEC[@]}" "
-      [ .jobs[].steps[]
+      [ ${JOBS_NODE} | .[].steps[]
         | select(.uses // \"\" | test(\"${COMPOSITE_SUFFIX}(@|\$)\"))
         | select(.with.\"label-description\" != null)
         | (.with.label // \"-\") + \"\t\" + .with.\"label-description\" ]

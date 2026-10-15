@@ -303,7 +303,7 @@ run_scenario 'removed job and member are reported' 0 \
 # @arg $1 exit status for the failing read
 # @arg $2 text the failing read's input holds, or `-`
 # @arg $3 text of the failing read's expression (default: the job-id read's
-#         `| keys`; `to_entries` is the job-key read's)
+#         `| keys`; `to_json` is the job-key read's)
 function yq_stub() {
   local real_yq
   real_yq="$(command -v yq)"
@@ -368,7 +368,7 @@ PATH="${STUB_DIR}:${PATH}" run_scenario 'failed job-id read at HEAD stops the ru
 rm --recursive --force -- "${STUB_DIR}"
 
 # The job-key read of the same workflow is a separate read and fails alone.
-yq_stub 9 rollout to_entries
+yq_stub 9 rollout to_json
 PATH="${STUB_DIR}:${PATH}" run_scenario 'failed job-key read at HEAD stops the run' 2 \
   --expect-err 'cannot read job keys from .github/workflows/a.yml at HEAD: yq exited 9' \
   --forbid 'PRESSURE='
@@ -434,6 +434,25 @@ git -C "${SANDBOX}" add --all
 git -C "${SANDBOX}" commit --quiet -m 'ci: add a workflow merging a chain of maps'
 run_scenario 'a merge chain under jobs is resolved to its keys' 0 \
   --expect 'chain-base-job' --expect 'chain-own-job' --forbid '<<'
+
+# A root key written as an alias of `jobs` is `jobs:`, as GitHub Actions
+# reads it, both for the ids and for the keys the list cannot carry; one
+# given twice, plain and as an alias, stops the run. The jobs of the
+# scenario above are taken back out.
+git -C "${SANDBOX}" rm --quiet -- "${WF_DIR}/j.yml"
+printf 'name: &k jobs\n*k :\n  root-alias-key-job:\n    runs-on: x\n' >"${WF_DIR}/k.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add a workflow whose jobs key is an alias'
+run_scenario 'a jobs key written as an alias is counted' 0 \
+  --expect 'root-alias-key-job' --forbid 'hold a job key the list cannot carry'
+printf 'name: &k jobs\njobs: {plain-twice-job: {runs-on: x}}\n*k :\n  alias-twice-job:\n    runs-on: x\n' >"${WF_DIR}/l.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add a workflow giving its jobs key twice'
+run_scenario 'a jobs key given twice stops the run' 2 \
+  --expect-err 'cannot read job ids from .github/workflows/l.yml at HEAD: yq exited 1' \
+  --forbid 'plain-twice-job'
+git -C "${SANDBOX}" rm --quiet -- "${WF_DIR}/k.yml" "${WF_DIR}/l.yml"
+git -C "${SANDBOX}" commit --quiet -m 'ci: drop the aliased jobs key workflows'
 
 # A workflow holding a NUL byte is one `yq` cannot read. The bytes git
 # prints must reach `yq` as they are: a shell variable drops the NUL and

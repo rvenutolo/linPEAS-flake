@@ -28,12 +28,15 @@ readonly YQ_MERGE_SPEC=(--yaml-fix-merge-anchor-to-spec)
 # makes `yq` fail ("<name>: is given more than once"). With no such key
 # it is `.<name>`, which is how a key a root merge key brings in is read,
 # since the merged keys are not the root's own; a root that is no map
-# holds none. The key's value is read through an alias: `explode` handed
-# only that node resolves it in one pass, since an anchor cannot sit on
-# an alias. An absent key reads as null rather than as nothing at all.
-# A script reads one key with `${ROOT_KEY_NODE//@KEY@/<name>}`.
+# holds none. An absent key reads as null rather than as nothing at all.
+# `ROOT_KEY_RAW_NODE` is the key's value as written, an alias left
+# unresolved, for a script that reports such a value by its kind.
+# `ROOT_KEY_NODE` reads the value through an alias: `explode` handed only
+# that node resolves it in one pass, since an anchor cannot sit on an
+# alias. A script reads one key with `${ROOT_KEY_NODE//@KEY@/<name>}`.
 # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
-readonly ROOT_KEY_NODE='.@KEY@ as $plain | [select(kind == "map") | to_entries[] | select((.key | explode(.)) == "@KEY@") | .value] as $all | with(select($all | length > 1); error("@KEY@: is given more than once")) | ($all + [$plain] | .[0]) | [(select(kind == "alias") | explode(.)), select(kind != "alias")] | .[0]'
+readonly ROOT_KEY_RAW_NODE='.@KEY@ as $plain | [select(kind == "map") | to_entries[] | select((.key | explode(.)) == "@KEY@") | .value] as $all | with(select($all | length > 1); error("@KEY@: is given more than once")) | ($all + [$plain] | .[0])'
+readonly ROOT_KEY_NODE="${ROOT_KEY_RAW_NODE}"' | [(select(kind == "alias") | explode(.)), select(kind != "alias")] | .[0]'
 
 # The `jobs:` node.
 readonly JOBS_NODE="${ROOT_KEY_NODE//@KEY@/jobs}"
@@ -83,8 +86,9 @@ function odd_job_key_message() {
 
 # @description Print the first key of the job ids a script lists that the
 # list cannot carry, as a JSON string, or nothing when every key is
-# carriable. The keys are those the job-id read returns: `jobs:` and the
-# keys in it are resolved through `RESOLVE_JOB_ALIASES` first, so a merge
+# carriable. The keys are those the job-id read returns: `jobs:` is the
+# `JOBS_NODE`, and it and the keys in it are resolved through
+# `RESOLVE_JOB_ALIASES` first, so a merge
 # key brings in the jobs it names, which are checked, and is not itself a
 # key. A key is refused when it is not a scalar, is empty, or holds a tab,
 # a line break, a carriage return or a NUL.
@@ -94,7 +98,7 @@ function odd_job_key_message() {
 # @exitcode 1 yq could not evaluate the file
 function first_unlistable_job_key() {
   local rows line
-  rows="$(yq eval "${YQ_MERGE_SPEC[@]}" '[(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | select(kind == "map") | to_entries[] | .key | select('"${UNLISTABLE_JOB_KEY}"') | tostring | to_json(0)] | .[0] // ""' "$1")" || return
+  rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "[(${JOBS_NODE} // {}) | ${RESOLVE_JOB_ALIASES}"' | select(kind == "map") | to_entries[] | .key | select('"${UNLISTABLE_JOB_KEY}"') | tostring | to_json(0)] | .[0] // ""' "$1")" || return
   while IFS= read -r line; do
     if [[ -n ${line} ]]; then
       printf '%s\n' "${line}"

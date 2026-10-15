@@ -109,7 +109,9 @@ readonly SCAN_ROOT="${SCAN_ROOT_OVERRIDE:-${REPO_ROOT}}"
 readonly HARNESS_RUNNER="${REPO_ROOT}/scripts/run-harness-group.sh"
 
 # @description Emit every `jobs:` key of every workflow file, one per line.
-#              A merge key is resolved, so the jobs it brings in are
+#              `jobs:` is `JOBS_NODE`, so a root key written as an alias of
+#              `jobs` is read, and one given twice fails the read. A merge
+#              key is resolved, so the jobs it brings in are
 #              listed; a key holding a line break, a tab or nothing is not
 #              listed, since a line cannot carry it, and nor is a key that
 #              is not a scalar. A scalar key YAML types as an int, a bool or
@@ -136,13 +138,13 @@ function job_names() {
       # refused file's own shape, not a missing precondition.
       # A read that fails (a merge key that is not a mapping) falls back to
       # the file's literal job keys, so the refusal is its only finding.
-      names="$(yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
-        names="$(yq eval "${YQ_MERGE_SPEC[@]}" --no-doc '(.jobs // {}) | select(kind == "map") | to_entries[] | .key | select(kind == "scalar" and tag != "!!merge") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
+      names="$(yq eval "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE} // {}) | ${RESOLVE_JOB_ALIASES}"' | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
+        names="$(yq eval "${YQ_MERGE_SPEC[@]}" --no-doc "(${JOBS_NODE} // {})"' | select(kind == "map") | to_entries[] | .key | select(kind == "scalar" and tag != "!!merge") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" 2>/dev/null)" ||
         names=''
       if [[ -n ${names} ]]; then printf '%s\n' "${names}"; fi
       continue
     fi
-    yq eval "${YQ_MERGE_SPEC[@]}" '(.jobs // {}) | '"${RESOLVE_JOB_ALIASES}"' | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" || return 1
+    yq eval "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE} // {}) | ${RESOLVE_JOB_ALIASES}"' | to_entries[] | .key | select(kind == "scalar") | tostring | select(test("^$|[\t\n\r\x00]") | not)' "${f}" || return 1
   done
 }
 

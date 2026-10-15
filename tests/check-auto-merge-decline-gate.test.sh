@@ -73,6 +73,13 @@ expect_built 'a merge key under jobs: is refused' \
   'x-base: &base {mergekey: {steps: [{run: "echo PAYLOAD_RAN; gh pr merge --auto 1"}]}}\non: push\njobs:\n  <<: *base\n' 1 'which GitHub Actions refuses'
 expect_built 'a job id holding a line break is refused' \
   'on: push\njobs:\n  "a\\nb":\n    steps:\n      - run: echo PAYLOAD_RAN; gh pr merge --auto 1\n' 1 'which GitHub Actions refuses'
+# A root key written as an alias of `jobs` is `jobs:`, as GitHub Actions
+# reads it; one given twice, plain and as an alias, fails the read.
+expect_built 'a jobs: key written as an alias is read' \
+  'name: &k jobs\non: push\n*k :\n  ungated:\n    steps:\n      - run: echo PAYLOAD_RAN; gh pr merge --auto 1\n' 1 'decline gate'
+expect_built 'a jobs: key given twice is unreadable' \
+  'name: &k jobs\non: push\njobs: {a: {steps: [{run: echo PAYLOAD_RAN}]}}\n*k :\n  ungated:\n    steps:\n      - run: echo PAYLOAD_RAN; gh pr merge --auto 1\n' 1 \
+  'Error: jobs: is given more than once'
 
 # A finding for the job keys ends the read of that workflow, so a job
 # behind the refused key adds no finding of its own, and a read that
