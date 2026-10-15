@@ -4,7 +4,8 @@
 # first job key the job list cannot carry (a line break, a carriage
 # return, an empty key, a key that is not a scalar, a merge key) and the
 # first key of a job-id list that the list cannot carry, reads `jobs:`
-# written as an alias, prints nothing for carriable keys or a
+# written as an alias and a root key written as an alias of `jobs`,
+# refuses a root `jobs:` given twice, prints nothing for carriable keys or a
 # `jobs:` that is no map, and reads a merge list first mapping wins
 # without yq's warning that the flag is false.
 set -Eeuo pipefail

@@ -116,12 +116,10 @@ function read_workflow() {
 # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
 readonly ON_NODE='.on as $plain | [to_entries[] | select((.key | explode(.)) == "on") | .value] as $all | with(select($all | length > 1); error("on: is given more than once")) | ($all + [$plain] | .[0]) as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)) | with(select([... | select(kind == "alias")] | length > 0); error("on: holds an alias nested too deep to resolve"))'
 
-# The top-level `permissions:` node, read through an alias: `explode`
-# handed only that node resolves it in one pass, since an anchor cannot
-# sit on an alias. The node is collected into a list first, so an absent
-# key reads as null rather than as nothing at all.
-# shellcheck disable=SC2016 # yq program literal
-readonly PERMS_NODE='[(.permissions | select(kind == "alias") | explode(.)), (.permissions | select(kind != "alias"))] | .[0]'
+# The top-level `permissions:` node (`ROOT_KEY_NODE`, which reads a root
+# key written as an alias and a value written as one alike). A key given
+# twice stops the run like any read `yq` cannot evaluate (exit 2).
+readonly PERMS_NODE="${ROOT_KEY_NODE//@KEY@/permissions}"
 
 failed=0
 fail() {

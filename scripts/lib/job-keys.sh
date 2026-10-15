@@ -22,9 +22,21 @@
 
 readonly YQ_MERGE_SPEC=(--yaml-fix-merge-anchor-to-spec)
 
-# The `jobs:` node, read through an alias: `explode` handed only that
-# node resolves it in one pass, since an anchor cannot sit on an alias.
-readonly JOBS_NODE='[(.jobs | select(kind == "alias") | explode(.)), (.jobs | select(kind != "alias"))] | .[0]'
+# A root key of a workflow, the text `@KEY@` standing for its name. It is
+# the one root key that is the name or an alias of it, as GitHub Actions
+# reads a root key written as an alias: a root holding more than one
+# makes `yq` fail ("<name>: is given more than once"). With no such key
+# it is `.<name>`, which is how a key a root merge key brings in is read,
+# since the merged keys are not the root's own; a root that is no map
+# holds none. The key's value is read through an alias: `explode` handed
+# only that node resolves it in one pass, since an anchor cannot sit on
+# an alias. An absent key reads as null rather than as nothing at all.
+# A script reads one key with `${ROOT_KEY_NODE//@KEY@/<name>}`.
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+readonly ROOT_KEY_NODE='.@KEY@ as $plain | [select(kind == "map") | to_entries[] | select((.key | explode(.)) == "@KEY@") | .value] as $all | with(select($all | length > 1); error("@KEY@: is given more than once")) | ($all + [$plain] | .[0]) | [(select(kind == "alias") | explode(.)), select(kind != "alias")] | .[0]'
+
+# The `jobs:` node.
+readonly JOBS_NODE="${ROOT_KEY_NODE//@KEY@/jobs}"
 
 # Two `explode` passes read the job keys of a `jobs:` node. One pass
 # replaces the aliases the node holds with what they stand for and leaves

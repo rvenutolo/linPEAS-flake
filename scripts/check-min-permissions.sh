@@ -95,12 +95,9 @@ function die_unread() {
   exit 2
 }
 
-# The top-level `permissions:` node, read through an alias: `explode`
-# handed only that node resolves it in one pass, since an anchor cannot
-# sit on an alias. The node is collected into a list first, so an absent
-# key reads as null rather than as nothing at all.
-# shellcheck disable=SC2016 # yq program literal
-readonly TOP_PERMS='[(.permissions | select(kind == "alias") | explode(.)), (.permissions | select(kind != "alias"))] | .[0]'
+# The top-level `permissions:` node (`ROOT_KEY_NODE`, which reads a root
+# key written as an alias and a value written as one alike).
+readonly TOP_PERMS="${ROOT_KEY_NODE//@KEY@/permissions}"
 
 failed=0
 shopt -s nullglob

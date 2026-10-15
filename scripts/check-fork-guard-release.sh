@@ -43,7 +43,8 @@
 # Every job inherits the workflow-level `env:`, so a read of the key there,
 # named or not, or an expression there not closed on its line, puts every
 # job in the file under the guard. It is read the same way, through its
-# aliases and merge keys. No other workflow-level key can read a secret:
+# aliases and merge keys, and so are a root `env:` or `jobs:` key written
+# as an alias; one given twice, plain and as an alias, is refused. No other workflow-level key can read a secret:
 # GitHub Actions makes the `secrets` context available to `env:` alone
 # among them (`run-name`, `concurrency` and `defaults` cannot read it).
 #
@@ -260,8 +261,9 @@ for f in "${selected_files[@]}"; do
   [[ -n ${rows} ]] || continue
   # Every job inherits the workflow-level `env:`, the one workflow-level
   # key GitHub Actions lets read the `secrets` context, so a read of the
-  # App's private key there puts every job under the guard.
-  if ! env_text="$(yq eval "${YQ_MERGE_SPEC[@]}" '.env | explode(.)' "${f}")"; then
+  # App's private key there puts every job under the guard. The key is
+  # read as `ROOT_KEY_NODE` reads it, so one written as an alias is read.
+  if ! env_text="$(yq eval "${YQ_MERGE_SPEC[@]}" "${ROOT_KEY_NODE//@KEY@/env}"' | explode(.)' "${f}")"; then
     printf 'cannot read the workflow env: from %s\n' "${f}" >&2
     exit 2
   fi

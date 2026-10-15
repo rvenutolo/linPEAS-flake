@@ -645,7 +645,7 @@ GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every guard-re
 
 A file `yq` reads as several YAML documents (GitHub Actions refuses a workflow file holding several) is reported without its jobs being read.
 
-A job key the job list cannot carry, or a merge key directly under `jobs:`, is a counted finding and the file's jobs are not read. The App-token check reads the matched job after `explode`, so a step reached through a job written as an alias or through a merge key inside the job is found, and a merge list is read first mapping wins. See "Job keys and merge lists in the `jobs:` reads" in `docs/development/linting.md`.
+A root `env:` or `jobs:` key written as an alias is read as the key it stands for, and a file giving one twice, plain and as an alias, is not passed. A job key the job list cannot carry, or a merge key directly under `jobs:`, is a counted finding and the file's jobs are not read. The App-token check reads the matched job after `explode`, so a step reached through a job written as an alias or through a merge key inside the job is found, and a merge list is read first mapping wins. See "Job keys and merge lists in the `jobs:` reads" in `docs/development/linting.md`.
 
 Enforced by `scripts/check-fork-guard-release.sh`. Wired as the `lint-workflow-security` CI job (member check `fork-guard-release`) and as a pre-commit hook.
 

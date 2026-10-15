@@ -37,7 +37,7 @@ below.
 
 - top-level `permissions:` missing, non-empty map, scalar (`read-all` /
     `write-all`), or any other shape such as a list (read by its YAML
-    kind and through an alias, so an empty map carrying a tag of its own
+    kind and through an alias, its root key included, so an empty map carrying a tag of its own
     passes and an empty scalar carrying the map tag does not)
 - a workflow file `yq` reads as several YAML documents
 - any job whose `permissions:` block is omitted or not a map (read by its
