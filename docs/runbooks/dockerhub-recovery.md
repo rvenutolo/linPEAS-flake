@@ -79,8 +79,9 @@ credential is sound. Take these first instead:
     [SECURITY.md](https://github.com/rvenutolo/linPEAS-flake/blob/main/SECURITY.md).
     No republish below runs until they are reissued.
 1. Capture both registries' current manifests before changing
-    anything — `docker manifest inspect` against each — so the
-    rewritten bytes are recoverable evidence rather than something the
+    anything — `docker buildx imagetools inspect --raw` against each,
+    as `verify-latest-release.yml` does to compare the registries — so
+    the rewritten bytes are recoverable evidence rather than something the
     republish overwrites. Both repositories are public, so this step
     needs no credential and does not wait on the reissue.
 1. Only then apply the republish path below, with reissued
@@ -293,8 +294,9 @@ text):
     `_DELETE` variants are authoritative.
 1. No workflow may use the `secrets` context without a literal name
     (`toJSON(secrets)`, `secrets[format(...)]`, `secrets[env.NAME]`,
-    `secrets.*`, a double-quoted index), leave an expression unclosed on
-    its line, or give a job `secrets: inherit`: no name in the text says
+    `secrets.*`, a double-quoted index, the word `secrets` inside a
+    string literal), leave an expression unclosed on its line, or give
+    a job `secrets: inherit`: no name in the text says
     which token such a use reads or hands on.
 1. `release-on-bump.yml` must consume `secrets.DOCKERHUB_TOKEN_RW` and
     `dockerhub-sync.yml` must consume `secrets.DOCKERHUB_TOKEN_DELETE` —

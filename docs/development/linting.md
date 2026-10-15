@@ -822,11 +822,12 @@ such a file, so the refusal is its only finding and their other checks do
 not report those names missing. The shared reading refuses the
 carriage return and the NUL because `yq` counts a lone carriage return
 as a line break and a line-by-line read does not, and bash drops a NUL
-from the text it reads. A lint with a check of its own refuses a line
-break and a tab, most also refuse a NUL, and of those only
-`check-min-permissions.sh` and `check-egress-allowlist.sh`, which also
-run the shared reading, refuse a carriage return; the others read it as
-part of the name. A
+from the text it reads. Most of the lints listed below with a check of
+their own refuse a line break, a tab and a NUL in that check, and no such
+check refuses a carriage return. `check-min-permissions.sh` and
+`check-egress-allowlist.sh` also run the shared reading, which refuses
+the carriage return and the NUL for them; the others read a carriage
+return as part of the name. A
 generator (`refresh-ci-dag.sh`, `refresh-enforcement-matrix.sh`) stops
 with exit 2 and leaves its output untouched instead. The shared reading
 is `first_odd_job_key` and `odd_job_key_message` in
@@ -864,7 +865,8 @@ in, as the list reads it, and is not itself refused.
 The same report's lint-group member list has no such guard. It splits
 `yq`'s output on line breaks and drops a NUL, so a member holding a line
 break is listed as two names and one holding a NUL as one name without it;
-an empty member, or one holding a tab or a carriage return, is omitted.
+an empty member, or one holding a tab, a carriage return or any other
+character outside a job id (`JOB_ID_RE` in the script), is omitted.
 Refusing would end the reminder's run and lose its verdict, and the list is
 advisory. `check-ci-job-in-summary.sh` stops CI on an empty member and on one
 that spans lines, so a manifest on a measured ref holds neither.

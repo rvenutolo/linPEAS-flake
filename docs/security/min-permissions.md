@@ -37,14 +37,15 @@ below.
 
 - top-level `permissions:` missing, non-empty map, scalar (`read-all` /
     `write-all`), or any other shape such as a list (read by its YAML
-    kind and through an alias, its root key included, so an empty map carrying a tag of its own
+    kind and through an alias, as is a `permissions:` root key written as an alias, so an empty map carrying a tag of its own
     passes and an empty scalar carrying the map tag does not)
 - a workflow file `yq` reads as several YAML documents
 - any job whose `permissions:` block is omitted or not a map (read by its
     YAML kind, so a map carrying a tag of its own passes)
 - a merge key directly under `jobs:`, or a job key that is empty, is
     not a scalar, or holds a tab, a line break, a carriage return or a
-    NUL; that workflow's jobs are not read
+    NUL, or the tag of a job id, a job or its `permissions:` holding a
+    tab or a line break; that workflow's jobs are not read
 
 Wired as the `lint-workflow-security` CI job (member check
 `min-permissions`) and as a pre-commit hook.
