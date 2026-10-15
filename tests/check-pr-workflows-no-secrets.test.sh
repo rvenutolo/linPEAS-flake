@@ -467,6 +467,42 @@ function main() {
       'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 4 secrets.GITHUB_TOKEN reference(s) allowed'
   }
 
+  # A job calling a reusable workflow with `secrets: inherit` hands it every
+  # secret the caller can read, though no `${{ }}` names one. It is read
+  # through `yq`, so a quoted, tagged or aliased value, or one a merge key
+  # brings in, is read the same. An explicit `secrets:` map is read through
+  # the expressions in its values. A call passing no secrets, or an empty
+  # `secrets:`, is the control.
+  {
+    local -r call_head=$'on: pull_request\njobs:\n  a:\n    uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n'
+    local -r inherit_line='FILE: job "a" passes every secret to the workflow it calls (secrets: inherit), not allowed in PR-triggered workflow'
+    run_text_scenario 'secrets: inherit fails' \
+      'inherit.yml' "${call_head}"$'    secrets: inherit\n' 1 stderr "${inherit_line}"
+    run_text_scenario 'a quoted secrets: inherit fails' \
+      'inherit-quoted.yml' "${call_head}"$'    "secrets": !!str \'inherit\'\n' 1 stderr "${inherit_line}"
+    run_text_scenario 'an aliased secrets: inherit fails' \
+      'inherit-alias.yml' $'x: &s inherit\n'"${call_head}"$'    secrets: *s\n' 1 stderr "${inherit_line}"
+    run_text_scenario 'a secrets: inherit a merge key brings in fails' \
+      'inherit-merge-key.yml' $'x: &b\n  secrets: inherit\n'"${call_head}"$'    <<: *b\n' 1 stderr "${inherit_line}"
+    run_text_scenario 'secrets: inherit in a job written as an alias fails' \
+      'inherit-job-alias.yml' $'x: &j\n  uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n  secrets: inherit\non: pull_request\njobs:\n  a: *j\n' 1 stderr "${inherit_line}"
+    run_text_scenario 'a secret in an explicit secrets: map fails' \
+      'inherit-map.yml' "${call_head}"$'    secrets:\n      K: ${{ secrets.MAP_SECRET }}\n' 1 stderr \
+      'FILE:6: secrets.MAP_SECRET not allowed in PR-triggered workflow'
+    # Each pass allows its own count of GITHUB_TOKEN references, so no two
+    # passes print the same summary.
+    local -r tokens=$'      t1: ${{ secrets.GITHUB_TOKEN }}\n      t2: ${{ secrets.GITHUB_TOKEN }}\n      t3: ${{ secrets.GITHUB_TOKEN }}\n      t4: ${{ secrets.GITHUB_TOKEN }}\n      t5: ${{ secrets.GITHUB_TOKEN }}\n      t6: ${{ secrets.GITHUB_TOKEN }}\n'
+    run_text_scenario 'GITHUB_TOKEN in an explicit secrets: map passes' \
+      'inherit-map-token.yml' "${call_head}"$'    secrets:\n'"${tokens}" 0 stdout \
+      'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 6 secrets.GITHUB_TOKEN reference(s) allowed'
+    run_text_scenario 'a reusable-workflow call passing no secrets passes' \
+      'inherit-none.yml' "${call_head}"$'    with:\n'"${tokens}"$'      t7: ${{ secrets.GITHUB_TOKEN }}\n' 0 stdout \
+      'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 7 secrets.GITHUB_TOKEN reference(s) allowed'
+    run_text_scenario 'an empty secrets: passes' \
+      'inherit-null.yml' "${call_head}"$'    secrets:\n    with:\n'"${tokens}"$'      t7: ${{ secrets.GITHUB_TOKEN }}\n      t8: ${{ secrets.GITHUB_TOKEN }}\n' 0 stdout \
+      'pr-workflows-no-secrets: examined 1 workflow(s): 1 scanned as PR-triggered, 0 skipped as not PR-triggered; 8 secrets.GITHUB_TOKEN reference(s) allowed'
+  }
+
   # A workflow with no `on:` is not PR-triggered: beside a clean
   # PR-triggered one, it is counted as skipped.
   local no_on_dir no_on_out no_on_err no_on_outcome no_on_exit=0
