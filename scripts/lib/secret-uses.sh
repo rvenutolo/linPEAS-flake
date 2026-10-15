@@ -4,8 +4,10 @@
 # workflow text, one line at a time: each secret a `${{ }}` expression
 # names, each expression that uses the context without a literal name,
 # and each `${{` not closed on its line; and the decoded text of a YAML
-# file's double-quoted scalars, which a reader of the file text misses.
-# Source after `set -Eeuo pipefail` and after scripts/lib/ascii-match.sh.
+# file's double-quoted scalars, which a reader of the file text misses;
+# and the jobs that hand every secret on with `secrets: inherit`.
+# Source after `set -Eeuo pipefail` and after scripts/lib/ascii-match.sh,
+# and after scripts/lib/job-keys.sh for `inherit_secret_jobs`.
 # shellcheck shell=bash
 
 # A secret reference in the dot or the index form, with any name, the
@@ -119,5 +121,34 @@ function double_quoted_scalars() {
   fi
   if [[ -n ${texts} ]]; then
     printf '%s\n' "${texts}"
+  fi
+}
+
+# A job's `secrets:` value read as `inherit`, as a `yq` condition on that
+# node: anything but a map or null (see inherit_secret_jobs).
+readonly INHERITS_SECRETS='(kind == "scalar" and tag != "!!null") or kind == "seq"'
+
+# @description Print, one per line as a JSON string, the key of each job
+# that hands every secret to the reusable workflow it calls: its
+# `secrets:` is `inherit`, which no `${{ }}` holds, so `secret_uses` never
+# reads it. GitHub Actions takes a map or `inherit` there and nothing else,
+# so any value but a map or null is read as `inherit` without its text
+# being compared. The `jobs:` node and each job are read through their
+# aliases and merge keys, and a merge key directly under `jobs:` brings its
+# jobs in. An explicit `secrets:` map names what it hands on in its values,
+# which `secret_uses` reads, so its job is not printed. Source
+# scripts/lib/job-keys.sh before this file.
+# @arg $1 workflow file path
+# @stdout the job keys
+# @exitcode 0 the file was read, whether a job inherits or not
+# @exitcode 2 `yq` could not read the file
+function inherit_secret_jobs() {
+  local -r file="$1"
+  local keys
+  if ! keys="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | explode(.) | select(kind == "map") | to_entries[] | select(.value | explode(.) | select(kind == "map") | .secrets | '"${INHERITS_SECRETS}"') | .key | tostring | to_json(0)] | .[]' "${file}")"; then
+    return 2
+  fi
+  if [[ -n ${keys} ]]; then
+    printf '%s\n' "${keys}"
   fi
 }

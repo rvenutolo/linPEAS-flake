@@ -47,6 +47,12 @@
 # GitHub Actions makes the `secrets` context available to `env:` alone
 # among them (`run-name`, `concurrency` and `defaults` cannot read it).
 #
+# A job calling a reusable workflow with `secrets: inherit` hands it every
+# secret, the key among them, though no `${{ }}` names one, so it needs the
+# guard too. Its `secrets:` is read through `yq`, through aliases and merge
+# keys, and any value but a map or null counts as `inherit`. An explicit
+# `secrets:` map is read through the expressions in its values, as above.
+#
 # Without the guard, a fork that inherits these workflows can fire
 # them under its own GITHUB_TOKEN (or repo-scoped secrets, if any
 # were configured). The repository check pins execution to the
@@ -71,8 +77,9 @@
 # cannot run: `yq` is absent from PATH, the workflow globs match no
 # file, WORKFLOW_FILE_FILTER selects none of the files they matched, or
 # a read of the workflow-level `env:` or its secrets uses, or of one job's
-# permissions, body, secrets uses or `if:`, fails once the job list has
-# been read. An empty scan set is a could-not-run rather than a clean tree;
+# permissions, `secrets:`, body, secrets uses or `if:`, fails once the job
+# list has been read. An empty scan set is a could-not-run rather than a
+# clean tree;
 # LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
 set -Eeuo pipefail
@@ -164,6 +171,16 @@ job_needs_fork_guard() {
       return 0
     fi
   done
+  # `secrets: inherit` hands the App's private key to the called workflow
+  # with every other secret, though no `${{ }}` names it. The job is
+  # exploded twice: one written as an alias may hold a `secrets:` written
+  # as an alias too. The match is counted: `yq` prints a literal after a
+  # `select` that matched nothing.
+  local inherits
+  if ! inherits="$(read_workflow "${file}" '['"${JOB_BY_KEY}"' | explode(.) | explode(.) | select(kind == "map") | .secrets | select('"${INHERITS_SECRETS}"')] | length' "${job}" 'secrets:')"; then
+    exit 2
+  fi
+  [[ ${inherits} != 0 ]] && return 0
   # App installation token = real write privilege despite a read-only
   # GITHUB_TOKEN. A job minting one must carry the fork guard.
   local body

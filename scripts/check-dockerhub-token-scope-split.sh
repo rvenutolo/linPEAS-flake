@@ -23,6 +23,10 @@
 # the object filter (`secrets.*`), a double-quoted index, and the word
 # `secrets` inside a string literal. So is a `${{` not closed on its line,
 # which the lint reads one line at a time (see scripts/lib/secret-uses.sh).
+# So is a job's `secrets: inherit` in every workflow, which hands every
+# secret to the reusable workflow the job calls without naming one; it is
+# read through `yq`, so a quoted, tagged or aliased value is read too. An
+# explicit `secrets:` map is read through the expressions in its values.
 # GitHub Actions evaluates an expression in a scalar as YAML decodes it,
 # and in a double-quoted scalar an escape (`s\x65crets`, `\x24{{`) can hide
 # a reference from the file text, so each rule also reads the decoded text
@@ -69,6 +73,8 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/md-fence.sh"
 # shellcheck source=scripts/lib/ascii-match.sh
 source "${_lib_dir}/lib/ascii-match.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 # shellcheck source=scripts/lib/secret-uses.sh
 source "${_lib_dir}/lib/secret-uses.sh"
 
@@ -213,8 +219,8 @@ done
 
 # Unnamed: a use of the `secrets` context that names no secret may read
 # either token or the unsuffixed one, and so may an expression not closed
-# on its line. Refused in every workflow, since no name in the text says
-# which token it reads.
+# on its line or a job's `secrets: inherit`. Refused in every workflow,
+# since no name in the text says which token it reads.
 # The decoded text of the workflow's double-quoted scalars is read after
 # its file text, and a use the file text already showed is not reported
 # again. A use read only there is reported with the file but no line: `yq`
@@ -254,6 +260,15 @@ for wf in "${workflow_files[@]}"; do
     done <<<"${records}"
   done
   unset seen
+  if ! inheriting="$(inherit_secret_jobs "${wf}")"; then
+    printf 'dockerhub-token-scope-split lint: yq could not read %s\n' \
+      "${wf}" >&2
+    exit 2
+  fi
+  while IFS= read -r job; do
+    [[ -z ${job} ]] && continue
+    violation "${wf}: job ${job} passes every secret to the workflow it calls (secrets: inherit; the scope split cannot tell which token it hands on)"
+  done <<<"${inheriting}"
 done
 
 # Markdown: a shell-fenced Docker Hub tag delete must carry the

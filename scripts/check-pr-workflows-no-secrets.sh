@@ -28,7 +28,11 @@
 # inside a string literal of an expression, which the guard cannot tell
 # from a use. A `${{` not closed on its own line is refused as well: GitHub
 # Actions reads an expression broken across the lines of a block scalar,
-# and the guard reads one line at a time. Not read: text outside `${{ }}`.
+# and the guard reads one line at a time. Text outside `${{ }}` is not
+# read, but for a job's `secrets: inherit`, which hands every secret to the
+# reusable workflow the job calls without naming one: it is refused, read
+# through `yq` so a quoted, tagged or aliased value is read too. An
+# explicit `secrets:` map is read through the expressions in its values.
 #
 # GitHub Actions evaluates an expression in the scalar as YAML decodes it,
 # and in a double-quoted scalar an escape (`s\x65crets`, `\x24{{`, `\x7d}`,
@@ -55,6 +59,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/ascii-match.sh
 source "${_lib_dir}/lib/ascii-match.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 # shellcheck source=scripts/lib/secret-uses.sh
 source "${_lib_dir}/lib/secret-uses.sh"
 
@@ -154,7 +160,8 @@ function report_use() {
 # @description Scan a PR-triggered workflow for disallowed secrets uses
 # and for expressions not closed on their line: first the file text, then
 # the decoded text of its double-quoted scalars, where a use the file text
-# already showed is not reported again. Increments the global failed
+# already showed is not reported again; then for jobs with
+# `secrets: inherit`. Increments the global failed
 # counter and prints violations to stderr.
 # @arg $1 path to workflow YAML
 function scan_secrets() {
@@ -189,6 +196,17 @@ function scan_secrets() {
       allowed=$((allowed + 1))
     fi
   done <<<"${decoded_uses}"
+  local inheriting job
+  if ! inheriting="$(inherit_secret_jobs "${file}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${file}" >&2
+    exit 2
+  fi
+  while IFS= read -r job; do
+    [[ -z ${job} ]] && continue
+    printf '%s: job %s passes every secret to the workflow it calls (secrets: inherit), not allowed in PR-triggered workflow\n' \
+      "${file}" "${job}" >&2
+    failed=$((failed + 1))
+  done <<<"${inheriting}"
 }
 
 failed=0

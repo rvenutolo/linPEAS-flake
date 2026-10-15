@@ -293,8 +293,9 @@ text):
     `_DELETE` variants are authoritative.
 1. No workflow may use the `secrets` context without a literal name
     (`toJSON(secrets)`, `secrets[format(...)]`, `secrets[env.NAME]`,
-    `secrets.*`, a double-quoted index) or leave an expression unclosed on
-    its line: no name in the text says which token such a use reads.
+    `secrets.*`, a double-quoted index), leave an expression unclosed on
+    its line, or give a job `secrets: inherit`: no name in the text says
+    which token such a use reads or hands on.
 1. `release-on-bump.yml` must consume `secrets.DOCKERHUB_TOKEN_RW` and
     `dockerhub-sync.yml` must consume `secrets.DOCKERHUB_TOKEN_DELETE` —
     the lint fails closed if either producer is removed, so a deletion
