@@ -362,6 +362,10 @@ the expression computes (`secrets[format(...)]`, `secrets[env.NAME]`),
 the object filter (`secrets.*`), a double-quoted index, and the word
 `secrets` inside a string literal. So is a `${{` not closed on its line,
 which the lint reads one line at a time (see scripts/lib/secret-uses.sh).
+So is a job's `secrets: inherit` in every workflow, which hands every
+secret to the reusable workflow the job calls without naming one; it is
+read through `yq`, so a quoted, tagged or aliased value is read too. An
+explicit `secrets:` map is read through the expressions in its values.
 GitHub Actions evaluates an expression in a scalar as YAML decodes it,
 and in a double-quoted scalar an escape (`s\x65crets`, `\x24{{`) can hide
 a reference from the file text, so each rule also reads the decoded text
@@ -3111,8 +3115,10 @@ Read the uses of the GitHub Actions `secrets` context in
 workflow text, one line at a time: each secret a `${{ }}` expression
 names, each expression that uses the context without a literal name,
 and each `${{` not closed on its line; and the decoded text of a YAML
-file's double-quoted scalars, which a reader of the file text misses.
-Source after `set -Eeuo pipefail` and after scripts/lib/ascii-match.sh.
+file's double-quoted scalars, which a reader of the file text misses;
+and the jobs that hand every secret on with `secrets: inherit`.
+Source after `set -Eeuo pipefail` and after scripts/lib/ascii-match.sh,
+and after scripts/lib/job-keys.sh for `inherit_secret_jobs`.
 
 #### secret_uses()
 
@@ -3171,6 +3177,32 @@ once under an anchor is printed once, however many aliases repeat it.
 **Stdout:**
 
 - the decoded texts
+
+#### inherit_secret_jobs()
+
+Print, one per line as a JSON string, the key of each job
+that hands every secret to the reusable workflow it calls: its
+`secrets:` is `inherit`, which no `${{ }}` holds, so `secret_uses` never
+reads it. GitHub Actions takes a map or `inherit` there and nothing else,
+so any value but a map or null is read as `inherit` without its text
+being compared. The `jobs:` node and each job are read through their
+aliases and merge keys, and a merge key directly under `jobs:` brings its
+jobs in. An explicit `secrets:` map names what it hands on in its values,
+which `secret_uses` reads, so its job is not printed. Source
+scripts/lib/job-keys.sh before this file.
+
+**Args:**
+
+- `$1` — workflow file path
+
+**Exit codes:**
+
+- `0` — the file was read, whether a job inherits or not
+- `2` — `yq` could not read the file
+
+**Stdout:**
+
+- the job keys
 
 ### scripts/lib/temp.sh
 

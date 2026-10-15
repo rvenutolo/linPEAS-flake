@@ -464,6 +464,58 @@ function main() {
     'markdown scan set is empty' $'\n'
   rm --recursive --force -- "${dir}"
 
+  # A job calling a reusable workflow with `secrets: inherit` hands it every
+  # secret, either token or the unsuffixed one among them, though no
+  # `${{ }}` names one. Refused in every workflow, as an unnamed use is. It
+  # is read through `yq`, so a value written as an alias is read the same.
+  local i
+  local -r call=$'  call:\n    uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n'
+  for wf in release-on-bump.yml dockerhub-sync.yml verify-latest-release.yml other.yml; do
+    dir="$(mktemp --directory)"
+    write_baseline "${dir}"
+    if [[ ${wf} == other.yml ]]; then
+      printf 'jobs:\n' >"${dir}/${wf}"
+    fi
+    printf '%s    secrets: inherit\n' "${call}" >>"${dir}/${wf}"
+    assert_run "secrets: inherit in ${wf} fails" "${dir}" 1 \
+      "${wf}: job \"call\" passes every secret to the workflow it calls (secrets: inherit; the scope split cannot tell which token it hands on)"
+    rm --recursive --force -- "${dir}"
+  done
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  printf 'x: &s inherit\njobs:\n%s    secrets: *s\n' "${call}" >"${dir}/other.yml"
+  assert_run 'an aliased secrets: inherit fails' "${dir}" 1 \
+    'other.yml: job "call" passes every secret to the workflow it calls (secrets: inherit; the scope split cannot tell which token it hands on)'
+  rm --recursive --force -- "${dir}"
+
+  # An explicit `secrets:` map names the secrets it hands on in its values,
+  # which the token rules read as any other expression.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf '%s    secrets:\n      T: ${{ secrets.DOCKERHUB_TOKEN_DELETE }}\n' "${call}" >>"${dir}/release-on-bump.yml"
+  assert_run 'DELETE token in an explicit secrets: map in release fails' "${dir}" 1 \
+    'release-on-bump.yml: consumes secrets.DOCKERHUB_TOKEN_DELETE'
+  rm --recursive --force -- "${dir}"
+
+  # Controls: a call passing no secrets, and one with an empty `secrets:`,
+  # each in its own count of extra workflows so their summaries differ.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  for i in 1 2 3; do
+    printf 'jobs:\n%s' "${call}" >"${dir}/other${i}.yml"
+  done
+  assert_run 'a reusable-workflow call passing no secrets passes' "${dir}" 0 ''
+  rm --recursive --force -- "${dir}"
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  for i in 1 2 3; do
+    printf 'jobs:\n%s' "${call}" >"${dir}/other${i}.yml"
+  done
+  printf 'jobs:\n%s    secrets:\n' "${call}" >"${dir}/other4.yml"
+  assert_run 'an empty secrets: passes' "${dir}" 0 ''
+  rm --recursive --force -- "${dir}"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
