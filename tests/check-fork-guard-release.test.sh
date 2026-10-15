@@ -282,6 +282,16 @@ expect_body workflow-env-alias.yml $'x-env: &e\n  KEY: ${{ toJSON(secrets) }}\ne
   "DIR/workflow-env-alias.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
 expect_body workflow-env-merge-key.yml $'x-env: &e\n  KEY: ${{ toJSON(secrets) }}\nenv:\n  <<: *e\n  OTHER: x'"${WF_ENV_TAIL#' }}'}" 1 \
   "DIR/workflow-env-merge-key.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+# A root key written as an alias of `env` or `jobs` is that key, as GitHub
+# Actions reads it; one given twice, plain and as an alias, stops the read.
+expect_body workflow-env-alias-key.yml $'name: &k env\non: push\n*k :\n  KEY: ${{ toJSON(secrets) }}'"${WF_ENV_TAIL#' }}'}" 1 \
+  "DIR/workflow-env-alias-key.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body workflow-env-given-twice.yml $'name: &k env\non: push\nenv: {A: x}\n*k :\n  KEY: ${{ toJSON(secrets) }}'"${WF_ENV_TAIL#' }}'}" 2 \
+  $'Error: env: is given more than once\ncannot read the workflow env: from DIR/workflow-env-given-twice.yml'
+expect_body jobs-alias-key.yml $'name: &k jobs\non: push\n*k :'"${WRITE_BARE#jobs:}" 1 \
+  "DIR/jobs-alias-key.yml: job c holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body jobs-given-twice.yml $'name: &k jobs\non: push\n'"${READ_ONLY}"$'*k :'"${WRITE_BARE#jobs:}" 1 \
+  $'Error: jobs: is given more than once\nDIR/jobs-given-twice.yml: could not evaluate workflow with yq (malformed?)'"${ONE_JOB}"
 expect_body workflow-env-other-secret.yml "${WF_ENV_HEAD}secrets.BUMP_APP_OTHER_KEY${WF_ENV_TAIL}" 0 ''
 expect_body workflow-env-unread.yml "${WF_ENV_HEAD}secrets.BUMP_APP_OTHER_KEY${WF_ENV_TAIL}" 2 \
   'cannot read the workflow env: from DIR/workflow-env-unread.yml' '.env'

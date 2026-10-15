@@ -227,6 +227,12 @@ expect_body top-alias-granting.yml $'x-p: &p {issues: write}\npermissions: *p\nj
   "DIR/top-alias-granting.yml: top-level permissions non-empty (keys: issues); need ${Q}permissions: {}${Q}${ONE}"
 expect_body top-alias-string.yml $'x-p: &p write-all\npermissions: *p\njobs: {}\n' 1 \
   "DIR/top-alias-string.yml: top-level permissions is scalar write-all (need ${Q}permissions: {}${Q})${ONE}"
+# A root key written as an alias of `permissions` or `jobs` is that key,
+# as GitHub Actions reads it.
+expect_body top-alias-key-granting.yml $'name: &k permissions\n*k : {issues: write}\njobs: {}\n' 1 \
+  "DIR/top-alias-key-granting.yml: top-level permissions non-empty (keys: issues); need ${Q}permissions: {}${Q}${ONE}"
+expect_body jobs-alias-key-bare.yml $'name: &k jobs\npermissions: {}\n*k :\n  f:\n    steps:\n      - run: echo PAYLOAD_RAN\n' 1 \
+  "DIR/jobs-alias-key-bare.yml: job f missing ${Q}permissions:${Q} block (every job must declare its own)${ONE}"
 # Several documents are one finding, read no further: a trailing ---
 # starts a second one, and a granting block in it is not reported.
 expect_body two-docs.yml $'permissions: {}\njobs:\n  a:\n    permissions: {}\n---\npermissions: {contents: write}\njobs:\n' 1 \

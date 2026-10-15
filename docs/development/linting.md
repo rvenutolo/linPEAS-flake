@@ -610,6 +610,17 @@ each read that uses `RESOLVE_JOB_ALIASES` does. A lint that refuses a
 job key counts a merge key still present under `jobs:`, whether written
 inline or brought in through an alias, as a refused key.
 
+GitHub Actions reads a root key written as an alias (`name: &k jobs`,
+then `*k :`) as the key it stands for. The reads of the root `jobs:`,
+the top-level `permissions:` (`check-min-permissions.sh`,
+`check-ratchet-pin-audit.sh`) and the workflow `env:`
+(`check-fork-guard-release.sh`) take the node from `ROOT_KEY_NODE` in
+`scripts/lib/job-keys.sh`, as the `on:` reads take theirs from
+`ON_NODE`: the node is the value of the one root key that is the name or
+an alias of it, and a root holding two, one plain and one an alias, makes
+`yq` fail ("jobs: is given more than once"), which each script handles
+as a read that failed.
+
 A lint that reads only the `jobs:` node hands `explode` that node alone
 (`JOBS_NODE` in `scripts/lib/job-keys.sh`): a `jobs:` written as an alias
 is read through, and the keys inside it stay as written. The lints that

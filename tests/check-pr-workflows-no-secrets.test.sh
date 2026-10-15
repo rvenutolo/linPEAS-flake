@@ -488,6 +488,8 @@ function main() {
       'inherit-job-alias.yml' $'x: &j\n  uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n  secrets: inherit\non: pull_request\njobs:\n  a: *j\n' 1 stderr "${inherit_line}"
     run_text_scenario 'secrets: inherit as an alias in a job written as an alias fails' \
       'inherit-nested-alias.yml' $'x-s: &s inherit\nx: &j\n  uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n  secrets: *s\non: pull_request\njobs:\n  a: *j\n' 1 stderr "${inherit_line}"
+    run_text_scenario 'secrets: inherit under a root key written as an alias of jobs fails' \
+      'inherit-jobs-alias-key.yml' $'name: &k jobs\non: pull_request\n*k :\n  a:\n    uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n    secrets: inherit\n' 1 stderr "${inherit_line}"
     run_text_scenario 'secrets: inherit in a job a merge key under jobs: brings in fails' \
       'inherit-jobs-merge-key.yml' $'x: &js\n  a:\n    uses: o/r/.github/workflows/x.yml@0123456789012345678901234567890123456789\n    secrets: inherit\non: pull_request\njobs:\n  <<: *js\n' 1 stderr "${inherit_line}"
     run_text_scenario 'a secret in an explicit secrets: map fails' \

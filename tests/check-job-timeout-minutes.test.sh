@@ -285,10 +285,12 @@ ${ONE_BAD}"
 
 # A row with a field missing cannot be read, which is a finding rather
 # than a pass. yq prints every field, so a stub stands in for one that
-# does not: it answers the job read with a row holding only an id.
+# does not: it answers the job read with a row holding only an id. It is
+# keyed on the text only the row read holds, `timeout-minutes`, so the
+# job-id read before it runs the real `yq`.
 stub_dir="$(mktemp --directory)"
 real_yq="$(command -v yq)"
-printf '#!/usr/bin/env bash\ncase "$*" in *to_entries*) printf "a\\n"; exit 0 ;; esac\nexec %q "$@"\n' \
+printf '#!/usr/bin/env bash\ncase "$*" in *timeout-minutes*) printf "a\\n"; exit 0 ;; esac\nexec %q "$@"\n' \
   "${real_yq}" >"${stub_dir}/yq"
 chmod +x -- "${stub_dir}/yq"
 PATH="${stub_dir}:${PATH}" expect_built 'a row missing its fields is a finding' \
@@ -297,7 +299,7 @@ PATH="${stub_dir}:${PATH}" expect_built 'a row missing its fields is a finding' 
 ${ONE_BAD}"
 # The same with every field present but the value's text: the job is
 # reported once, not also as missing.
-printf '#!/usr/bin/env bash\ncase "$*" in *to_entries*) printf "b\\tfalse\\tnone\\t-\\t\\"\\"\\n"; exit 0 ;; esac\nexec %q "$@"\n' \
+printf '#!/usr/bin/env bash\ncase "$*" in *timeout-minutes*) printf "b\\tfalse\\tnone\\t-\\t\\"\\"\\n"; exit 0 ;; esac\nexec %q "$@"\n' \
   "${real_yq}" >"${stub_dir}/yq"
 PATH="${stub_dir}:${PATH}" expect_built 'a row missing only its last field is a finding' \
   "${JOB_HEAD}"'    timeout-minutes: 5\n' 1 \

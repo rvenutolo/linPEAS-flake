@@ -149,6 +149,14 @@ expect_shape 'permissions: written as an alias of a granting map is a finding' \
   "${PERMS_LINE}" '\nx-p: &p {contents: read}\npermissions: *p\n' '' 1 \
   "top-level permissions must be {} (got kind=map tag=!!map length=1)
 ${ONE_FAILED}"
+expect_shape 'permissions: written as a root key alias of a granting map is a finding' \
+  "${PERMS_LINE}" '\nrun-name: &k permissions\n*k : {contents: read}\n' '' 1 \
+  "top-level permissions must be {} (got kind=map tag=!!map length=1)
+${ONE_FAILED}"
+expect_shape 'permissions: given twice, plain and as a root key alias, stops the run' \
+  "${PERMS_LINE}" '\npermissions: {}\nrun-name: &k permissions\n*k : {}\n' '' 2 \
+  "Error: permissions: is given more than once
+cannot read the top-level permissions from %W"
 expect_shape 'a map tag holding a space is printed whole' \
   "${PERMS_LINE}" '\npermissions: !<x%%200> {a: b}\n' '' 1 \
   "top-level permissions must be {} (got kind=map tag=x 0 length=1)

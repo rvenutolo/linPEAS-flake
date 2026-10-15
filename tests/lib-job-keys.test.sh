@@ -4,7 +4,8 @@
 # first job key the job list cannot carry (a line break, a carriage
 # return, an empty key, a key that is not a scalar, a merge key) and the
 # first key of a job-id list that the list cannot carry, reads `jobs:`
-# written as an alias, prints nothing for carriable keys or a
+# written as an alias and a root key written as an alias of `jobs`,
+# refuses a root `jobs:` given twice, prints nothing for carriable keys or a
 # `jobs:` that is no map, and reads a merge list first mapping wins
 # without yq's warning that the flag is false.
 set -Eeuo pipefail
@@ -74,6 +75,22 @@ expect_out unparsable $'jobs: [\n' 'first_odd_job_key "$2" 2>/dev/null || printf
 # `jobs:` read through an alias is expanded once, and a merge list inside it
 # must not make `yq` warn.
 expect_out aliased-jobs-merge-list $'p: &P\n  permissions: {contents: write}\nq: &Q\n  permissions: {contents: read}\nx: &b\n  a:\n    <<: [*P, *Q]\njobs: *b\n' "${ODD}" ''
+
+# A root key written as an alias of `jobs` is the `jobs:` node, as GitHub
+# Actions reads it; a key given twice, one plain and one an alias, is
+# refused by yq. A key whose text holds a `*` is compared as text, not as
+# a pattern. A root merge key still brings `jobs:` in, and a root that is
+# no map holds no `jobs:`.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process
+readonly NODE_KEYS='yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"" | keys | join(\",\")" "$2" 2>&1'
+expect_out root-alias-key $'name: &k jobs\non: push\n*k :\n  a: {x: 1}\n' "${NODE_KEYS}" 'a'
+expect_out root-alias-key-alias-value $'name: &k jobs\nx: &j {q: {x: 1}}\n*k : *j\n' "${NODE_KEYS}" 'q'
+expect_out root-alias-key-given-twice $'name: &k jobs\njobs: {b: {x: 1}}\n*k : {a: {x: 1}}\n' "${NODE_KEYS} || true" 'Error: jobs: is given more than once'
+expect_out root-alias-key-glob-text $'name: &k "j*"\n*k : {a: {x: 1}}\njobs: {b: {x: 1}}\n' "${NODE_KEYS}" 'b'
+expect_out root-merge-key $'x: &b {jobs: {m: {x: 1}}}\n<<: *b\n' "${NODE_KEYS}" 'm'
+# shellcheck disable=SC2016 # snippet is bash source text for a child process
+expect_out root-scalar $'hello\n' 'yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}" "$2" 2>&1' 'null'
+expect_out root-alias-key-odd $'name: &k jobs\n*k :\n  "": {x: 1}\n' "${ODD}" '""'
 
 # A merge list is read first mapping wins, silently.
 readonly PQ=$'p: &P\n  permissions: {contents: write}\nq: &Q\n  permissions: {contents: read}\n'
