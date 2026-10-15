@@ -17,7 +17,8 @@
 #
 # Assertions:
 #   1. Every step whose `uses:` starts with
-#      `wagoid/commitlint-github-action` has a `with:` block carrying a
+#      `wagoid/commitlint-github-action`, its ASCII letters in either
+#      case as GitHub Actions resolves them, has a `with:` block carrying a
 #      non-empty `configFile:`. `with:` is read by kind: a map carrying a
 #      tag of its own is read, and any other shape is a finding, as is a
 #      `configFile:` that is not a scalar. `jobs:`, a job, its steps, a
@@ -59,12 +60,19 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
 
 readonly ACTION_PREFIX="wagoid/commitlint-github-action"
+# The owner and repository a selected step names, with each ASCII letter
+# in either case, so a respelling does not take a step out of the lint's
+# reach.
+ACTION_RE="$(ascii_fold_regex "${ACTION_PREFIX}")"
+readonly ACTION_RE
 readonly BASE_CONFIG=".commitlintrc.yml"
 readonly MERGE_CONFIG=".commitlintrc.merge.yml"
 readonly SELF="scripts/check-commitlint-config-explicit.sh"
@@ -172,7 +180,7 @@ for f in "${paths[@]}"; do
   # shellcheck disable=SC2016 # yq expression + literal `${{` needle: no shell expansion wanted
   if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" --no-doc "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) as $k
     | .value | explode(.) | explode(.) | [.steps] | .[] | select(kind == "seq") | to_entries[]
-    | select(.value | explode(.) | explode(.) | explode(.) | (.uses // "") | test("^'"${ACTION_PREFIX}"'"))
+    | select(.value | explode(.) | explode(.) | explode(.) | (.uses // "") | test("^'"${ACTION_RE}"'"))
     | (.key | tostring) + "\t" + $k + "\t" + (.value | explode(.) | explode(.) | explode(.) |
         ([.with | kind] + ["none"] | .[0]) + "\t" + ([.with | tag | to_json(0)] + ["\"\""] | .[0]) + "\t"
         + ([.with | select(kind == "map") | .configFile | kind + "\t" + (tag | to_json(0)) + "\t" + (tostring | to_json(0))]

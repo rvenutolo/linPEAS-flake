@@ -292,6 +292,20 @@ EOF
   expect 'job key written as an alias is read through (size label ignores key alias)' \
     "${DECLARING_SCRIPTS}" "${work}/job-key-alias.yml" 0 ''
 
+  # GitHub Actions resolves an action's owner and repository whatever
+  # their case, so a respelled size step is still found and its ignore
+  # list compared.
+  printf 'name: a\non:\n  workflow_dispatch: {}\njobs:\n  size:\n    steps:\n      - uses: Pascalgn/Size-Label-Action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7\n        env:\n          IGNORED: "docs/alpha.md\\ndocs/case-fold.md"\n' \
+    >"${work}/case-fold.yml"
+  expect 'a size step spelled in mixed case is read' "${DECLARING_SCRIPTS}" "${work}/case-fold.yml" 1 \
+    "${work}/case-fold.yml: IGNORED lists docs/case-fold.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
+  # The long s folds to `s` under a case-insensitive regex flag; it is no
+  # ASCII letter, so a step spelled with it is no size step and the
+  # undeclared entry in its ignore list is never compared.
+  printf 'name: a\non:\n  workflow_dispatch: {}\njobs:\n  size:\n    steps:\n      - uses: pa\xc5\xbfcalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7\n        env:\n          IGNORED: "docs/long-s.md"\n      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7\n        env:\n          IGNORED: "docs/alpha.md"\n' \
+    >"${work}/long-s.yml"
+  expect 'a non-ASCII letter that folds to an ASCII one is no size step' "${DECLARING_SCRIPTS}" "${work}/long-s.yml" 0 ''
+
   # (m) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' \
     "${REPO_ROOT}/scripts" "${REPO_ROOT}/.github/workflows/labeler.yml" 0 ''

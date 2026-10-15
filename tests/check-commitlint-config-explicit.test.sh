@@ -181,6 +181,14 @@ expect_built 'a job id that is a list is refused' \
   "${HEAD}"'  ? [a]\n  : {steps: [{uses: wagoid/commitlint-github-action@x}]}\n' 1 \
   "%W: ${ODD}kind=seq, id=\"[a]\")
 ${ONE}"
+# GitHub Actions resolves an action's owner and repository whatever
+# their case, so a respelled step must stay in the lint's reach.
+expect_built 'a step spelled in mixed case is a commitlint step' \
+  "${HEAD}"'  mixed:\n    steps:\n      - uses: Wagoid/Commitlint-GitHub-Action@x\n' 1 \
+  "%W: job mixed step[0] wagoid/commitlint-github-action ${NO_WITH}
+${ONE}"
+expect_built 'a step spelled in upper case with a configFile passes' \
+  "${HEAD}"'  upperok:\n    steps:\n      - uses: WAGOID/COMMITLINT-GITHUB-ACTION@x\n        with: {configFile: .commitlintrc.yml}\n' 0 ''
 # A commitlint config that does not parse is a file this lint could not
 # read: yq exits 1 on it, and reporting that as the rule-set drift
 # verdict would name rules nothing was ever read. The config is written
