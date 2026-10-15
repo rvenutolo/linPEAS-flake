@@ -2,7 +2,8 @@
 # tests/refresh-ephemeral-refs-gap.test.sh
 #
 # Round-trip, drift and derivation harness for
-# scripts/refresh-ephemeral-refs-gap.sh.
+# scripts/refresh-ephemeral-refs-gap.sh, and for the `files` regex of the
+# pre-commit hook that runs it.
 #
 # Each fixture root is small enough that the whole expected census is
 # stated in the assertion, so a derivation rule that stops firing changes
@@ -18,6 +19,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "${REPO_ROOT}/scripts/lib/enumerate.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/refresh-ephemeral-refs-gap.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/ephemeral-refs-gap"
 
@@ -342,6 +345,43 @@ function main() {
   else
     fail "empty-labels: expected exit 0, census line ${empty_census_line@Q}, sentence line ${empty_sentence_line@Q}, got exit ${rc}"
     cat -- "${work}/empty-labels.out" "${work}/empty-labels.err" >&2
+  fi
+
+  # 14. The pre-commit hook re-runs the check only on the paths its
+  #     `files` regex matches, so a tracked source of a type no extractor
+  #     claims must match it, or a blocking shape committed there passes
+  #     locally. The regex is read from the hook's source and matched with
+  #     Python's `re.search`, as pre-commit matches it; the page and the
+  #     two scripts the block derives from must match it as well.
+  local -a tracked=() hook_paths=()
+  local src
+  # shellcheck source=scripts/lib/ephemeral-refs-scope.sh
+  source "${REPO_ROOT}/scripts/lib/ephemeral-refs-scope.sh"
+  enumerate_into tracked 'git ls-files' git -C "${REPO_ROOT}" ls-files -z
+  for src in "${tracked[@]}"; do
+    [[ $(language_of "${src}") == 'other' ]] || continue
+    is_allowlisted "${src}" && continue
+    hook_paths+=("${src}")
+  done
+  hook_paths+=(docs/development/linting.md scripts/refresh-ephemeral-refs-gap.sh
+    scripts/lib/ephemeral-refs-scope.sh)
+  rc=0
+  printf '%s\n' "${hook_paths[@]}" | python3 -I -c '
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r"ephemeral-refs-gap-fresh = \{.*?\n\s*files = \"((?:[^\"\\\\]|\\\\.)*)\";", text, re.S)
+if not m:
+    print("no files regex found for ephemeral-refs-gap-fresh")
+    sys.exit(2)
+regex = re.sub(r"\\\\(.)", r"\1", m.group(1))
+missed = [p for p in sys.stdin.read().splitlines() if not re.search(regex, p)]
+print("\n".join(missed))
+sys.exit(1 if missed else 0)
+' "${REPO_ROOT}/nix/hooks/freshness.nix" >"${work}/hook-files.out" 2>&1 || rc=$?
+  if [[ ${rc} -eq 0 ]]; then
+    pass "the hook's files regex matches all ${#hook_paths[@]} unclaimed source(s) and inputs"
+  else
+    fail "hook files regex (exit ${rc}) misses: $(tr '\n' ' ' <"${work}/hook-files.out")"
   fi
 
   harness_assert_verify || failures=$((failures + 1))
