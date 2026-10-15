@@ -108,6 +108,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/lib-md-fence.test.sh`       | `scripts/lib/md-fence.sh`       | —        |
 | `tests/lib-payload.test.sh`        | `scripts/lib/payload.sh`        | —        |
 | `tests/lib-repo.test.sh`           | `scripts/lib/repo.sh`           | —        |
+| `tests/lib-secret-uses.test.sh`    | `scripts/lib/secret-uses.sh`    | —        |
 | `tests/lib-temp.test.sh`           | `scripts/lib/temp.sh`           | —        |
 
 ## Refresh harnesses

@@ -301,6 +301,40 @@ function main() {
     'matched 0 files via workflow YAML'
   rm --recursive --force -- "${dir}"
 
+  # A use of the `secrets` context with no literal name may read either
+  # token, or the unsuffixed one, so it is refused in every workflow, the
+  # three the split binds and any other: the whole context, a name the
+  # expression computes, the object filter and a double-quoted index.
+  local case wf expr
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expressions, not shell expansion
+  for case in 'release-on-bump.yml|${{ toJSON(secrets) }}' \
+    "dockerhub-sync.yml|\${{ secrets[format('DOCKERHUB_TOKEN_{0}', 'RW')] }}" \
+    'verify-latest-release.yml|${{ secrets[env.NAME] }}' \
+    'other.yml|${{ secrets.* }}' \
+    'other.yml|${{ secrets["DOCKERHUB_TOKEN_RW"] }}'; do
+    wf="${case%%|*}" expr="${case#*|}"
+    dir="$(mktemp --directory)"
+    write_baseline "${dir}"
+    if [[ ${wf} == other.yml ]]; then
+      printf 'jobs:\n  a:\n    steps:\n' >"${dir}/${wf}"
+    fi
+    printf '      - env:\n          T: %s\n' "${expr}" >>"${dir}/${wf}"
+    assert_run "unnamed secrets use ${expr} in ${wf} fails" "${dir}" 1 \
+      "${wf}:$(grep --count '' "${dir}/${wf}"): ${expr} reads the secrets context without a literal name"
+    rm --recursive --force -- "${dir}"
+  done
+
+  # A `${{` not closed on its line may read any secret: the lint reads one
+  # line at a time.
+  dir="$(mktemp --directory)"
+  write_baseline "${dir}"
+  # shellcheck disable=SC2016 # literal GH Actions ${{ }} expression, not shell expansion
+  printf 'jobs:\n  a:\n    steps:\n      - env:\n          T: >-\n            ${{\n            secrets.DOCKERHUB_TOKEN }}\n' \
+    >"${dir}/other.yml"
+  assert_run 'expression not closed on its line fails' "${dir}" 1 \
+    'other.yml:6: expression not closed on its line'
+  rm --recursive --force -- "${dir}"
+
   # Markdown: the write-scoped token in a delete snippet. The tree
   # complies today, so this fixture is what proves the branch runs at all.
   dir="$(mktemp --directory)"
