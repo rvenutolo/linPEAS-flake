@@ -46,7 +46,10 @@
 # be shown to catch anything the other misses.
 #
 # The subject step is discovered by the action it runs rather than by job
-# or workflow name, so renaming the job leaves the list governed.
+# or workflow name, so renaming the job leaves the list governed. The
+# action's owner and repository are matched with their ASCII letters in
+# either case, as GitHub Actions resolves them, so a respelled step is
+# still found.
 #
 # Breadth is asserted rather than inferred: the run reports how many
 # declarations it read, and reading none is a broken header parse
@@ -67,6 +70,8 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/ascii-match.sh
+source "${_lib_dir}/lib/ascii-match.sh"
 # shellcheck source=scripts/lib/log.sh
 source "${_lib_dir}/lib/log.sh"
 # shellcheck source=scripts/lib/enumerate.sh
@@ -79,6 +84,8 @@ source "${_lib_dir}/lib/generates.sh"
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 readonly LABELER="${LABELER_YML_OVERRIDE:-.github/workflows/labeler.yml}"
 readonly SIZE_ACTION='pascalgn/size-label-action'
+SIZE_ACTION_RE="$(ascii_fold_regex "${SIZE_ACTION}")"
+readonly SIZE_ACTION_RE
 # The job a key names. `jobs:` written as an alias is read through by
 # `JOBS_NODE` in the job list and in this lookup alike. The key reaches
 # `yq` as data, through `strenv`, and is compared by its base64 text:
@@ -197,11 +204,11 @@ while IFS= read -r job; do
     printf '%s: could not evaluate job %s in %s with yq\n' "${0##*/}" "${job}" "${LABELER}" >&2
     exit 2
   fi
-  [[ ${uses} == *"${SIZE_ACTION}"* ]] || continue
+  [[ ${uses} =~ ${SIZE_ACTION_RE} ]] || continue
   size_steps=$((size_steps + 1))
   if ! step_ignored="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}
     | .steps[]
-    | select(.uses // \"\" | test(\"${SIZE_ACTION}\"))
+    | select(.uses // \"\" | test(\"${SIZE_ACTION_RE}\"))
     | .env.IGNORED // \"\"
   " "${LABELER}")"; then
     printf '%s: could not evaluate the IGNORED list of job %s in %s with yq\n' \
