@@ -295,7 +295,7 @@ jobs:
           # Using %s for the backtick-containing artifact names avoids SC2016 false positives.
           artifact_note="\`repro-diff\` (30-day retention) — \`summary.txt\` plus the \`image.html\`/\`image.txt\` and \`linpeas.html\`/\`linpeas.txt\` reports diffoscope wrote"
           printf -v body \
-            'The weekly reproducibility check detected a mismatch.\n\n- Run: %s\n- Diffoscope artifacts: %s\n- Runbook: [docs/runbooks/reproducibility-check.md](%s)\n\nInvestigate per the runbook; do not close until root cause is fixed or the workflow has been demoted per runbook criteria.' \
+            'The reproducibility check failed: the hashes of the two builds differ, or the comparison could not measure them. The log of the compare hashes step tells which: a Result: MISMATCH line there means the hashes differ.\n\n- Run: %s\n- Diffoscope artifacts: %s\n- Runbook: [docs/runbooks/reproducibility-check.md](%s)\n\nInvestigate per the runbook; do not close until root cause is fixed or the workflow has been demoted per runbook criteria.' \
             "${run_url}" "${artifact_note}" "${runbook_url}"
           gh issue create \
             --repo "${GITHUB_REPOSITORY}" \
