@@ -258,4 +258,32 @@ expect_body app-key-unnamed-open.yml "${KEY_JOB_HEAD%'${{ '}"$'>-\n            $
 expect_body app-key-unnamed-step-id.yml "${KEY_JOB_HEAD}steps.secrets.outputs.key${KEY_JOB_TAIL}" 0 ''
 expect_body app-key-unnamed-guarded.yml "${KEY_JOB_HEAD/$'    permissions:'/$'    if: github.repository == \'rvenutolo/linPEAS-flake\'\n    permissions:'}toJSON(secrets)${KEY_JOB_TAIL}" 0 ''
 
+# Every job inherits the workflow-level `env:`, the one workflow-level key
+# GitHub Actions lets read the `secrets` context, so a read of the App's
+# private key there, or a use naming no secret, puts every job in the file
+# under the guard. A guarded job beside the unguarded one shows the
+# finding is per job, and another secret is the control.
+readonly WF_ENV_HEAD=$'on: push\nenv:\n  KEY: ${{ '
+readonly WF_ENV_TAIL=$' }}\njobs:\n  a:\n    permissions:\n      contents: read\n    steps:\n      - run: echo PAYLOAD_RAN\n  b:\n    if: github.repository == \'rvenutolo/linPEAS-flake\'\n    permissions:\n      contents: read\n    steps:\n      - run: echo PAYLOAD_RAN\n'
+for case in 'named|secrets.BUMP_APP_PRIVATE_KEY' 'named-mixed-case|Secrets.Bump_App_Private_Key' \
+  "index|secrets['BUMP_APP_PRIVATE_KEY']" 'unnamed|toJSON(secrets)'; do
+  label="${case%%|*}" shape="${case#*|}"
+  expect_body "workflow-env-${label}.yml" "${WF_ENV_HEAD}${shape}${WF_ENV_TAIL}" 1 \
+    "DIR/workflow-env-${label}.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+done
+# shellcheck disable=SC2016 # the workflow expression is literal text
+expect_body workflow-env-open.yml "${WF_ENV_HEAD%'${{ '}"$'|-\n    ${{\n    secrets.BUMP_APP_OTHER_KEY'"${WF_ENV_TAIL}" 1 \
+  "DIR/workflow-env-open.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+# A YAML escape in a double-quoted scalar is read decoded.
+expect_body workflow-env-escaped.yml $'on: push\nenv:\n  KEY: "${{ s\\x65crets.BUMP_APP_PRIVATE_KEY'"${WF_ENV_TAIL/$' }}\n'/$' }}"\n'}" 1 \
+  "DIR/workflow-env-escaped.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+# An `env:` written as an alias is read as the mapping it stands for.
+expect_body workflow-env-alias.yml $'x-env: &e\n  KEY: ${{ toJSON(secrets) }}\nenv: *e'"${WF_ENV_TAIL#' }}'}" 1 \
+  "DIR/workflow-env-alias.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body workflow-env-merge-key.yml $'x-env: &e\n  KEY: ${{ toJSON(secrets) }}\nenv:\n  <<: *e\n  OTHER: x'"${WF_ENV_TAIL#' }}'}" 1 \
+  "DIR/workflow-env-merge-key.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body workflow-env-other-secret.yml "${WF_ENV_HEAD}secrets.BUMP_APP_OTHER_KEY${WF_ENV_TAIL}" 0 ''
+expect_body workflow-env-unread.yml "${WF_ENV_HEAD}secrets.BUMP_APP_OTHER_KEY${WF_ENV_TAIL}" 2 \
+  'cannot read the workflow env: from DIR/workflow-env-unread.yml' '.env'
+
 printf 'all tests passed\n'
