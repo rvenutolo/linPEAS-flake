@@ -162,6 +162,14 @@ expect_body group-alias.yml $'x-s: &s g\nconcurrency:\n  group: *s\n' 1 "DIR/gro
 # GitHub Actions reads a workflow file as one YAML document and refuses
 # one holding several, so such a file is a finding and is read no
 # further.
+# A root key written as an alias of `concurrency` is `concurrency:`, as
+# GitHub Actions reads it, for the map and the group alike; one given
+# twice, plain and as an alias, fails the read.
+expect_body conc-alias-key.yml $'name: &k concurrency\n*k :\n  group: g\n' 0 ''
+expect_body conc-alias-key-empty-group.yml $'name: &k concurrency\n*k :\n  group: ""\n' 1 \
+  "DIR/conc-alias-key-empty-group.yml: top-level concurrency ${Q}group:${Q} is empty${ONE}"
+expect_body conc-given-twice.yml $'name: &k concurrency\nconcurrency: {group: g}\n*k :\n  group: h\n' 1 \
+  $'Error: concurrency: is given more than once\nDIR/conc-given-twice.yml: could not evaluate workflow with yq (malformed?)'"${ONE}"
 expect_body several-docs.yml $'concurrency:\n  group: g\n---\non: push\n' 1 \
   "DIR/several-docs.yml: holds several YAML documents; a workflow file must hold one${ONE}"
 

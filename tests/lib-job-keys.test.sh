@@ -120,6 +120,11 @@ expect_out sequence-jobs-listed $'jobs: [a, b]\n' "${UNLISTABLE}" ''
 expect_out no-jobs-listed $'on: push\n' "${UNLISTABLE}" ''
 # shellcheck disable=SC2016 # snippet is bash source text for a child process
 expect_out unparsable-listed $'jobs: [\n' 'first_unlistable_job_key "$2" 2>/dev/null || printf "failed=%d" "$?"' 'failed=1'
+# A root key written as an alias of `jobs` is the `jobs:` node; one given
+# twice, plain and as an alias, fails the read.
+expect_out root-alias-key-listed $'name: &k jobs\n*k :\n  "": {x: 1}\n' "${UNLISTABLE}" '""'
+# shellcheck disable=SC2016 # snippet is bash source text for a child process
+expect_out root-alias-key-given-twice-listed $'name: &k jobs\njobs: {b: {x: 1}}\n*k : {"": {x: 1}}\n' 'first_unlistable_job_key "$2" 2>&1 || true' 'Error: jobs: is given more than once'
 
 # The message names the file and the key.
 # shellcheck disable=SC2016 # snippet is bash source text for a child process

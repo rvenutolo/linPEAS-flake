@@ -162,6 +162,22 @@ expect_shape 'a map tag holding a space is printed whole' \
   "top-level permissions must be {} (got kind=map tag=x 0 length=1)
 ${ONE_FAILED}"
 
+# A root key written as an alias of `jobs` or `concurrency` is that key,
+# as GitHub Actions reads it; one given twice, plain and as an alias,
+# stops the run.
+expect_shape 'jobs: written as a root key alias is read through it' \
+  $'\njobs:\n' '\nrun-name: &k jobs\n*k :\n' '' 0 ''
+expect_shape 'jobs: given twice, plain and as a root key alias, stops the run' \
+  $'\njobs:\n' '\njobs: {}\nrun-name: &k jobs\n*k :\n' '' 2 \
+  "Error: jobs: is given more than once
+cannot read the timeout-minutes of job check from %W"
+expect_shape 'concurrency: written as a root key alias is read through it' \
+  $'\nconcurrency:\n' '\nrun-name: &k concurrency\n*k :\n' '' 0 ''
+expect_shape 'concurrency: given twice, plain and as a root key alias, stops the run' \
+  $'\nconcurrency:\n' '\nconcurrency: {group: ratchet-pin-audit}\nrun-name: &k concurrency\n*k :\n' '' 2 \
+  "Error: concurrency: is given more than once
+cannot read the concurrency group from %W"
+
 # on: is read from ON_NODE by kind; schedule must be a non-empty list.
 expect_shape 'a scalar carrying the list tag is no schedule' \
   "${SCHED_LINES}" '  schedule: !!seq x\n' '' 1 \

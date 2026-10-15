@@ -134,6 +134,21 @@ function main() {
   run_scenario 'a merge key under jobs: is refused' "${root}/merge-under-jobs" 1 \
     "notify-label-descriptions lint: ${root}/merge-under-jobs/a.yml: jobs: holds a job key"
 
+  # A root key written as an alias of `jobs` is `jobs:`, as GitHub Actions
+  # reads it, so the description under it is held to the cap. One given
+  # twice, plain and as an alias, is a workflow the lint cannot read.
+  mkdir -p "${root}/jobs-alias-key" "${root}/jobs-given-twice"
+  write_caller "${root}/jobs-alias-key/a.yml" 'epsilon-drift' "${OVER_CAP}"
+  sed --in-place --expression='s/^name: caller$/name: \&k jobs/' --expression='s/^jobs:$/*k :/' \
+    -- "${root}/jobs-alias-key/a.yml"
+  run_scenario 'a jobs: key written as an alias is read' "${root}/jobs-alias-key" 1 \
+    'label epsilon-drift description is 101 characters, over the 100-character cap'
+  write_caller "${root}/jobs-given-twice/a.yml" 'zeta-drift' 'zeta'
+  sed --in-place --expression='s/^name: caller$/name: \&k jobs\njobs: {}/' --expression='s/^jobs:$/*k :/' \
+    -- "${root}/jobs-given-twice/a.yml"
+  run_scenario 'a jobs: key given twice is a could-not-run' "${root}/jobs-given-twice" 2 \
+    "${root}/jobs-given-twice/a.yml could not be parsed"
+
   # yq's own error text stays out of the output: the lint's line is the
   # whole report for a workflow it could not read.
   mkdir -p "${root}/unparsable-only"
