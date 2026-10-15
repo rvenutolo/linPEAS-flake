@@ -6,6 +6,24 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261015-c468195d] - 2026-10-15
+
+### Build
+- Gate the repo's Python on mypy --strict ([#1307](https://github.com/rvenutolo/linPEAS-flake/pull/1307))
+
+### Chores
+- Bump linpeas to 20261015-c468195d ([#1308](https://github.com/rvenutolo/linPEAS-flake/pull/1308))
+
+### Fixes
+- Read a root key written as an alias in the remaining workflow reads ([#1306](https://github.com/rvenutolo/linPEAS-flake/pull/1306))
+- Read a root key written as a YAML alias in the workflow lints ([#1305](https://github.com/rvenutolo/linPEAS-flake/pull/1305))
+- Read secrets: inherit in the secret lints ([#1301](https://github.com/rvenutolo/linPEAS-flake/pull/1301))
+- Read a secrets use in workflow-level env: in the fork-guard lint ([#1300](https://github.com/rvenutolo/linPEAS-flake/pull/1300))
+- Read secrets uses behind a YAML escape in the secret lints ([#1297](https://github.com/rvenutolo/linPEAS-flake/pull/1297))
+- Refuse secrets uses the fork-guard and dockerhub lints cannot name ([#1296](https://github.com/rvenutolo/linPEAS-flake/pull/1296))
+- Refuse a PR-workflow secrets use with no literal name ([#1295](https://github.com/rvenutolo/linPEAS-flake/pull/1295))
+- Read a secret named through the index form in the secret lints ([#1292](https://github.com/rvenutolo/linPEAS-flake/pull/1292))
+
 ## [20261014-2ddc3388] - 2026-10-14
 
 ### CI
