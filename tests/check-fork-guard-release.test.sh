@@ -242,12 +242,15 @@ expect_body app-key-index-other-secret.yml "${KEY_JOB_HEAD}secrets['bump_app_oth
 
 # A use of the `secrets` context with no literal name may read the App's
 # private key, so the job needs the guard: the whole context, a name the
-# expression computes, the object filter, a double-quoted index, and an
-# expression not closed on its line, which the lint reads one line at a
-# time. A step id spelled `secrets` is no use of the context, and a guarded
-# job reading the whole context is the control.
+# expression computes, the object filter, a double-quoted index, the word
+# `secrets` inside a string literal, which the reader cannot tell from a
+# use, and an expression not closed on its line, which the lint reads one
+# line at a time. A step id spelled `secrets` is no use of the context,
+# and guarded jobs reading the whole context or holding the string literal
+# are the controls.
 for case in 'whole-context|toJSON(secrets)' "computed-index|secrets[format('BUMP_APP_{0}', 'PRIVATE_KEY')]" \
-  'env-index|secrets[env.NAME]' 'object-filter|secrets.*' 'double-quoted-index|secrets["BUMP_APP_PRIVATE_KEY"]'; do
+  'env-index|secrets[env.NAME]' 'object-filter|secrets.*' 'double-quoted-index|secrets["BUMP_APP_PRIVATE_KEY"]' \
+  "string-literal|contains(github.head_ref, 'secrets')"; do
   label="${case%%|*}" shape="${case#*|}"
   expect_body "app-key-unnamed-${label}.yml" "${KEY_JOB_HEAD}${shape}${KEY_JOB_TAIL}" 1 \
     "DIR/app-key-unnamed-${label}.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
@@ -257,6 +260,7 @@ expect_body app-key-unnamed-open.yml "${KEY_JOB_HEAD%'${{ '}"$'>-\n            $
   "DIR/app-key-unnamed-open.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
 expect_body app-key-unnamed-step-id.yml "${KEY_JOB_HEAD}steps.secrets.outputs.key${KEY_JOB_TAIL}" 0 ''
 expect_body app-key-unnamed-guarded.yml "${KEY_JOB_HEAD/$'    permissions:'/$'    if: github.repository == \'rvenutolo/linPEAS-flake\'\n    permissions:'}toJSON(secrets)${KEY_JOB_TAIL}" 0 ''
+expect_body app-key-unnamed-string-literal-guarded.yml "${KEY_JOB_HEAD/$'    permissions:'/$'    if: github.repository == \'rvenutolo/linPEAS-flake\'\n    permissions:'}contains(github.head_ref, 'secrets')${KEY_JOB_TAIL}" 0 ''
 
 # Every job inherits the workflow-level `env:`, the one workflow-level key
 # GitHub Actions lets read the `secrets` context, so a read of the App's

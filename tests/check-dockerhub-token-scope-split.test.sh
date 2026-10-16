@@ -307,14 +307,17 @@ function main() {
   # A use of the `secrets` context with no literal name may read either
   # token, or the unsuffixed one, so it is refused in every workflow, the
   # three the split binds and any other: the whole context, a name the
-  # expression computes, the object filter and a double-quoted index.
+  # expression computes, the object filter, a double-quoted index, and the
+  # word `secrets` inside a string literal, which the reader cannot tell
+  # from a use.
   local case wf expr
   # shellcheck disable=SC2016 # literal GH Actions ${{ }} expressions, not shell expansion
   for case in 'release-on-bump.yml|${{ toJSON(secrets) }}' \
     "dockerhub-sync.yml|\${{ secrets[format('DOCKERHUB_TOKEN_{0}', 'RW')] }}" \
     'verify-latest-release.yml|${{ secrets[env.NAME] }}' \
     'other.yml|${{ secrets.* }}' \
-    'other.yml|${{ secrets["DOCKERHUB_TOKEN_RW"] }}'; do
+    'other.yml|${{ secrets["DOCKERHUB_TOKEN_RW"] }}' \
+    "other.yml|\${{ contains(github.head_ref, 'secrets') }}"; do
     wf="${case%%|*}" expr="${case#*|}"
     dir="$(mktemp --directory)"
     write_baseline "${dir}"
