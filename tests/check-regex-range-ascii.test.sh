@@ -377,6 +377,20 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   put grep-letter-range scripts/a.sh '#!/usr/bin/env bash' "grep -E '[a-z]' f"
   run_case grep-letter-range 1 '' "DIR/scripts/a.sh:2: grep range [a-z] follows the locale$(footer 1)"
 
+  put grep-range-after-class scripts/a.sh '#!/usr/bin/env bash' "grep -E '^[[:space:]a-z]+' f"
+  run_case grep-range-after-class 1 '' "DIR/scripts/a.sh:2: grep range [[:space:]a-z] follows the locale$(footer 1)"
+
+  put grep-range-after-bracket scripts/a.sh '#!/usr/bin/env bash' "grep -E '[]a-z]' f"
+  run_case grep-range-after-bracket 1 '' "DIR/scripts/a.sh:2: grep range []a-z] follows the locale$(footer 1)"
+
+  put grep-range-after-equivalence scripts/a.sh '#!/usr/bin/env bash' "grep -E '[[=a=]c-h]' f" "grep -E '[[.a.]d-i]' f"
+  run_case grep-range-after-equivalence 1 '' "DIR/scripts/a.sh:2: grep range [[=a=]c-h] follows the locale
+DIR/scripts/a.sh:3: grep range [[.a.]d-i] follows the locale$(footer 2)"
+
+  put grep-env-unset scripts/a.sh '#!/usr/bin/env bash' "env -u LC_ALL grep -E '[a-z]' f" "env -uLC_ALL grep -E '[b-c]' f"
+  run_case grep-env-unset 1 '' "DIR/scripts/a.sh:2: grep range [a-z] follows the locale
+DIR/scripts/a.sh:3: grep range [b-c] follows the locale$(footer 2)"
+
   put grep-negated-digit scripts/a.sh '#!/usr/bin/env bash' "grep -E '^[^0-9]+\$' f"
   run_case grep-negated-digit 1 '' "DIR/scripts/a.sh:2: grep range [^0-9] follows the locale$(footer 1)"
 
