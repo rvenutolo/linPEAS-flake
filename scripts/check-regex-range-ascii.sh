@@ -81,8 +81,15 @@ require_tool jq
 # @description Emit the parse-tree records of one file, tab-separated:
 # `T line x_end y_pos y_end safe` for each binary test (safe is 1 after
 # a `local LC_ALL=C` earlier in its function, or after a top-level
-# `export LC_ALL=C` or `=C.UTF-8`), and `A name value_pos value_end` for
-# each assignment and each `for` loop item.
+# `export LC_ALL=C` or `=C.UTF-8`), `A name value_pos value_end` for
+# each assignment and each `for` loop item, and
+# `G call line mode c_locale unresolved pat_start pat_end` for each
+# pattern of a `grep`, `egrep` or `fgrep` call: `call` is the call's byte
+# offset, shared by its patterns; `mode` is `G`, `E`, `F` or `P`;
+# `c_locale` is 1 when the call runs under `LC_ALL=C` or `C.UTF-8`;
+# `unresolved` is 1 when a pattern source cannot be read (`-f`, or a word
+# that may expand to options); `pat_start` and `pat_end` are the pattern
+# word's byte offsets, both -1 for a call with no readable pattern.
 # @arg $1 file path
 # @exitcode 2 shfmt cannot parse the file
 function records_of() {
@@ -122,8 +129,12 @@ function records_of() {
     # -1 when `command -v`/`-V` only looks the word up.
     def lead($w; $i):
       def opts($j): if (($w[$j]? // "") | startswith("-")) then opts($j + 1) else $j end;
-      def envw($j): if (($w[$j]? // "") | startswith("-") or test("^[A-Za-z_][A-Za-z0-9_]*="))
-          then envw($j + 1) else lead($w; $j) end;
+      # `-u NAME` and `-C DIR`, alone or ending a cluster, and `--unset`
+      # and `--chdir` without `=`, take the next word as their argument.
+      def envw($j): ($w[$j]? // "") as $x
+        | if ($x | test("^-[A-Za-z]*[uC]$")) or ($x | IN("--unset", "--chdir")) then envw($j + 2)
+          elif ($x | startswith("-") or test("^[A-Za-z_][A-Za-z0-9_]*=")) then envw($j + 1)
+          else lead($w; $j) end;
       if ($w[$i]? | IN("command", "builtin")) then
         opts($i + 1) as $j
         | if any($w[$i + 1:$j][]; test("^-[A-Za-z]*[vV]")) then -1 else lead($w; $j) end
@@ -407,12 +418,15 @@ function main() {
   for file in "${files[@]}"; do
     # A file is parsed only if it can hold a finding: a `~` (the `=~`
     # operator, whose `=` and `~` a backslash-newline can separate), a
-    # marker, or a grep word beside range-shaped text, since a grep range
-    # is read only from the file's own text.
+    # marker, or a grep word beside a bracket range, since a grep range is
+    # read only from the file's own text. The bracket text may hold
+    # classes, equivalence classes, collating symbols or a leading `]`
+    # before the range, as grep_range reads them.
     if ! grep --quiet --fixed-strings -- '~' "${file}" &&
       ! grep --quiet --fixed-strings -- "${MARKER}" "${file}" &&
       ! { grep --quiet --word-regexp --regexp=grep --regexp=egrep --regexp=fgrep -- "${file}" &&
-        grep --quiet --extended-regexp -- '\[[^]]*[[:alnum:]]-[[:alnum:]]' "${file}"; }; then
+        grep --quiet --extended-regexp -- \
+          '\[\^?\]?([^]]|\[[:=.][^]]*[:=.]\])*[[:alnum:]]-[[:alnum:]]' "${file}"; }; then
       continue
     fi
     text="$(<"${file}")"
