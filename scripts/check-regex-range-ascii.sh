@@ -118,7 +118,9 @@ source "${_lib_dir}/lib/enumerate.sh"
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
 readonly MARKER='regex-range-ascii: locale-bound'
-readonly MARKER_LINE_RE="^[[:space:]]*# ${MARKER}"
+# The marker word ends at a colon, whitespace or the line end, so
+# `locale-boundary` is not the marker.
+readonly MARKER_LINE_RE="^[[:space:]]*# ${MARKER}(:|[[:space:]]|\$)"
 # An expansion whose text the lint cannot follow: a command or arithmetic
 # substitution, a positional or special parameter.
 # shellcheck disable=SC2016 # the expansions are the text matched
@@ -135,13 +137,15 @@ require_tool jq
 # a `local LC_ALL=C` earlier in its function, or after a top-level
 # `export LC_ALL=C` or `=C.UTF-8`), `A name value_pos value_end` for
 # each assignment and each `for` loop item, and
-# `G call line mode c_locale unresolved pat_start pat_end` for each
+# `G call line mode c_locale unresolved pat_start pat_end optpos` for each
 # pattern of a `grep`, `egrep` or `fgrep` call: `call` is the call's byte
 # offset, shared by its patterns; `mode` is `G`, `E`, `F` or `P`;
 # `c_locale` is 1 when the call runs under `LC_ALL=C` or `C.UTF-8`;
 # `unresolved` is 1 when a pattern source cannot be read (`-f`, or a word
 # that may expand to options); `pat_start` and `pat_end` are the pattern
-# word's byte offsets, both -1 for a call with no readable pattern.
+# word's byte offsets, both -1 for a call with no readable pattern;
+# `optpos` is 1 when the pattern is a first operand before any `--`, where
+# a word expanding to an option is read by grep as that option.
 # @arg $1 file path
 # @exitcode 2 shfmt cannot parse the file
 function records_of() {
@@ -236,7 +240,7 @@ function records_of() {
             else . end
         elif ($l | startswith("-")) and $l != "-" then cluster($a; $l; 1)
         elif list_exp($a) then .unres = 1
-        else .ops += [[$a.Pos.Offset, $a.End.Offset]] end;
+        else .ops += [[$a.Pos.Offset, $a.End.Offset, 1]] end;
     # Every object node, collected once: each stream below scans this
     # list instead of walking the tree again.
     [.. | objects] as $all
@@ -307,9 +311,16 @@ function records_of() {
         | [.Args[] | wstr] as $w
         | lead($w; 0) as $k
         | select($k >= 0 and ($w[$k] | IN("grep", "egrep", "fgrep")))
-        | ([$w[0:$k][] | select(startswith("LC_ALL="))] | last) as $env_lc
+        | ([range(0; $k) | select($w[.] | startswith("LC_ALL="))] | last) as $env_at
+        # An `env` unset of LC_ALL: `-u NAME` (alone or ending a cluster of
+        # `-i`, `-0`, `-v`), `-uNAME`, `--unset NAME`, `--unset=NAME`.
+        | ([range(0; $k) | select(
+              ($w[.] | IN("--unset=LC_ALL") or test("^-[i0v]*uLC_ALL$"))
+              or (($w[.] | test("^-[i0v]*u$") or . == "--unset") and $w[. + 1] == "LC_ALL"))]
+            | last) as $unset_at
         | ([$call.Assigns[]? | select(.Name.Value? == "LC_ALL")] | last) as $pre_lc
-        | (if $env_lc != null then ($env_lc[7:] | IN("C", "C.UTF-8"))
+        | (if $unset_at != null and ($env_at == null or $env_at < $unset_at) then false
+            elif $env_at != null then ($w[$env_at][7:] | IN("C", "C.UTF-8"))
             elif $pre_lc != null then ($pre_lc | c_locale)
             else safe_at($call.Pos.Offset) end) as $safe
         | ({"grep": "G", "egrep": "E", "fgrep": "F"}[$w[$k]]) as $mode
@@ -320,7 +331,7 @@ function records_of() {
         | select(($p | length) > 0 or $st.unres == 1)
         | (if ($p | length) == 0 then [[-1, -1]] else $p end)[]
         | [ "G", $call.Pos.Offset, $call.Pos.Line, $st.mode,
-            (if $safe then 1 else 0 end), $st.unres, .[0], .[1] ] )
+            (if $safe then 1 else 0 end), $st.unres, .[0], .[1], (.[2] // 0) ] )
     | @tsv' <<<"${tree}"
 }
 
@@ -459,12 +470,32 @@ function follow_range() {
   return 0
 }
 
+# @description Succeed when a word is a bare expansion of a variable
+# (`$name` or `${name}`, alone or in double quotes) that one of its
+# same-file values, quotes removed, sets to text starting with `-`: in an
+# operand position grep reads it as an option, so the pattern is another
+# word. Reads the caller's `values` map.
+# @arg $1 word text
+function option_variable() {
+  local word="$1" name v
+  word="${word#\"}"
+  word="${word%\"}"
+  [[ ${word} =~ ^\$(\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))$ ]] || return 1
+  name="${BASH_REMATCH[2]}${BASH_REMATCH[3]}"
+  while IFS= read -r v; do
+    v="${v//\'/}"
+    v="${v//\"/}"
+    [[ ${v} == -* ]] && return 0
+  done <<<"${values[${name}]:-}"
+  return 1
+}
+
 function main() {
   local -a files=()
   glob_into files 'scripts, script libraries and harnesses' \
     "${SCRIPTS_DIR}/*.sh" "${SCRIPTS_DIR}/lib/*.sh" "${TESTS_DIR}/*.sh"
 
-  local file text records kind f2 f3 f4 f5 f6 f7 f8 op regex value line cid markers rc
+  local file text records kind f2 f3 f4 f5 f6 f7 f8 f9 op regex value line cid markers rc
   local found=0 tests=0 resolved=0 c_locale=0
   local calls=0 not_regex=0 grep_c_locale=0 unresolved=0 marked=0
   for file in "${files[@]}"; do
@@ -473,7 +504,9 @@ function main() {
     # marker, or a grep word beside a bracket range, since a grep range is
     # read only from the file's own text. The bracket text may hold
     # classes, equivalence classes, collating symbols or a leading `]`
-    # before the range, as grep_range reads them.
+    # before the range, as grep_range reads them. The match is line by
+    # line, so a range split by a backslash-newline inside its bracket is
+    # not seen here, and a file holding no other sign is not parsed.
     if ! grep --quiet --fixed-strings -- '~' "${file}" &&
       ! grep --quiet --fixed-strings -- "${MARKER}" "${file}" &&
       ! { grep --quiet --word-regexp --regexp=grep --regexp=egrep --regexp=fgrep -- "${file}" &&
@@ -488,13 +521,13 @@ function main() {
     local -A values=() call_line=() call_mode=() call_c=() call_unres=() call_range=() call_via=()
     local -A marker_ok=() marker_used=()
     local -a findings=()
-    while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8; do
+    while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8 f9; do
       [[ ${kind} == A ]] || continue
       value="${text:f3:f4-f3}"
       values["${f2}"]+="${value//\\$'\n'/}"$'\n'
     done <<<"${records}"
 
-    while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8; do
+    while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8 f9; do
       [[ ${kind} == T ]] || continue
       op="${text:f3:f4-f3}"
       op="${op//\\/}"
@@ -518,8 +551,8 @@ function main() {
     done <<<"${records}"
 
     # G records: call id, line, mode, C locale, unresolved, pattern start
-    # and end (-1 when the call has no pattern operand).
-    while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8; do
+    # and end (-1 when the call has no pattern operand), option position.
+    while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8 f9; do
       [[ ${kind} == G ]] || continue
       call_line["${f2}"]="${f3}"
       call_mode["${f2}"]="${f4}"
@@ -529,6 +562,10 @@ function main() {
       [[ -z ${call_range[${f2}]:-} ]] || continue
       regex="${text:f7:f8-f7}"
       regex="${regex//\\$'\n'/}"
+      if ((f9)) && option_variable "${regex}"; then
+        call_unres["${f2}"]=1
+        continue
+      fi
       follow_range grep_range "${regex}"
       ((FOLLOW_UNRES)) && call_unres["${f2}"]=1
       if [[ -n ${FOLLOW_RANGE} ]]; then
@@ -538,14 +575,15 @@ function main() {
     done <<<"${records}"
 
     rc=0
-    markers="$(grep --line-number --regexp="${MARKER_LINE_RE}" -- "${file}")" || rc=$?
+    markers="$(grep --line-number --extended-regexp --regexp="${MARKER_LINE_RE}" -- "${file}")" || rc=$?
     if ((rc > 1)); then
       log_err "cannot read ${file}"
       exit 2
     fi
     while IFS=: read -r line value; do
       [[ -n ${line} ]] || continue
-      value="${value#*"${MARKER}"}"
+      [[ ${value} =~ ${MARKER_LINE_RE}(.*)$ ]] || continue
+      value="${BASH_REMATCH[2]}"
       value="${value#:}"
       value="${value#"${value%%[![:space:]]*}"}"
       if [[ -z ${value} ]]; then
