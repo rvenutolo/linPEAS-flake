@@ -383,6 +383,9 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   put grep-range-after-bracket scripts/a.sh '#!/usr/bin/env bash' "grep -E '[]a-z]' f"
   run_case grep-range-after-bracket 1 '' "DIR/scripts/a.sh:2: grep range []a-z] follows the locale$(footer 1)"
 
+  put grep-range-after-negated-bracket scripts/a.sh '#!/usr/bin/env bash' "grep -E '[^]a-z]' f"
+  run_case grep-range-after-negated-bracket 1 '' "DIR/scripts/a.sh:2: grep range [^]a-z] follows the locale$(footer 1)"
+
   put grep-range-after-equivalence scripts/a.sh '#!/usr/bin/env bash' "grep -E '[[=a=]c-h]' f" "grep -E '[[.a.]d-i]' f"
   run_case grep-range-after-equivalence 1 '' "DIR/scripts/a.sh:2: grep range [[=a=]c-h] follows the locale
 DIR/scripts/a.sh:3: grep range [[.a.]d-i] follows the locale$(footer 2)"
@@ -390,6 +393,16 @@ DIR/scripts/a.sh:3: grep range [[.a.]d-i] follows the locale$(footer 2)"
   put grep-env-unset scripts/a.sh '#!/usr/bin/env bash' "env -u LC_ALL grep -E '[a-z]' f" "env -uLC_ALL grep -E '[b-c]' f"
   run_case grep-env-unset 1 '' "DIR/scripts/a.sh:2: grep range [a-z] follows the locale
 DIR/scripts/a.sh:3: grep range [b-c] follows the locale$(footer 2)"
+
+  # Unsetting LC_ALL through env leaves grep under LANG, whatever scope the
+  # call stands in, until a later env word sets it to C again.
+  put grep-env-unset-in-c-scope scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' "env -u LC_ALL grep -E '[n-o]' f" \
+    "env --unset=LC_ALL grep -E '[p-q]' f" "env --unset LC_ALL grep -E '[r-s]' f" "env -uLC_ALL grep -E '[t-u]' f" \
+    "env -u LC_ALL LC_ALL=C grep -E '[v-w]' f"
+  run_case grep-env-unset-in-c-scope 1 '' "DIR/scripts/a.sh:3: grep range [n-o] follows the locale
+DIR/scripts/a.sh:4: grep range [p-q] follows the locale
+DIR/scripts/a.sh:5: grep range [r-s] follows the locale
+DIR/scripts/a.sh:6: grep range [t-u] follows the locale$(footer 4)"
 
   put grep-negated-digit scripts/a.sh '#!/usr/bin/env bash' "grep -E '^[^0-9]+\$' f"
   run_case grep-negated-digit 1 '' "DIR/scripts/a.sh:2: grep range [^0-9] follows the locale$(footer 1)"
@@ -406,7 +419,7 @@ DIR/scripts/a.sh:3: grep range [b-c] follows the locale$(footer 2)"
   put grep-digit-only scripts/a.sh '#!/usr/bin/env bash' "grep -E '^v[0-9]+\$' f" "grep 'Q[1-4]' f" "grep -E '[0-9.]+' f"
   run_case grep-digit-only 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 3 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
 
-  put grep-ordinary scripts/a.sh '#!/usr/bin/env bash' 'command -v grep >/dev/null' 'grep --quiet -- foo f' "grep -E '^(a|b)\$' f" "grep --count '[[:alpha:]]' f" "grep -E '[0123456789abcdef]' f" "grep -E 'v[0-9]+' f"
+  put grep-ordinary scripts/a.sh '#!/usr/bin/env bash' 'command -v grep >/dev/null' "command -v grep '[a-z]' >/dev/null" 'grep --quiet -- foo f' "grep -E '^(a|b)\$' f" "grep --count '[[:alpha:]]' f" "grep -E '[0123456789abcdef]' f" "grep -E 'v[0-9]+' f"
   run_case grep-ordinary 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 5 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   # -F holds no regex and -P matches by code point.
@@ -433,6 +446,16 @@ DIR/scripts/a.sh:3: grep range [b-c] follows the locale$(footer 2)"
   put grep-unresolved scripts/a.sh '#!/usr/bin/env bash' 'grep -f pats.txt f' 'grep "${flags[@]}" -e foo f' 'grep -E "$1" f' 'grep -E "$(cat p)" f' 'grep -E "${undefined_re}" f' "grep -E 'v[0-9]' f"
   run_case grep-unresolved 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 6 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 5 unresolved, 0 marked' ''
 
+  # An option held in a plain variable may stand where the pattern seems to
+  # be; a variable in a pattern position, or holding no option, is followed.
+  put grep-option-in-variable scripts/a.sh '#!/usr/bin/env bash' "opt='-i'" "grep \"\${opt}\" '[b-c]' f" "grep \$opt '[d-e]' f" "grep -E 'v[0-9]' f"
+  run_case grep-option-in-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 3 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 2 unresolved, 0 marked' ''
+
+  put grep-pattern-variable-read scripts/a.sh '#!/usr/bin/env bash' "re='-[f-g]'" "word='[h-i]'" 'grep -e "$re" f' 'grep -E -- "${re}" f' 'grep "$word" f'
+  run_case grep-pattern-variable-read 1 '' "DIR/scripts/a.sh:4: grep range [f-g] (through re) follows the locale
+DIR/scripts/a.sh:5: grep range [f-g] (through re) follows the locale
+DIR/scripts/a.sh:6: grep range [h-i] (through word) follows the locale$(footer 3)"
+
   # The reasoned marker on the line above exempts the call; a marker with no
   # reason, or one that exempts nothing, is itself a finding.
   put grep-marker-reason scripts/a.sh '#!/usr/bin/env bash' '# regex-range-ascii: locale-bound: probes the locale on purpose' "LC_ALL=\"\${loc}\" grep -E '^[a-z]\$' f"
@@ -448,6 +471,9 @@ DIR/scripts/a.sh:3: grep range [a-c] follows the locale$(footer 2)"
   put grep-marker-bare scripts/a.sh '#!/usr/bin/env bash' '  # regex-range-ascii: locale-bound' "grep -E '[d-e]' f"
   run_case grep-marker-bare 1 '' "DIR/scripts/a.sh:2: marker has no reason
 DIR/scripts/a.sh:3: grep range [d-e] follows the locale$(footer 2)"
+
+  put grep-marker-prefix-word scripts/a.sh '#!/usr/bin/env bash' '# regex-range-ascii: locale-boundary' "grep -E '[l-m]' f"
+  run_case grep-marker-prefix-word 1 '' "DIR/scripts/a.sh:3: grep range [l-m] follows the locale$(footer 1)"
 
   put grep-marker-stale scripts/a.sh '#!/usr/bin/env bash' '# regex-range-ascii: locale-bound: deliberate' "grep -E '[0-9]+' f"
   run_case grep-marker-stale 1 '' "DIR/scripts/a.sh:2: marker exempts nothing$(footer 1)"
