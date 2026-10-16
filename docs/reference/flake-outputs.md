@@ -52,20 +52,20 @@ the markers by hand.
     ├───aarch64-linux
     │   ├───cosign: package 'cosign-3.1.3'
     │   ├───default: package 'linpeas-20261015-c468195d'
-    │   ├───diffoscopeMinimal: package 'diffoscope-332'
+    │   ├───diffoscopeMinimal: package 'diffoscope-333'
     │   ├───git-cliff: package 'git-cliff-2.14.2'
     │   ├───linpeas: package 'linpeas-20261015-c468195d'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
-    │   ├───nix: package 'nix-2.34.8'
+    │   ├───nix: package 'nix-2.34.9'
     │   └───site: package 'linpeas-flake-site-20261015-c468195d'
     └───x86_64-linux
         ├───cosign: package 'cosign-3.1.3'
         ├───default: package 'linpeas-20261015-c468195d'
-        ├───diffoscopeMinimal: package 'diffoscope-332'
+        ├───diffoscopeMinimal: package 'diffoscope-333'
         ├───git-cliff: package 'git-cliff-2.14.2'
         ├───linpeas: package 'linpeas-20261015-c468195d'
         ├───linpeas-image: package 'linpeas.tar.gz'
-        ├───nix: package 'nix-2.34.8'
+        ├───nix: package 'nix-2.34.9'
         └───site: package 'linpeas-flake-site-20261015-c468195d'
 ```
 
