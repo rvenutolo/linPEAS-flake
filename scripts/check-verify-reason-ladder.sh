@@ -287,7 +287,9 @@ done
 # Boundary-aware so `READ_TAG` is not satisfied by a `READ_TAG_EXTRA`
 # occurrence. The name is safe to interpolate into the ERE because the
 # identifier check above already rejected every name that could carry a
-# regex metacharacter.
+# regex metacharacter. grep runs under the C locale: under `en_US.UTF-8`
+# the `[^A-Za-z0-9_]` boundary range excludes non-ASCII letters too, so a
+# name followed by one would read as never read.
 #
 # grep's status is read three ways rather than as a boolean: exit 2 means
 # grep itself could not run the search, and scoring that as "no match"
@@ -295,7 +297,7 @@ done
 # as workflow drift.
 for name in "${env_names[@]}"; do
   read_status=0
-  grep --extended-regexp --quiet -- \
+  LC_ALL=C grep --extended-regexp --quiet -- \
     "(^|[^A-Za-z0-9_])${name}([^A-Za-z0-9_]|$)" <<<"${ladder_body}" ||
     read_status=$?
   case "${read_status}" in

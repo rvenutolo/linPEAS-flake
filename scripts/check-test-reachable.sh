@@ -144,7 +144,9 @@ function reachable_set() {
 
   # 4. Direct `tests/<x>.test.sh` invocations in any workflow file. Guard the
   # glob explicitly (nullglob makes an empty match vanish, which would leave
-  # grep reading stdin).
+  # grep reading stdin). grep runs under the C locale: under `en_US.UTF-8` the
+  # `[A-Za-z0-9_.-]` range also matches non-ASCII letters, so a harness whose
+  # name falls outside that class would count as invoked.
   #
   # glob-exempt: this glob collects reachability evidence, so an empty match
   # set subtracts runners rather than violations — every harness a workflow
@@ -154,7 +156,7 @@ function reachable_set() {
   if ((${#wf_files[@]} > 0)); then
     local hit
     status=0
-    rows="$(grep --no-filename --only-matching --extended-regexp \
+    rows="$(LC_ALL=C grep --no-filename --only-matching --extended-regexp \
       'tests/[A-Za-z0-9_.-]+\.test\.sh' "${wf_files[@]}" |
       sed 's#tests/##')" || status=$?
     if ((status > 1)); then

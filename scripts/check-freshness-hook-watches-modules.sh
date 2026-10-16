@@ -162,7 +162,10 @@ function required_modules() {
   for m in "${!mods[@]}"; do
     dir="$(dirname -- "${m}")"
     status=0
-    imports="$(grep --only-matching --extended-regexp \
+    # LC_ALL=C keeps the path range ASCII: under `en_US.UTF-8` collation GNU grep
+    # lets a letter range admit non-ASCII letters, so the import set would
+    # depend on the caller's locale.
+    imports="$(LC_ALL=C grep --only-matching --extended-regexp \
       '\.\.?/[A-Za-z0-9._/-]+\.nix' <<<"${nix_src["${m}"]}")" || status=$?
     # A module with no imports is the common case and grep reports it as
     # status 1, so only a higher status is a scan that broke rather than
@@ -194,7 +197,10 @@ declare -a repo_scripts=()
 glob_into repo_scripts 'repo shell scripts' "${ROOT}/scripts/*.sh"
 for f in "${repo_scripts[@]}"; do
   [[ -f ${f} ]] || continue
-  attr="$(grep --only-matching --extended-regexp \
+  # LC_ALL=C keeps the attribute range ASCII: under `en_US.UTF-8` collation GNU
+  # grep lets a letter range admit non-ASCII letters, so the evaluated
+  # attribute would depend on the caller's locale.
+  attr="$(LC_ALL=C grep --only-matching --extended-regexp \
     'devTooling\.\$\{sys\}\.[A-Za-z0-9_]+' -- "${f}" |
     head --lines=1 | sed 's/.*\.//' || true)"
   [[ -n ${attr} ]] || continue
@@ -371,7 +377,10 @@ function attr_source_paths() {
     paths["${m}"]=1
     dir="$(dirname -- "${m}")"
     status=0
-    refs="$(grep --only-matching --extended-regexp \
+    # LC_ALL=C keeps the path range ASCII: under `en_US.UTF-8` collation GNU grep
+    # lets a letter range admit non-ASCII letters, so the reference set
+    # would depend on the caller's locale.
+    refs="$(LC_ALL=C grep --only-matching --extended-regexp \
       '\.\.?/[A-Za-z0-9._/-]+' <<<"${nix_src["${m}"]}")" || status=$?
     # A module with no relative references is ordinary and grep reports it
     # as status 1, so only a higher status is a scan that broke rather than

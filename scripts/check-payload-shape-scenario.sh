@@ -115,7 +115,9 @@ readonly MARKER_RE='^[[:space:]]*#[[:space:]]*payload-subject-exempt:[[:space:]]
 function matches_predicate() {
   local -r f="$1"
   grep --quiet 'gh api' "${f}" && return 0
-  grep --quiet --extended-regexp '[A-Z_]+_JSON_OVERRIDE' "${f}" && return 0
+  # A shell variable name is ASCII; under `en_US.UTF-8` grep's `[A-Z]`
+  # follows collation and admits letters such as `É`.
+  LC_ALL=C grep --quiet --extended-regexp '[A-Z_]+_JSON_OVERRIDE' "${f}" && return 0
   grep --quiet --extended-regexp '="\$\(cat\)"' "${f}" && return 0
   grep --quiet --extended-regexp \
     'cat -- .*(flake\.lock|LOCK)|git show.*:flake\.lock' "${f}" && return 0
