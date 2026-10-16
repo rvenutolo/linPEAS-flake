@@ -6,6 +6,26 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261015-57155ef8] - 2026-10-16
+
+### Chores
+- Bump linpeas to 20261015-57155ef8 ([#1323](https://github.com/rvenutolo/linPEAS-flake/pull/1323))
+- Update flake.lock ([#1322](https://github.com/rvenutolo/linPEAS-flake/pull/1322))
+- Update github-actions ([#1317](https://github.com/rvenutolo/linPEAS-flake/pull/1317))
+- Hide docs-audit-fix skill from the slash menu ([#1310](https://github.com/rvenutolo/linPEAS-flake/pull/1310))
+
+### Documentation
+- Fix the docs-correctness audit findings and close the cycle ([#1313](https://github.com/rvenutolo/linPEAS-flake/pull/1313))
+
+### Fixes
+- Pin locale-bound grep ranges to the C locale ([#1321](https://github.com/rvenutolo/linPEAS-flake/pull/1321))
+- Run the gap hook on every file type no extractor claims ([#1312](https://github.com/rvenutolo/linPEAS-flake/pull/1312))
+- Select the commitlint and size-label steps whatever their case ([#1311](https://github.com/rvenutolo/linPEAS-flake/pull/1311))
+
+### Tests
+- Cover the string-literal secrets use in two secrets harnesses ([#1319](https://github.com/rvenutolo/linPEAS-flake/pull/1319))
+- Probe grep, not only bash, before grep-range scenarios ([#1318](https://github.com/rvenutolo/linPEAS-flake/pull/1318))
+
 ## [20261015-c468195d] - 2026-10-15
 
 ### Build
