@@ -287,7 +287,7 @@ function members_at() {
 
 # @description Filter stdin to ids safe to render; drop the rest.
 function only_valid_ids() {
-  grep -E "${JOB_ID_RE}" || true
+  LC_ALL=C grep -E "${JOB_ID_RE}" || true
 }
 
 # @description Render a labeled Markdown list from newline-separated ids,

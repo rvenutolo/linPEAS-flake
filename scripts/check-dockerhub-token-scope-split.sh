@@ -58,9 +58,10 @@
 # harness can point at a temp dir, PATHS_OVERRIDE (newline-separated file
 # list) for the Markdown scan set, and LINT_ALLOW_EMPTY_SCAN=1 to accept a
 # workflows dir holding no YAML or an empty Markdown scan set. Exits 0 if
-# the split holds, 1 on a violation, 2 when the workflows dir is not there
-# to read, holds no workflow to read, holds one that could not be read, or
-# the Markdown scan set could not be enumerated.
+# the split holds, 1 on a violation, 2 when the lint could not run: yq is
+# not on PATH, the workflows dir is missing or holds no workflow, a
+# workflow or a doc could not be read, or the Markdown scan set is empty
+# or could not be enumerated, for example.
 set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"

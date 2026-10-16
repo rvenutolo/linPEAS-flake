@@ -265,7 +265,8 @@ and the reason list above are four hand-synced copies of one set.
 step in the `verify` job other than the attribution step itself is
 referenced by a `steps.<id>.outcome` entry
 in the attribution `env:`, every such env var is read by the ladder,
-every `reason` token the ladder emits appears in the list above, and the
+every `reason` token the ladder emits appears somewhere on this page (a
+fixed-string match, not a check against the list above), and the
 ladder's branch order matches the steps' execution order — the order the
 "first failed step wins" rule depends on.
 

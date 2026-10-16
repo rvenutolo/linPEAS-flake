@@ -99,7 +99,7 @@ function secret_uses() {
 # @description Print the text of each double-quoted scalar in a YAML file
 # as `yq` decodes it, keys and values alike, each on its own lines. GitHub
 # Actions evaluates an expression in the decoded text, and a double-quoted
-# scalar is the one YAML style whose escapes (`\x65`, `e`, `\n`, an
+# scalar is the one YAML style whose escapes (`\x65`, `\u0065`, `\n`, an
 # escaped line break) make that text differ from the file's: an escape can
 # hide a use's name, its `${{` or its `}}` from a reader of the file text.
 # A tagged scalar is printed too, whatever its style: `yq` reports the

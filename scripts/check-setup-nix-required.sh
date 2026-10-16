@@ -32,7 +32,8 @@
 # counted finding, and the file's jobs are not read.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
-# Exits 0 on full coverage, 1 on any drift, 2 on missing yq.
+# Exits 0 on full coverage, 1 on any drift, 2 when the lint could not run
+# (missing yq, or no workflow file to read, for example).
 
 set -Eeuo pipefail
 IFS=$'\n\t'

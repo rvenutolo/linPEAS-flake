@@ -678,6 +678,25 @@ LC_ALL=en_US.UTF-8 run_scenario 'non-ASCII letter after the audit point is refus
   --forbid-err 'is not a commit in this history'
 cd "${REPO_ROOT}"
 
+# --- scenario: a non-ASCII letter in a job or a member is not listed ---
+# Under en_US.UTF-8 a `[a-z]` range also matches non-ASCII letters, so a
+# job id or a member holding `é` would pass the id filter. Neither is a
+# job id, so neither is listed; the ASCII markers beside them are.
+make_sandbox
+cd "${SANDBOX}"
+printf 'lint-a:\n  - alpha\n  - mémber\n  - member-marker\n' >"${LG_FILE}"
+printf 'name: u\njobs:\n  jéb:\n    runs-on: x\n  job-marker:\n    runs-on: x\n' >"${WF_DIR}/u.yml"
+git -C "${SANDBOX}" add --all
+git -C "${SANDBOX}" commit --quiet -m 'ci: add a job and a member holding a non-ASCII letter'
+extra_commit
+extra_commit
+extra_commit
+extra_commit
+LC_ALL=en_US.UTF-8 run_scenario 'a job or a member holding a non-ASCII letter is not listed under en_US.UTF-8' 0 \
+  --expect "- ${BT}member-marker${BT}" --expect "- ${BT}job-marker${BT}" \
+  --forbid 'mémber' --forbid 'jéb'
+cd "${REPO_ROOT}"
+
 harness_assert_verify || failures=$((failures + 1))
 
 if ((failures)); then

@@ -22,8 +22,9 @@ fi
 # Every field below is read with `jq`, and the shape probes report a
 # failed read as a defect in the build-info file. An absent `jq` would
 # therefore be announced as `not a JSON object` against a file that is a
-# perfectly good JSON object. This script sources no libraries, so the
-# guard is written out rather than taken from `require_tool`.
+# perfectly good JSON object. The one library this script sources,
+# scripts/lib/ascii-match.sh, carries no `require_tool`, so the guard is
+# written out.
 if ! command -v jq >/dev/null 2>&1; then
   printf 'ERROR: jq not found on PATH\n' >&2
   exit 2
