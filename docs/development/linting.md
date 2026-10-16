@@ -651,7 +651,7 @@ its input. In a `(( ))` condition the error reads as false.
 
 A script that puts text it did not compute itself into arithmetic
 first matches it against a regex whose digit class is ASCII under any
-locale (see [Locale-bound ranges in bash regexes](#locale-bound-ranges-in-bash-regexes))
+locale (see [Locale-bound ranges in bash regexes and grep](#locale-bound-ranges-in-bash-regexes-and-grep))
 and bounds its length, or it compares the text as text. A number a tool prints is text too when it
 travels in a delimited row beside free text: a field holding the
 delimiter moves the fields after it, and one holding a line break as
@@ -668,7 +668,7 @@ counter, a `grep -c` or `wc` count, `date +%s` output, or a number the
 script's own `awk`, `jq` or `yq` program printed. A provenance label
 also misses text that reaches a field through its delimiter.
 
-## Locale-bound ranges in bash regexes
+## Locale-bound ranges in bash regexes and grep
 
 A range in a bash `[[ … =~ … ]]` regex follows the locale's collation.
 Under `en_US.UTF-8`, a typical developer shell's locale, which the
@@ -694,12 +694,21 @@ case-insensitive regex flag (`(?i)`) is not used for this, because it
 also folds letters outside ASCII: `yq` reads the Kelvin sign as `k` and
 the long s as `s` under it.
 
-Other matchers measured on this tree do not need this: `[0-9]` is ASCII
+In a GNU `grep` pattern, a bracket with a letter endpoint (`[a-z]`,
+`[0-9a-f]`) or a negated one (`[^0-9]`) follows the locale the same way;
+a positive bracket of digit ranges (`[0-9]`) does not. Run such a call
+under `LC_ALL=C`, as a prefix assignment or in a function or script that
+sets a C locale. A call that must follow the locale, such as a probe of
+it, carries the marker `# regex-range-ascii: locale-bound: <reason>` on
+the line directly above it.
+
+Other matchers measured on this tree do not need this: a positive `[0-9]` is ASCII
 in GNU `grep`, `sed`, `gawk`, `mawk`, `jq` and `yq` in every locale, and
 bash glob patterns read ranges as ASCII while `globasciiranges` is on
 (the default). POSIX classes such as `[[:space:]]` and `[[:alpha:]]`
 match characters outside ASCII in any UTF-8 locale, `C.UTF-8` included,
-and so does a letter range in `grep -E` under `en_US.UTF-8`; those are
+and so does a letter range in `grep -E` under `en_US.UTF-8`, and in
+GNU `grep` a negated `[^0-9]` follows the locale; those are
 settled in [Locale-bound character classes](#locale-bound-character-classes).
 
 A harness scenario that shows a script's answer under a locale pins the
@@ -710,7 +719,7 @@ would run under C and pass whatever the script does. That probe asks
 bash; a scenario whose subject is a `grep` range calls
 `require_grep_locale_gap` instead, which asks the `grep` on PATH whether
 `[a-z]` admits `é`. GNU grep does not use the regex engine bash uses,
-and keeps a lone `[0-9]` ASCII in every locale while it follows the
+and keeps a lone positive `[0-9]` ASCII in every locale while it follows the
 locale for `[a-z]` and for a mixed range such as `[0-9a-f]`.
 
 Enforced by `scripts/check-regex-range-ascii.sh`; what it reads and

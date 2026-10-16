@@ -1,55 +1,107 @@
 #!/usr/bin/env bash
 # scripts/check-regex-range-ascii.sh
 #
-# @description Lint: a bash `[[ … =~ … ]]` regex in `scripts/*.sh`,
-# `scripts/lib/*.sh` or `tests/*.sh` must not hold a range between ASCII letters or digits (`[0-9]`,
-# `[a-f]`, `[A-Za-z_]`) unless it is matched under a C locale. A range
-# follows the locale's collation: under `en_US.UTF-8` `[0-9]` also matches
-# digits such as `٣` and `５`, and `[a-f]` matches `é`, while the CI
-# runner's `C.UTF-8` matches ASCII only. A validator written with a range
-# therefore passes on a developer's machine a value CI refuses, and the
-# difference is invisible to CI.
+# @description Lint: a bash `[[ … =~ … ]]` regex, or a GNU `grep` regex
+# pattern, in `scripts/*.sh`, `scripts/lib/*.sh` or `tests/*.sh` must not
+# hold a locale-bound range between ASCII letters or digits unless it is
+# matched under a C locale. A range follows the locale's collation: under
+# `en_US.UTF-8` `[0-9]` in a bash regex also matches digits such as `٣`
+# and `５`, and `[a-f]` matches `é`, while the CI runner's `C.UTF-8`
+# matches ASCII only. A validator written with a range therefore passes on
+# a developer's machine a value CI refuses, and the difference is
+# invisible to CI.
+#
+# In bash, every such range is reported. GNU grep keeps a positive bracket
+# whose ranges all run between digits (`[0-9]`, `Q[1-4]`, `[0-9.]`) ASCII
+# in every locale, so only a bracket that holds a letter endpoint
+# (`[a-z]`, `[0-9a-f]`, `[A-Za-z0-9._/-]`) or is negated (`[^0-9]`: under
+# `en_US.UTF-8` `٣` falls outside it) is reported for grep.
 #
 # A test is matched under a C locale when it follows a
 # `local LC_ALL=C` or `local LC_ALL=C.UTF-8` that is a direct statement
 # of its own function (`ascii_match` in `scripts/lib/ascii-match.sh` is
 # one), or follows a top-level `export LC_ALL=C` or
 # `export LC_ALL=C.UTF-8`; the value is one word, unquoted or in single
-# quotes, the last `LC_ALL` word on its line. A later assignment, `declare`, `local` or
-# `export` (also behind `builtin` or `command`, and with the whole
-# assignment quoted) that sets anything but one lone `C` or `C.UTF-8`
-# word, or a later `unset LC_ALL`, `wait -p LC_ALL`, `read`, `mapfile`,
-# `getopts`, `printf -v`, arithmetic assignment (also in a C-style `for`),
-# `exec {LC_ALL}>` or `for LC_ALL in`, in the same function or outside
-# any function, ends that; an element name (`LC_ALL[0]`) counts as
-# `LC_ALL`. A write through `eval` or a nameref is not read, nor is the
-# order in which functions are called. A declaration inside a subshell, a
-# command substitution, a conditional or a background statement does not
-# start a C locale; an `unset` or write in one still ends it, as do
-# `unset -f`, `unset -n` and `command -v unset LC_ALL`, so a range after
-# them is reported although the shell would match it as C. A backslash-newline inside an operator
-# or a regex is joined before it is read. Otherwise the
-# class is spelled out (`[0123456789]`), or the text is matched through `ascii_match`.
+# quotes, the last `LC_ALL` word on its line. A later assignment,
+# `declare`, `local` or `export` (also behind `builtin` or `command`, and
+# with the whole assignment quoted) that sets anything but one lone `C` or
+# `C.UTF-8` word, or a later `unset LC_ALL`, `wait -p LC_ALL`, `read`,
+# `mapfile`, `getopts`, `printf -v`, arithmetic assignment (also in a
+# C-style `for`), `exec {LC_ALL}>` or `for LC_ALL in`, in the same
+# function or outside any function, ends that; an element name
+# (`LC_ALL[0]`) counts as `LC_ALL`. A write through `eval` or a nameref is
+# not read, nor is the order in which functions are called. A declaration
+# inside a subshell, a command substitution, a conditional or a
+# background statement does not start a C locale; an `unset` or write in
+# one still ends it, as do `unset -f`, `unset -n` and
+# `command -v unset LC_ALL`, so a range after them is reported although
+# the shell would match it as C. A backslash-newline inside an operator or
+# a regex is joined before it is read. Otherwise the class is spelled out
+# (`[0123456789]`), or the text is matched through `ascii_match`.
 #
 # The `=~` tests are read from the `shfmt --tojson` parse tree, and the
 # operator from the source text between the two operands, since shfmt
-# releases encode the operator differently; a file holding no `~` is not
-# parsed. A regex held in a variable is
-# read through the assignments to that variable and the items of a `for`
-# loop over it in the same file, following variables they name, three levels deep. Not read: a regex
-# that reaches the test as a function argument, from a function's output,
-# from an array assigned as a list (`re=(…)`), or from a sourced file; a regex inside `eval`
-# or `bash -c` text; and `grep`, `sed`, `awk`, `jq` and `yq` patterns.
+# releases encode the operator differently. A file is parsed when it
+# holds `~`, holds the marker text, or holds a `grep`, `egrep` or `fgrep`
+# word together with range-shaped text (a bracket-aware match: classes,
+# equivalence classes, collating symbols, and a leading `]` or `^]`); any
+# other file is not parsed. A regex held in a variable is read through the
+# assignments to that variable and the items of a `for` loop over it in
+# the same file, following variables they name, three levels deep.
 # A quoted operand (`=~ "[0-9]"`) is a literal match, but is read like
 # an unquoted one and reported; so is a function whose `local LC_ALL`
 # value is in double quotes. Unquote it or spell the class out.
+#
+# A grep call is a command whose word, after leading `command` or
+# `builtin` words and their options and `env` with its options and
+# NAME=value words, is `grep`, `egrep` or `fgrep`; `command -v grep` is
+# a lookup, not a call. `env` options are skipped, and `-u`/`--unset` and
+# `-C`/`--chdir` consume their argument; `env -S` is not read. A call's
+# patterns are its `-e`/`--regexp` operands, or, when there are none and
+# no `-f`/`--file`, its first operand; options are read wherever they
+# stand, up to `--`, and an option's own argument (`-m 1`) is never a
+# pattern. A call with `-F`/`--fixed-strings` holds no regex and one with
+# `-P`/`--perl-regexp` matches by code point; neither is read. A call
+# runs under a C locale when an `LC_ALL=C` or `LC_ALL=C.UTF-8` assignment
+# prefixes it (also through `env`), or when it stands in a scope that sets
+# a C locale as described above; a prefix with any other `LC_ALL` value
+# overrides that scope. Only `LC_ALL` is read. A pattern held in a
+# variable is followed as a `=~` regex is. Inside a pattern, a `$name` or
+# a backtick in single quotes is still read as an expansion, as for `=~`:
+# a single-quoted `$name` is followed, and a backtick counts the call as
+# unresolved.
+#
+# A grep call that is locale-bound on purpose carries the marker
+# `# regex-range-ascii: locale-bound: <reason>` on the line directly
+# above the line its command starts on (inside a pipeline too). A marker
+# with no reason, or one that exempts no reported call, is itself
+# reported. The marker never exempts a `=~` test. A marker-shaped line
+# inside a heredoc is read as a marker.
+#
+# Findings print sorted by line within a file, ties broken by message
+# text. The final line is the summary: `regex-range-ascii: ok — scanned N
+# file(s), N =~ test(s), N with a regex in a variable, N under a C locale;
+# N grep call(s), N not regex (-F/-P), N under a C locale, N unresolved,
+# N marked`.
+#
+# Not read: a regex or pattern that reaches the test or call as a function
+# argument, from a function's output or a command substitution, from an
+# array assigned as a list (`re=(…)`), from a sourced file, or from a
+# `-f` file; a call whose options come from an array or `$@` expansion;
+# an abbreviated long option (`--regex=`) or a separate-argument long
+# option outside the listed set (`--group-separator SEP`); a regex inside
+# `eval` or `bash -c` text; grep in workflow and composite-action `run:`
+# blocks, which run only on the runner, whose locale is `C.UTF-8`; and
+# `sed`, `awk`, `jq` and `yq` patterns. A grep call that cannot be read is
+# counted as unresolved in the summary line.
 #
 # Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and TESTS_DIR_OVERRIDE
 # (default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
 #
 # Exits 0 when no such range is found, 1 when one is. Exits 2 when the
-# check cannot run: `shfmt` or `jq` absent from PATH, a file `shfmt`
-# cannot parse, or a scan set matching no file.
+# check cannot run: `shfmt` or `jq` absent from PATH, a file in the parse
+# set (described above) that `shfmt` cannot parse, or a scan set matching
+# no file.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
