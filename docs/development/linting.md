@@ -702,14 +702,13 @@ sets a C locale. A call that must follow the locale, such as a probe of
 it, carries the marker `# regex-range-ascii: locale-bound: <reason>` on
 the line directly above it.
 
-Other matchers measured on this tree do not need this: a positive `[0-9]` is ASCII
-in GNU `grep`, `sed`, `gawk`, `mawk`, `jq` and `yq` in every locale, and
-bash glob patterns read ranges as ASCII while `globasciiranges` is on
-(the default). POSIX classes such as `[[:space:]]` and `[[:alpha:]]`
-match characters outside ASCII in any UTF-8 locale, `C.UTF-8` included,
-and so does a letter range in `grep -E` under `en_US.UTF-8`, and in
-GNU `grep` a negated `[^0-9]` follows the locale; those are
-settled in [Locale-bound character classes](#locale-bound-character-classes).
+Other matchers measured on this tree do not need this: a positive
+`[0-9]` is ASCII in GNU `grep`, `sed`, `gawk`, `mawk`, `jq` and `yq` in
+every locale, and bash glob patterns read ranges as ASCII while
+`globasciiranges` is on (the default). POSIX classes such as
+`[[:space:]]` and `[[:alpha:]]` match characters outside ASCII in any
+UTF-8 locale, `C.UTF-8` included; those are settled in
+[Locale-bound character classes](#locale-bound-character-classes).
 
 A harness scenario that shows a script's answer under a locale pins the
 locale with `LC_ALL` and first calls `require_locale_gap` from

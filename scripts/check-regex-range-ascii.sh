@@ -45,7 +45,9 @@
 # holds `~`, holds the marker text, or holds a `grep`, `egrep` or `fgrep`
 # word together with range-shaped text (a bracket-aware match: classes,
 # equivalence classes, collating symbols, and a leading `]` or `^]`); any
-# other file is not parsed. A regex held in a variable is read through the
+# other file is not parsed. That match reads line by line, so a grep range
+# split by a backslash-newline inside its bracket, in a file with no other
+# sign, is not seen. A regex held in a variable is read through the
 # assignments to that variable and the items of a `for` loop over it in
 # the same file, following variables they name, three levels deep.
 # A quoted operand (`=~ "[0-9]"`) is a literal match, but is read like
@@ -60,20 +62,25 @@
 # patterns are its `-e`/`--regexp` operands, or, when there are none and
 # no `-f`/`--file`, its first operand; options are read wherever they
 # stand, up to `--`, and an option's own argument (`-m 1`) is never a
-# pattern. A call with `-F`/`--fixed-strings` holds no regex and one with
-# `-P`/`--perl-regexp` matches by code point; neither is read. A call
-# runs under a C locale when an `LC_ALL=C` or `LC_ALL=C.UTF-8` assignment
-# prefixes it (also through `env`), or when it stands in a scope that sets
-# a C locale as described above; a prefix with any other `LC_ALL` value
-# overrides that scope. Only `LC_ALL` is read. A pattern held in a
-# variable is followed as a `=~` regex is. Inside a pattern, a `$name` or
-# a backtick in single quotes is still read as an expansion, as for `=~`:
-# a single-quoted `$name` is followed, and a backtick counts the call as
+# pattern. A first operand before any `--` that is a plain variable
+# (`"$opt"`, `${opt}`) with a same-file value starting with `-` is an
+# option, so the call is unresolved. A call with `-F`/`--fixed-strings`
+# holds no regex and one with `-P`/`--perl-regexp` matches by code point;
+# neither is read. A call runs under a C locale when an `LC_ALL=C` or
+# `LC_ALL=C.UTF-8` assignment prefixes it (also through `env`), or when it
+# stands in a scope that sets a C locale as described above; a prefix with
+# any other `LC_ALL` value overrides that scope, and so does
+# `env -u LC_ALL` (or `--unset`) unless a later `env` word sets
+# `LC_ALL=C` again. Only `LC_ALL` is read. A pattern held in a variable is
+# followed as a `=~` regex is. Inside a pattern, a `$name` or a backtick
+# in single quotes is still read as an expansion, as for `=~`: a
+# single-quoted `$name` is followed, and a backtick counts the call as
 # unresolved.
 #
 # A grep call that is locale-bound on purpose carries the marker
 # `# regex-range-ascii: locale-bound: <reason>` on the line directly
-# above the line its command starts on (inside a pipeline too). A marker
+# above the line its command starts on (inside a pipeline too); the word
+# is exactly `locale-bound`, so `locale-boundary` is not a marker. A marker
 # with no reason, or one that exempts no reported call, is itself
 # reported. The marker never exempts a `=~` test. A marker-shaped line
 # inside a heredoc is read as a marker.
@@ -91,9 +98,14 @@
 # an abbreviated long option (`--regex=`) or a separate-argument long
 # option outside the listed set (`--group-separator SEP`); a regex inside
 # `eval` or `bash -c` text; grep in workflow and composite-action `run:`
-# blocks, which run only on the runner, whose locale is `C.UTF-8`; and
-# `sed`, `awk`, `jq` and `yq` patterns. A grep call that cannot be read is
-# counted as unresolved in the summary line.
+# blocks, which run only on the runner, whose locale is `C.UTF-8`; grep
+# run through a wrapper command (`xargs`, `find -exec`, `timeout`, `nice`,
+# `sudo` and the like), which is neither read nor counted; and `sed`,
+# `awk`, `jq` and `yq` patterns.
+#
+# The summary counts each grep call once, in the first bucket it fits: not
+# regex (`-F`/`-P`), then under a C locale, then reported or marked when a
+# range is found, then unresolved when a pattern or option cannot be read.
 #
 # Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and TESTS_DIR_OVERRIDE
 # (default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
