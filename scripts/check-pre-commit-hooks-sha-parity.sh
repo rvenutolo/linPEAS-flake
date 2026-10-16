@@ -61,7 +61,10 @@ fi
 #     url = "github:cachix/git-hooks.nix/<40-hex>";
 #     ...
 #   };
-url_sha="$({ grep --extended-regexp --only-matching \
+# grep runs under the C locale: under `en_US.UTF-8` the `[0-9a-f]` range
+# also matches non-ASCII letters, so the match would run on past the hex
+# and an earlier line too short to be a SHA could shadow the real URL.
+url_sha="$({ LC_ALL=C grep --extended-regexp --only-matching \
   'github:cachix/git-hooks\.nix/[0-9a-f]{7,40}' "${FLAKE_NIX}" || true; } |
   head -n 1 |
   sed -E 's|^github:cachix/git-hooks\.nix/||')"

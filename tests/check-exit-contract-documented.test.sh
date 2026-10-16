@@ -7,10 +7,14 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-exit-contract-documented.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/exit-contract-documented"
 
 failures=0
+work="$(mktemp --directory)"
+trap 'rm --recursive --force -- "${work}"' EXIT
 
 # @description Run the lint over one fixture scan root and assert its exit
 #              code and, when given, a substring of its diagnostics.
@@ -18,9 +22,19 @@ failures=0
 # @arg $2 expected exit code
 # @arg $3 substring expected in stderr (empty to skip)
 function expect() {
-  local -r fixture="$1" want_exit="$2" want_msg="$3"
+  expect_in "${FIXTURES}/$1/scripts" "$1" "$2" "$3"
+}
+
+# @description Run the lint over one scan root and assert its exit code
+#              and, when given, a substring of its diagnostics.
+# @arg $1 scripts directory
+# @arg $2 scenario label
+# @arg $3 expected exit code
+# @arg $4 substring expected in stderr (empty to skip)
+function expect_in() {
+  local -r scripts_dir="$1" fixture="$2" want_exit="$3" want_msg="$4"
   local got_exit=0 got_stderr
-  got_stderr="$(SCRIPTS_DIR_OVERRIDE="${FIXTURES}/${fixture}/scripts" \
+  got_stderr="$(SCRIPTS_DIR_OVERRIDE="${scripts_dir}" \
     "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
   if [[ ${got_exit} != "${want_exit}" ]]; then
     printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' \
@@ -81,6 +95,32 @@ expect bad-repo-helper 1 'check-r.sh'
 expect bad-token-in-word 1 'check-i.sh'
 # A standalone 2 in a later sentence is out of the contract sentence.
 expect bad-late-sentence 1 'check-j.sh'
+
+# --- an exit code is an ASCII token in every locale ---
+# Under en_US.UTF-8 grep's `[A-Za-z]` also admits `é`, so a `2` followed
+# by one would read as the start of a word and each form below would go
+# unseen. The token guard names ASCII letters and digits, and `é` is
+# neither. Each script is written at run time with one contract form.
+require_grep_locale_gap en_US.UTF-8 || exit 1
+# @description Write a scan root holding one script that reaches exit 2
+#              behind the given header lines.
+# @arg $1 scan root name  @arg $@ header comment lines
+function write_locale_root() {
+  local -r name="$1"
+  shift
+  mkdir --parents -- "${work}/${name}"
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf '# %s\n' "$@"
+    printf '\necho PAYLOAD_RAN\nexit 2\n'
+  } >"${work}/${name}/check-${name}.sh"
+}
+write_locale_root locale-dedicated 'Exits 2é when the input is missing.'
+write_locale_root locale-list 'Exits 0 when clean, 1 on drift, 2é on a missing input.'
+write_locale_root locale-block 'Exit codes:' '  0 clean' '  2é missing input'
+LC_ALL=en_US.UTF-8 expect_in "${work}/locale-dedicated" locale-dedicated 0 ''
+LC_ALL=en_US.UTF-8 expect_in "${work}/locale-list" locale-list 0 ''
+LC_ALL=en_US.UTF-8 expect_in "${work}/locale-block" locale-block 0 ''
 
 # --- a scan root with no script is a could-not-run, not a clean tree ---
 expect empty 2 ''

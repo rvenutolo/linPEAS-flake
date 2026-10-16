@@ -67,17 +67,23 @@ function run_scenario() {
 # code and the whole of stderr. In that locale a bash `[0-9a-f]` range
 # also matches non-ASCII characters.
 # @arg $1 scenario name  @arg $2 URL SHA  @arg $3 lock rev
-# @arg $4 expected exit  @arg $5 the whole expected stderr
+# @arg $4 expected exit  @arg $5 the whole expected stderr, with DIR for
+# the temp directory  @arg $6 optional line put before the first line of
+# flake.nix
 function run_en_us_scenario() {
-  local -r name="$1" url_sha="$2" lock_rev="$3" expected_exit="$4" expected_stderr="$5"
+  local -r name="$1" url_sha="$2" lock_rev="$3" expected_exit="$4" lead_line="${6:-}"
   local -r good_sha='61ab0e80d9c7ab14c256b5b453d8b3fb0189ba0a'
   local dir stderr_file stdout_file outcome_file
   dir="$(mktemp --directory)"
   stderr_file="$(mktemp)"
   stdout_file="$(mktemp)"
   outcome_file="$(mktemp)"
-  sed "s|${good_sha}|${url_sha}|" -- "${FIXTURES}/good/flake.nix" >"${dir}/flake.nix"
+  {
+    [[ -n ${lead_line} ]] && printf '%s\n' "${lead_line}"
+    sed "s|${good_sha}|${url_sha}|" -- "${FIXTURES}/good/flake.nix"
+  } >"${dir}/flake.nix"
   sed "s|${good_sha}|${lock_rev}|g" -- "${FIXTURES}/good/flake.lock" >"${dir}/flake.lock"
+  local -r expected_stderr="${5//DIR/${dir}}"
 
   local actual_exit=0
   LC_ALL=en_US.UTF-8 FLAKE_NIX_OVERRIDE="${dir}/flake.nix" \
@@ -105,7 +111,8 @@ function main() {
   run_scenario 'SHA mismatch fails' \
     'bad-mismatch' 1 'SHA drift'
   run_scenario 'missing URL fails' \
-    'bad-no-url' 1 'no github:cachix/git-hooks.nix'
+    'bad-no-url' 1 \
+    "no github:cachix/git-hooks.nix/<sha> URL found in ${FIXTURES}/bad-no-url/flake.nix"
   run_scenario 'missing lock node fails' \
     'bad-no-lock-node' 1 'no nodes'
   # An absent input file yields no SHA to compare, so it cannot be
@@ -151,19 +158,25 @@ function main() {
   run_en_us_scenario 'non-ASCII digit in the lock rev fails under en_US.UTF-8' \
     61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0５ 1 \
     'lock rev has unexpected shape: 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0５'
-  # grep extracts the URL SHA through the same range, so under en_US.UTF-8
-  # the non-ASCII letter reaches the shape gate rather than ending the
-  # match early.
+  # grep extracts the URL SHA under the C locale, so a non-ASCII letter
+  # ends the hex run in every locale: the SHA read is the hex before it,
+  # and a URL with no hex run straight after the prefix is no URL.
   require_grep_locale_gap en_US.UTF-8 || exit 1
-  run_en_us_scenario 'non-ASCII letter in the URL SHA fails under en_US.UTF-8' \
-    61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0é 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0a 1 \
-    'extracted URL SHA has unexpected shape: 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0é'
+  run_en_us_scenario 'non-ASCII letter in the URL SHA ends the SHA under en_US.UTF-8' \
+    61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0é 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0a 0 ''
+  harness_assert_also 'parity ok (URL=61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0, lock='
   local -r full_sha='61ab0e80d9c7ab14c256b5b453d8b3fb0189ba0a'
-  # A full-length value with one stray character at either end is not a
-  # SHA either: the shape gates are anchored, not substring searches.
-  run_en_us_scenario 'non-ASCII letter before the URL SHA fails under en_US.UTF-8' \
+  run_en_us_scenario 'non-ASCII letter before the URL SHA is no URL under en_US.UTF-8' \
     é61ab0e80d9c7ab14c256b5b453d8 "${full_sha}" 1 \
-    'extracted URL SHA has unexpected shape: é61ab0e80d9c7ab14c256b5b453d8'
+    'no github:cachix/git-hooks.nix/<sha> URL found in DIR/flake.nix'
+  # An earlier line whose hex run is too short to be a SHA is passed over
+  # for the real URL after it.
+  run_en_us_scenario 'non-ASCII letter in an earlier short hex run is passed over under en_US.UTF-8' \
+    61ab0e80d9c7 "${full_sha}" 0 '' \
+    '# github:cachix/git-hooks.nix/abcé0123456789'
+  harness_assert_also "parity ok (URL=61ab0e80d9c7, lock=${full_sha})"
+  # A full-length lock rev with one stray character at either end is not
+  # a SHA either: the shape gate is anchored, not a substring search.
   run_en_us_scenario 'non-ASCII letter before a full lock rev fails under en_US.UTF-8' \
     "${full_sha}" "é${full_sha}" 1 \
     "lock rev has unexpected shape: é${full_sha}"

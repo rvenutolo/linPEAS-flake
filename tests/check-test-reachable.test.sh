@@ -13,6 +13,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-test-reachable.sh"
 
 failures=0
@@ -32,6 +34,7 @@ function fail() {
 # @arg $1 name  @arg $2 dir  @arg $3 expected exit  @arg $4 stderr substring
 # @arg $5 stdout substring (empty skips the check)
 # @arg $6 'strict' to leave LINT_ALLOW_EMPTY_SCAN unset (empty allows empty)
+# @arg $7 optional locale the guard runs under
 function assert_run() {
   local -r name="$1" dir="$2" expected_exit="$3" expected_stderr="$4"
   local -r expected_stdout="${5:-}"
@@ -44,10 +47,11 @@ function assert_run() {
   # breadth assertion those roots carry against the real tree is held by
   # tests/glob-scan-breadth.test.sh, which points each one at an empty
   # directory on purpose.
-  local -r strict="${6:-}"
+  local -r strict="${6:-}" locale="${7:-${LC_ALL:-}}"
   local -a empty_env=(LINT_ALLOW_EMPTY_SCAN=1)
   [[ ${strict} == 'strict' ]] && empty_env=()
   env "${empty_env[@]}" \
+    LC_ALL="${locale}" \
     TESTS_DIR_OVERRIDE="${dir}/tests" \
     HARNESS_RUNNER_OVERRIDE="${dir}/run-harness-group.sh" \
     LINT_GROUPS_OVERRIDE="${dir}/lint-groups.yml" \
@@ -140,6 +144,20 @@ function main() {
     >"${dir}/workflows/ci.yml"
   assert_run 'reachable via direct workflow invocation' "${dir}" 0 '' \
     'direct workflow invocation: 1'
+  rm --recursive --force -- "${dir}"
+
+  # The workflow scan is a grep whose name class is a range, so a harness
+  # name holding a non-ASCII letter is no direct invocation in any locale.
+  require_grep_locale_gap en_US.UTF-8 || exit 1
+  dir="$(mktemp --directory)"
+  scaffold "${dir}"
+  : >"${dir}/tests/fooé.test.sh"
+  printf 'jobs:\n  x:\n    steps:\n      - run: bash tests/fooé.test.sh\n' \
+    >"${dir}/workflows/ci.yml"
+  assert_run 'non-ASCII letter in a workflow-invoked harness name is no invocation under en_US.UTF-8' \
+    "${dir}" 1 \
+    'unreachable test harness (no runner executes it): fooé.test.sh' '' '' \
+    en_US.UTF-8
   rm --recursive --force -- "${dir}"
 
   # A tracked `.claude/` harness registered by its repo-root-relative path is

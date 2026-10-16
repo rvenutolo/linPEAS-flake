@@ -13,6 +13,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-payload-shape-scenario.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/payload-shape-scenario"
 
@@ -102,15 +104,34 @@ function main() {
 
   # (f) TOOLING: a scan root whose scripts match zero subjects. A clean
   # exit here would be indistinguishable from a scan that quietly
-  # stopped recognizing every arm of the predicate.
+  # stopped recognizing every arm of the predicate. The asserted text
+  # names the root, which separates it from the en_US.UTF-8 scenario
+  # below that reports zero subjects for a different one.
   expect 'zero subjects is a could-not-run' \
     "${FIXTURES}/empty/scripts" "${FIXTURES}/empty/tests-does-not-exist" 2 \
-    'scanned 0'
+    "scanned 0 payload-subject(s) among 1 script(s) under ${FIXTURES}/empty/scripts"
 
   # (g) TOOLING: ...and the documented override suppresses it, for a
   # scan root that deliberately holds no external-payload consumer.
   expect 'zero subjects passes when allowed' \
     "${FIXTURES}/empty/scripts" "${FIXTURES}/empty/tests-does-not-exist" 0 '' 1
+
+  # (g2) TOOLING, under en_US.UTF-8: the override-variable arm names an
+  # ASCII upper-case variable in every locale. There a `[A-Z_]` range
+  # also admits `É`, so a script naming only `É_JSON_OVERRIDE` would be
+  # taken for a subject; it is not one, so the root holds zero subjects.
+  # The script is written at run time so no tracked fixture carries a
+  # name bash cannot parse.
+  require_grep_locale_gap en_US.UTF-8 || exit 1
+  local non_ascii_root
+  non_ascii_root="$(mktemp --directory)"
+  mkdir -- "${non_ascii_root}/scripts"
+  printf '#!/usr/bin/env bash\n# reads É_JSON_OVERRIDE\necho PAYLOAD_RAN\n' \
+    >"${non_ascii_root}/scripts/check-accent.sh"
+  LC_ALL=en_US.UTF-8 expect 'a non-ASCII override name is not a subject under en_US.UTF-8' \
+    "${non_ascii_root}/scripts" "${non_ascii_root}/tests-does-not-exist" 2 \
+    "scanned 0 payload-subject(s) among 1 script(s) under ${non_ascii_root}/scripts"
+  rm --recursive --force -- "${non_ascii_root}"
 
   # (h) LIVE: the real tree must satisfy the lint. Every subject reads
   # its payload behind a scenario-verified exit-2 shape gate

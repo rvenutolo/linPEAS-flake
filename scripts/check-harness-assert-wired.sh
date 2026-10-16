@@ -161,7 +161,9 @@ function main() {
       fi
     fi
 
-    grep --extended-regexp --quiet -- "${ASSERT_IDIOM}" "${f}" || continue
+    # A flag name is ASCII; under `en_US.UTF-8` grep's `[A-Za-z]` follows
+    # collation and admits letters such as `é`.
+    LC_ALL=C grep --extended-regexp --quiet -- "${ASSERT_IDIOM}" "${f}" || continue
 
     local has_lib='no' has_verify='no'
     grep --fixed-strings --quiet -- "${GATE_LIB}" <<<"${stripped}" && has_lib='yes'

@@ -12,6 +12,8 @@ repo_root="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT="${repo_root}"
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-freshness-hook-watches-modules.sh"
 
 failures=0
@@ -500,6 +502,67 @@ EOF
   mkdir --parents -- "${work}/empty-modules/scripts"
   expect 'tooling: ROOT with no nix module is a could-not-run' \
     "${work}/empty-modules" 2 'enumerated 0 files via nix module scan under'
+
+  # The three scenarios below run under en_US.UTF-8, where a GNU grep
+  # letter range follows the locale's collation and admits `é`. The script
+  # reads every name and path under the C locale's ASCII ranges, so each
+  # asserts the C answer: the range ends at the first non-ASCII byte.
+  require_grep_locale_gap en_US.UTF-8 || exit 1
+
+  # (s) LOCALE: the definer imports a module whose name carries `é`, and
+  # the filter names only the ASCII modules. The import walk's path range
+  # does not admit the byte, so no `.nix` path is extracted from that
+  # import, the module never joins the required set, and the run passes.
+  write_tree "${work}/locale-import" \
+    '^(nix/hooks/(default|members|freshness)\.nix|nix/manifests\.nix)$' plain
+  cat >"${work}/locale-import/nix/hooks/default.nix" <<'EOF'
+{
+  fixtureAttr = import ./members.nix;
+  extra = import ./modé.nix;
+}
+EOF
+  printf '{ }\n' >"${work}/locale-import/nix/hooks/modé.nix"
+  LC_ALL=en_US.UTF-8 expect 'locale: a non-ASCII import name is outside the import range under en_US.UTF-8' \
+    "${work}/locale-import" 0 ''
+
+  # (t) LOCALE: the attribute-assigning module embeds `./dataé.json`, and
+  # both that file and an ASCII `nix/data` exist. The reference range stops
+  # before `é`, so the reference reads as `./data`, and that is the path
+  # reported as uncovered.
+  write_attr_tree "${work}/locale-reference" \
+    '^(flake\\.nix|flake\\.lock|nix/attr-source\\.nix|scripts/fixture-attr-tool\\.sh)$' \
+    fixtureCheck
+  cat >"${work}/locale-reference/nix/attr-source.nix" <<'EOF'
+{
+  perSystem =
+    { pkgs, ... }:
+    {
+      checks.fixtureCheck = pkgs.runCommandLocal "fixture-check" { } ''
+        bash ${../scripts/fixture-attr-tool.sh} ${./dataé.json}
+        touch "$out"
+      '';
+    };
+}
+EOF
+  printf '{ }\n' >"${work}/locale-reference/nix/dataé.json"
+  printf '{ }\n' >"${work}/locale-reference/nix/data"
+  LC_ALL=en_US.UTF-8 expect 'locale: a non-ASCII reference reads as its ASCII prefix under en_US.UTF-8' \
+    "${work}/locale-reference" 1 'does not cover nix/data (builds checks.fixtureCheck)'
+
+  # (u) LOCALE: the generator evaluates `devTooling.${sys}.toolé`, a module
+  # outside the filter defines `tool`, and nothing names `toolé`. The
+  # attribute range stops before `é`, so the evaluated attribute is `tool`,
+  # its definer is found, and the gap reported is that uncovered definer.
+  write_tree "${work}/locale-attr" \
+    '^(nix/hooks/.*\.nix|nix/manifests\.nix)$' plain
+  cat >"${work}/locale-attr/scripts/refresh-fixture-doc.sh" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+nix eval --json ".#devTooling.${sys}.toolé"
+EOF
+  printf '{\n  tool = { };\n}\n' >"${work}/locale-attr/nix/tool.nix"
+  LC_ALL=en_US.UTF-8 expect 'locale: a non-ASCII attribute name reads as its ASCII prefix under en_US.UTF-8' \
+    "${work}/locale-attr" 1 'does not cover nix/tool.nix (evaluates tool)'
 
   # A mention of the evaluated attribute behind a `#` and no mention at all
   # both leave the transposer as the sole uncovered module — the

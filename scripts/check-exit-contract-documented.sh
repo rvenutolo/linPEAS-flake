@@ -102,8 +102,12 @@ function documents_exit_two() {
   local unwrapped
   unwrapped="$(header_unwrapped "${file}")"
 
+  # Each match below runs in the C locale. An exit code is an ASCII token,
+  # and under `en_US.UTF-8` grep's `[A-Za-z]` and `\b` follow the locale's
+  # letters, so a `2` followed by `é` would stop counting as one.
+
   # A dedicated sentence: "Exits 2 when …", or prose naming "exit 2".
-  grep -qiE '\bexits?[[:space:]]+2([^0-9A-Za-z]|$)' <<<"${unwrapped}" && return 0
+  LC_ALL=C grep -qiE '\bexits?[[:space:]]+2([^0-9A-Za-z]|$)' <<<"${unwrapped}" && return 0
 
   # A comma-separated list inside one sentence: "Exits 0 on …, 1 …, 2 …".
   # The sentence, not a character budget, is the bound: one contract here
@@ -111,11 +115,11 @@ function documents_exit_two() {
   # clause, and any fixed window short enough to be safe would cut it
   # off. A period still ends the search, so a stray 2 in a later sentence
   # excuses nothing.
-  grep -qiE '\bexits?\b[^.]*,[[:space:]]*2([^0-9A-Za-z]|$)' <<<"${unwrapped}" && return 0
+  LC_ALL=C grep -qiE '\bexits?\b[^.]*,[[:space:]]*2([^0-9A-Za-z]|$)' <<<"${unwrapped}" && return 0
 
   # An enumerated block: an "Exit codes:" heading plus a `2` item line.
   if grep -qiE 'exit[[:space:]]+codes?:' <<<"${unwrapped}"; then
-    header_of "${file}" | grep -qE '^[[:space:]]*#[[:space:]]+2([^0-9A-Za-z]|$)' && return 0
+    header_of "${file}" | LC_ALL=C grep -qE '^[[:space:]]*#[[:space:]]+2([^0-9A-Za-z]|$)' && return 0
   fi
 
   return 1
