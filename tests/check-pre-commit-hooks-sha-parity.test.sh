@@ -154,6 +154,7 @@ function main() {
   # grep extracts the URL SHA through the same range, so under en_US.UTF-8
   # the non-ASCII letter reaches the shape gate rather than ending the
   # match early.
+  require_grep_locale_gap en_US.UTF-8 || exit 1
   run_en_us_scenario 'non-ASCII letter in the URL SHA fails under en_US.UTF-8' \
     61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0é 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0a 1 \
     'extracted URL SHA has unexpected shape: 61ab0e80d9c7ab14c256b5b453d8b3fb0189bb0é'
