@@ -681,7 +681,9 @@ cd "${REPO_ROOT}"
 # --- scenario: a non-ASCII letter in a job or a member is not listed ---
 # Under en_US.UTF-8 a `[a-z]` range also matches non-ASCII letters, so a
 # job id or a member holding `é` would pass the id filter. Neither is a
-# job id, so neither is listed; the ASCII markers beside them are.
+# job id, so neither is listed; the ASCII markers beside them are. The
+# filter is a grep, so grep must be the engine shown to follow the locale.
+require_grep_locale_gap en_US.UTF-8 || exit 1
 make_sandbox
 cd "${SANDBOX}"
 printf 'lint-a:\n  - alpha\n  - mémber\n  - member-marker\n' >"${LG_FILE}"

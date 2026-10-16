@@ -706,7 +706,12 @@ A harness scenario that shows a script's answer under a locale pins the
 locale with `LC_ALL` and first calls `require_locale_gap` from
 `scripts/lib/locale-gap.sh`, which fails the run when the locale cannot
 show the difference. A scenario under a locale that is not installed
-would run under C and pass whatever the script does.
+would run under C and pass whatever the script does. That probe asks
+bash; a scenario whose subject is a `grep` range calls
+`require_grep_locale_gap` instead, which asks the `grep` on PATH whether
+`[a-z]` admits `é`. GNU grep does not use the regex engine bash uses,
+and keeps a lone `[0-9]` ASCII in every locale while it follows the
+locale for `[a-z]` and for a mixed range such as `[0-9a-f]`.
 
 Enforced by `scripts/check-regex-range-ascii.sh`; what it reads and
 does not read is stated in its header.
