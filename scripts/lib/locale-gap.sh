@@ -47,6 +47,7 @@ function require_grep_locale_gap() {
   # The group's redirection also catches bash's own warning for an
   # uninstalled locale, which it prints as it sets `LC_ALL` for grep,
   # before grep's redirections apply.
+  # regex-range-ascii: locale-bound: probes the locale's collation on purpose
   probe="$({ printf 'é\n' | LC_ALL="${locale}" command grep --extended-regexp --count '^[a-z]$'; } 2>&1)" || true
   if [[ ${probe} != 1 ]]; then
     printf '%s: locale %s cannot show a locale-bound [a-z] range in grep (probe printed %q); scenarios pinned to it would pass without testing it\n' \

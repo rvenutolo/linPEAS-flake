@@ -65,6 +65,15 @@ source "${_lib_dir}/lib/enumerate.sh"
 
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
+readonly MARKER='regex-range-ascii: locale-bound'
+readonly MARKER_LINE_RE="^[[:space:]]*# ${MARKER}"
+# An expansion whose text the lint cannot follow: a command or arithmetic
+# substitution, a positional or special parameter.
+# shellcheck disable=SC2016 # the expansions are the text matched
+readonly OPAQUE_RE='\$\(|`|\$[0123456789@*#?!$-]|\$\{[0123456789@*#?!]'
+FOLLOW_RANGE=''
+FOLLOW_VIA=''
+FOLLOW_UNRES=0
 
 require_tool shfmt
 require_tool jq
@@ -108,17 +117,77 @@ function records_of() {
         else [$n, .] end;
     def lc_name: . == "LC_ALL" or startswith("LC_ALL[");
     def lc_word: select(lc_name or startswith("LC_ALL="));
-    [ .. | objects | select(.Type? == "FuncDecl") | [.Pos.Offset, .End.Offset] ] as $funcs
+    # Index of the command word after leading `command`/`builtin` words
+    # and their options, and `env` with its options and NAME=value words;
+    # -1 when `command -v`/`-V` only looks the word up.
+    def lead($w; $i):
+      def opts($j): if (($w[$j]? // "") | startswith("-")) then opts($j + 1) else $j end;
+      def envw($j): if (($w[$j]? // "") | startswith("-") or test("^[A-Za-z_][A-Za-z0-9_]*="))
+          then envw($j + 1) else lead($w; $j) end;
+      if ($w[$i]? | IN("command", "builtin")) then
+        opts($i + 1) as $j
+        | if any($w[$i + 1:$j][]; test("^-[A-Za-z]*[vV]")) then -1 else lead($w; $j) end
+      elif $w[$i]? == "env" then envw($i + 1)
+      else $i end;
+    # The literal text an option is recognised by: the leading literal
+    # part of the word, or the whole word when it holds no expansion.
+    def opt_text($a; $s): if $a.Parts[0].Type? == "Lit" then $a.Parts[0].Value
+        elif ($s | contains("\u0000") | not) then $s else "" end;
+    # A word that may expand to several words, any of them an option.
+    def list_exp($a): [$a | .. | objects | select(.Type? == "ParamExp")
+        | select((.Param.Value? | IN("@", "*"))
+          or (((.Index.Parts[0].Value?) // "") | IN("@", "*")))] | length > 0;
+    # One short-option cluster, letter by letter from index $t.
+    def cluster($a; $l; $t):
+      if $t >= ($l | length) then .
+      else $l[$t:$t + 1] as $c
+        | if ($c | IN("F", "P", "E", "G")) then .mode = $c | cluster($a; $l; $t + 1)
+          elif ("efmABCdD" | contains($c)) then
+            ($a.Pos.Offset + $t + 1) as $r
+            | if $r < $a.End.Offset then
+                (if $c == "e" then .pats += [[$r, $a.End.Offset]]
+                  elif $c == "f" then .unres = 1 | .hasf = true
+                  else . end)
+              else .skip = (if $c == "e" then "e" elif $c == "f" then "f" else "x" end) end
+          else cluster($a; $l; $t + 1) end
+      end;
+    # Fold one word after the command word into the operand state.
+    def operand($a; $s):
+      opt_text($a; $s) as $l
+      | if .skip == "e" then .pats += [[$a.Pos.Offset, $a.End.Offset]] | .skip = null
+        elif .skip == "f" then .unres = 1 | .hasf = true | .skip = null
+        elif .skip == "x" then .skip = null
+        elif .dd then .ops += [[$a.Pos.Offset, $a.End.Offset]]
+        elif $s == "--" then .dd = true
+        elif ($l | startswith("--")) then
+          ($l[2:] | split("=")[0]) as $n | ($l | contains("=")) as $eq
+          | if $n == "regexp" then (if $eq then .pats += [[$a.Pos.Offset + 9, $a.End.Offset]] else .skip = "e" end)
+            elif $n == "file" then (if $eq then .unres = 1 | .hasf = true else .skip = "f" end)
+            elif $n == "fixed-strings" then .mode = "F"
+            elif $n == "perl-regexp" then .mode = "P"
+            elif $n == "extended-regexp" then .mode = "E"
+            elif $n == "basic-regexp" then .mode = "G"
+            elif ($eq | not) and ($n | IN("max-count", "after-context", "before-context",
+                "context", "label", "include", "exclude", "exclude-from", "exclude-dir",
+                "binary-files", "devices", "directories")) then .skip = "x"
+            else . end
+        elif ($l | startswith("-")) and $l != "-" then cluster($a; $l; 1)
+        elif list_exp($a) then .unres = 1
+        else .ops += [[$a.Pos.Offset, $a.End.Offset]] end;
+    # Every object node, collected once: each stream below scans this
+    # list instead of walking the tree again.
+    [.. | objects] as $all
+    | [ $all[] | select(.Type? == "FuncDecl") | [.Pos.Offset, .End.Offset] ] as $funcs
     | def innermost($x): [ $funcs[] | select(.[0] <= $x and $x < .[1]) ]
         | if length == 0 then [null, null] else max_by(.[0]) end;
     # Every write to LC_ALL that is not a lone C or C.UTF-8 word:
     # [offset, enclosing function start, end], null outside a function.
-    [ ( .. | objects
+    [ ( $all[]
         | select(.Type? == "DeclClause"
             or (.Type? == "CallExpr" and ((.Args // []) | length) == 0))
         | select((lc_writes | length) > 0 and (last_c | not))
         | .Pos.Offset as $o | [$o] + innermost($o) ),
-      ( .. | objects | select(.Type? == "CallExpr" and ((.Args // []) | length) > 0)
+      ( $all[] | select(.Type? == "CallExpr" and ((.Args // []) | length) > 0)
         | (.Args | map(wstr) | strip(0)) as [$n, $w]
         | ($w[0] // "") as $cmd
         | $w[1:] as $rest
@@ -134,13 +203,13 @@ function records_of() {
                 and (any($rest[]; startswith("-vLC_ALL"))
                   or ([range(0; ($rest | length) - 1) | select($rest[.] == "-v" and ($rest[. + 1] | lc_name))] | length > 0))))
         | .Pos.Offset as $o | [$o] + innermost($o) ),
-      ( .. | objects | select(.Type? == "LetClause" or .Type? == "ArithmCmd" or .Type? == "ArithmExp"
+      ( $all[] | select(.Type? == "LetClause" or .Type? == "ArithmCmd" or .Type? == "ArithmExp"
             or (.Type? == "ForClause" and .Loop.Type? == "CStyleLoop"))
         | select([.. | objects | select(.Type? == "Lit" and .Value? == "LC_ALL")] | length > 0)
         | .Pos.Offset as $o | [$o] + innermost($o) ),
-      ( .. | objects | select(.N? != null and .N.Value? == "{LC_ALL}")
+      ( $all[] | select(.N? != null and .N.Value? == "{LC_ALL}")
         | .N.Pos.Offset as $o | [$o] + innermost($o) ),
-      ( .. | objects | select(.Type? == "ForClause")
+      ( $all[] | select(.Type? == "ForClause")
         | .Loop | select(.Type? == "WordIter" and .Name.Value? == "LC_ALL")
         | .Name.Pos.Offset as $o | [$o] + innermost($o) ) ] as $cancels
     | def cancelled($s; $at): any($cancels[];
@@ -150,25 +219,45 @@ function records_of() {
     [ .Stmts[]? | select(.Background | not) | .Cmd
         | select(.Type? == "DeclClause" and .Variant.Value? == "export")
         | select(last_c) | .Pos.Offset ] as $file_safe
-    | [ .. | objects | select(.Type? == "FuncDecl") | . as $f
+    | [ $all[] | select(.Type? == "FuncDecl") | . as $f
         | .Body.Cmd.Stmts[]? | select(.Background | not) | .Cmd
         | select(.Type? == "DeclClause" and .Variant.Value? == "local")
         | select(last_c)
         | [$f.Pos.Offset, $f.End.Offset, .Pos.Offset] ] as $safe_spans
-    | ( .. | objects | select(.Type? == "BinaryTest")
+    | def safe_at($at): any($file_safe[]; . < $at and (cancelled(.; $at) | not))
+        or any($safe_spans[]; .[0] <= $at and $at < .[1] and .[2] < $at
+          and (cancelled(.[2]; $at) | not));
+    ( $all[] | select(.Type? == "BinaryTest")
         | .Pos.Offset as $at
         | [ "T", .Pos.Line, .X.End.Offset, .Y.Pos.Offset, .Y.End.Offset,
-            (if any($file_safe[]; . < $at and (cancelled(.; $at) | not))
-                or any($safe_spans[]; .[0] <= $at and $at < .[1] and .[2] < $at
-                  and (cancelled(.[2]; $at) | not))
-              then 1 else 0 end) ] ),
-      ( .. | objects | select(.Type? == "DeclClause" or .Type? == "CallExpr")
+            (if safe_at($at) then 1 else 0 end) ] ),
+      ( $all[] | select(.Type? == "DeclClause" or .Type? == "CallExpr")
         | assigns | select(.Value? != null and .Value.Pos? != null)
         | [ "A", .Name.Value, .Value.Pos.Offset, .Value.End.Offset ] ),
-      ( .. | objects | select(.Type? == "ForClause")
+      ( $all[] | select(.Type? == "ForClause")
         | .Loop | select(.Type? == "WordIter")
         | .Name.Value as $n | .Items[]?
         | [ "A", $n, .Pos.Offset, .End.Offset ] )
+      ,
+      ( $all[] | select(.Type? == "CallExpr" and ((.Args // []) | length) > 0)
+        | . as $call
+        | [.Args[] | wstr] as $w
+        | lead($w; 0) as $k
+        | select($k >= 0 and ($w[$k] | IN("grep", "egrep", "fgrep")))
+        | ([$w[0:$k][] | select(startswith("LC_ALL="))] | last) as $env_lc
+        | ([$call.Assigns[]? | select(.Name.Value? == "LC_ALL")] | last) as $pre_lc
+        | (if $env_lc != null then ($env_lc[7:] | IN("C", "C.UTF-8"))
+            elif $pre_lc != null then ($pre_lc | c_locale)
+            else safe_at($call.Pos.Offset) end) as $safe
+        | ({"grep": "G", "egrep": "E", "fgrep": "F"}[$w[$k]]) as $mode
+        | (reduce range($k + 1; $w | length) as $i (
+            {mode: $mode, pats: [], ops: [], unres: 0, hasf: false, dd: false, skip: null};
+            operand($call.Args[$i]; $w[$i]))) as $st
+        | ($st.pats | if length > 0 then . elif $st.hasf then [] else $st.ops[0:1] end) as $p
+        | select(($p | length) > 0 or $st.unres == 1)
+        | (if ($p | length) == 0 then [[-1, -1]] else $p end)[]
+        | [ "G", $call.Pos.Offset, $call.Pos.Line, $st.mode,
+            (if $safe then 1 else 0 end), $st.unres, .[0], .[1] ] )
     | @tsv' <<<"${tree}"
 }
 
@@ -213,28 +302,133 @@ function first_range() {
   done
 }
 
+# @description Print the first bracket of a grep regex text that GNU grep
+# matches by the locale's collation, or nothing: a bracket holding a range
+# between ASCII letters or digits that is negated or has a letter
+# endpoint. A positive bracket whose ranges all run between digits
+# matches ASCII digits only in every locale. Classes, equivalence classes
+# and collating symbols inside a bracket are skipped; a backslash before
+# `[` outside one makes it literal.
+# @arg $1 regex text
+function grep_range() {
+  local -r re="$1"
+  local i=0 n=${#re} c j k negated ranged lettered
+  while ((i < n)); do
+    c="${re:i:1}"
+    # shellcheck disable=SC1003 # a single backslash, which shfmt writes this way
+    if [[ ${c} == '\' ]]; then
+      i=$((i + 2))
+      continue
+    fi
+    if [[ ${c} != '[' ]]; then
+      i=$((i + 1))
+      continue
+    fi
+    j=$((i + 1))
+    negated=0 ranged=0 lettered=0
+    if [[ ${re:j:1} == '^' ]]; then
+      negated=1
+      j=$((j + 1))
+    fi
+    [[ ${re:j:1} == ']' ]] && j=$((j + 1))
+    while ((j < n)) && [[ ${re:j:1} != ']' ]]; do
+      if [[ ${re:j:2} == '[:' || ${re:j:2} == '[=' || ${re:j:2} == '[.' ]]; then
+        k="${re:j+1:1}"
+        j=$((j + 2))
+        while ((j < n)) && [[ ${re:j:2} != "${k}]" ]]; do j=$((j + 1)); done
+        j=$((j + 2))
+        continue
+      fi
+      if [[ ${re:j+1:1} == '-' && ${re:j:1} == [[:alnum:]] && ${re:j+2:1} == [[:alnum:]] ]]; then
+        ranged=1
+        [[ ${re:j:1} == [0123456789] && ${re:j+2:1} == [0123456789] ]] || lettered=1
+        j=$((j + 3))
+        continue
+      fi
+      j=$((j + 1))
+    done
+    if ((ranged && (negated || lettered))); then
+      printf '%s\n' "${re:i:j+1-i}"
+      return 0
+    fi
+    i=$((j + 1))
+  done
+}
+
+# @description Follow a regex text through the same-file assignments in
+# the caller's `values` map, three levels deep. Sets FOLLOW_RANGE to the
+# first range the classifier prints (empty for none), FOLLOW_VIA to the
+# variable it came through (empty when the text itself holds it), and
+# FOLLOW_UNRES to 1 when the text or a value it reached holds an
+# expansion the lint cannot follow or names a variable with no
+# assignment in the file.
+# @arg $1 classifier: `first_range` or `grep_range`
+# @arg $2 regex text
+function follow_range() {
+  local -r classify="$1" regex="$2"
+  local pending="${regex}" seen=' ' depth name next
+  FOLLOW_RANGE="$("${classify}" "${regex}")"
+  FOLLOW_VIA=''
+  FOLLOW_UNRES=0
+  [[ ${regex} =~ ${OPAQUE_RE} ]] && FOLLOW_UNRES=1
+  for ((depth = 1; depth <= 3; depth++)); do
+    [[ -z ${FOLLOW_RANGE} ]] || break
+    next=''
+    while [[ ${pending} =~ \$\{?([A-Za-z_][A-Za-z0-9_]*) ]]; do
+      name="${BASH_REMATCH[1]}"
+      pending="${pending#*"${BASH_REMATCH[0]}"}"
+      [[ ${seen} == *" ${name} "* ]] && continue
+      seen+="${name} "
+      if [[ -z ${values[${name}]:-} ]]; then
+        FOLLOW_UNRES=1
+        continue
+      fi
+      [[ ${values[${name}]} =~ ${OPAQUE_RE} ]] && FOLLOW_UNRES=1
+      FOLLOW_RANGE="$("${classify}" "${values[${name}]}")"
+      if [[ -n ${FOLLOW_RANGE} ]]; then
+        FOLLOW_VIA="${name}"
+        break
+      fi
+      next+="${values[${name}]}"
+    done
+    pending="${next}"
+  done
+  return 0
+}
+
 function main() {
   local -a files=()
   glob_into files 'scripts, script libraries and harnesses' \
     "${SCRIPTS_DIR}/*.sh" "${SCRIPTS_DIR}/lib/*.sh" "${TESTS_DIR}/*.sh"
 
-  local file text records kind f2 f3 f4 f5 f6 op regex range name ref depth value
+  local file text records kind f2 f3 f4 f5 f6 f7 f8 op regex value line cid markers rc
   local found=0 tests=0 resolved=0 c_locale=0
+  local calls=0 not_regex=0 grep_c_locale=0 unresolved=0 marked=0
   for file in "${files[@]}"; do
-    # The operator is `=` and `~`, which a backslash-newline can separate,
-    # so a file without a `~` holds no such test and is not parsed.
-    grep --quiet --fixed-strings -- '~' "${file}" || continue
+    # A file is parsed only if it can hold a finding: a `~` (the `=~`
+    # operator, whose `=` and `~` a backslash-newline can separate), a
+    # marker, or a grep word beside range-shaped text, since a grep range
+    # is read only from the file's own text.
+    if ! grep --quiet --fixed-strings -- '~' "${file}" &&
+      ! grep --quiet --fixed-strings -- "${MARKER}" "${file}" &&
+      ! { grep --quiet --word-regexp --regexp=grep --regexp=egrep --regexp=fgrep -- "${file}" &&
+        grep --quiet --extended-regexp -- '\[[^]]*[[:alnum:]]-[[:alnum:]]' "${file}"; }; then
+      continue
+    fi
     text="$(<"${file}")"
     if ! records="$(records_of "${file}")"; then
       exit 2
     fi
-    local -A values=()
-    while IFS=$'\t' read -r kind f2 f3 f4 f5 f6; do
+    local -A values=() call_line=() call_mode=() call_c=() call_unres=() call_range=() call_via=()
+    local -A marker_ok=() marker_used=()
+    local -a findings=()
+    while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8; do
       [[ ${kind} == A ]] || continue
       value="${text:f3:f4-f3}"
       values["${f2}"]+="${value//\\$'\n'/}"$'\n'
     done <<<"${records}"
-    while IFS=$'\t' read -r kind f2 f3 f4 f5 f6; do
+
+    while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8; do
       [[ ${kind} == T ]] || continue
       op="${text:f3:f4-f3}"
       op="${op//\\/}"
@@ -247,50 +441,100 @@ function main() {
       fi
       regex="${text:f4:f5-f4}"
       regex="${regex//\\$'\n'/}"
-      range="$(first_range "${regex}")"
-      ref=''
-      # A regex held in a variable is read through the variable's
-      # assignments in this file, and the variables those name in turn.
-      local pending="${regex}" seen=' '
-      for ((depth = 1; depth <= 3; depth++)); do
-        [[ -z ${range} ]] || break
-        local next=''
-        while [[ ${pending} =~ \$\{?([A-Za-z_][A-Za-z0-9_]*) ]]; do
-          name="${BASH_REMATCH[1]}"
-          pending="${pending#*"${BASH_REMATCH[0]}"}"
-          [[ ${seen} == *" ${name} "* ]] && continue
-          seen+="${name} "
-          [[ -n ${values[${name}]:-} ]] || continue
-          range="$(first_range "${values[${name}]}")"
-          if [[ -n ${range} ]]; then
-            ref="${name}"
-            break
-          fi
-          next+="${values[${name}]}"
-        done
-        pending="${next}"
-      done
+      follow_range first_range "${regex}"
       [[ ${regex} =~ \$\{?[A-Za-z_] ]] && resolved=$((resolved + 1))
-      [[ -n ${range} ]] || continue
-      if [[ -n ${ref} ]]; then
-        printf '%s:%s: regex range %s (through %s) follows the locale\n' \
-          "${file}" "${f2}" "${range}" "${ref}" >&2
+      [[ -n ${FOLLOW_RANGE} ]] || continue
+      if [[ -n ${FOLLOW_VIA} ]]; then
+        findings+=("${f2}"$'\t'"${file}:${f2}: regex range ${FOLLOW_RANGE} (through ${FOLLOW_VIA}) follows the locale")
       else
-        printf '%s:%s: regex range %s follows the locale\n' "${file}" "${f2}" "${range}" >&2
+        findings+=("${f2}"$'\t'"${file}:${f2}: regex range ${FOLLOW_RANGE} follows the locale")
       fi
-      found=$((found + 1))
     done <<<"${records}"
-    unset values
+
+    # G records: call id, line, mode, C locale, unresolved, pattern start
+    # and end (-1 when the call has no pattern operand).
+    while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8; do
+      [[ ${kind} == G ]] || continue
+      call_line["${f2}"]="${f3}"
+      call_mode["${f2}"]="${f4}"
+      call_c["${f2}"]="${f5}"
+      ((f6)) && call_unres["${f2}"]=1
+      ((f7 >= 0)) || continue
+      [[ -z ${call_range[${f2}]:-} ]] || continue
+      regex="${text:f7:f8-f7}"
+      regex="${regex//\\$'\n'/}"
+      follow_range grep_range "${regex}"
+      ((FOLLOW_UNRES)) && call_unres["${f2}"]=1
+      if [[ -n ${FOLLOW_RANGE} ]]; then
+        call_range["${f2}"]="${FOLLOW_RANGE}"
+        call_via["${f2}"]="${FOLLOW_VIA}"
+      fi
+    done <<<"${records}"
+
+    rc=0
+    markers="$(grep --line-number --regexp="${MARKER_LINE_RE}" -- "${file}")" || rc=$?
+    if ((rc > 1)); then
+      log_err "cannot read ${file}"
+      exit 2
+    fi
+    while IFS=: read -r line value; do
+      [[ -n ${line} ]] || continue
+      value="${value#*"${MARKER}"}"
+      value="${value#:}"
+      value="${value#"${value%%[![:space:]]*}"}"
+      if [[ -z ${value} ]]; then
+        findings+=("${line}"$'\t'"${file}:${line}: marker has no reason")
+      else
+        marker_ok["${line}"]=1
+      fi
+    done <<<"${markers}"
+
+    for cid in "${!call_line[@]}"; do
+      calls=$((calls + 1))
+      line="${call_line[${cid}]}"
+      if [[ ${call_mode[${cid}]} == F || ${call_mode[${cid}]} == P ]]; then
+        not_regex=$((not_regex + 1))
+      elif [[ ${call_c[${cid}]} == 1 ]]; then
+        grep_c_locale=$((grep_c_locale + 1))
+      elif [[ -n ${call_range[${cid}]:-} ]]; then
+        if [[ -n ${marker_ok[$((line - 1))]:-} ]]; then
+          marked=$((marked + 1))
+          marker_used[$((line - 1))]=1
+        elif [[ -n ${call_via[${cid}]} ]]; then
+          findings+=("${line}"$'\t'"${file}:${line}: grep range ${call_range[${cid}]} (through ${call_via[${cid}]}) follows the locale")
+        else
+          findings+=("${line}"$'\t'"${file}:${line}: grep range ${call_range[${cid}]} follows the locale")
+        fi
+      elif [[ -n ${call_unres[${cid}]:-} ]]; then
+        unresolved=$((unresolved + 1))
+      fi
+    done
+    for line in "${!marker_ok[@]}"; do
+      [[ -n ${marker_used[${line}]:-} ]] ||
+        findings+=("${line}"$'\t'"${file}:${line}: marker exempts nothing")
+    done
+
+    if ((${#findings[@]})); then
+      found=$((found + ${#findings[@]}))
+      printf '%s\n' "${findings[@]}" |
+        sort --field-separator=$'\t' --key=1,1n --key=2 |
+        cut --fields=2- >&2
+    fi
+    unset values call_line call_mode call_c call_unres call_range call_via marker_ok marker_used findings
   done
 
   if ((found)); then
-    printf '\n%d regex range(s) follow the locale: under en_US.UTF-8 [0-9] also\n' "${found}" >&2
-    printf 'matches digits such as U+0663 and U+FF15. Spell the class out\n' >&2
-    printf '([0123456789]) or match through ascii_match (scripts/lib/ascii-match.sh).\n' >&2
+    printf '\n%d finding(s). A range follows the locale: under en_US.UTF-8 [0-9] in a\n' "${found}" >&2
+    printf 'bash regex also matches digits such as U+0663 and U+FF15. Spell the class\n' >&2
+    printf 'out ([0123456789]) or match through ascii_match (scripts/lib/ascii-match.sh).\n' >&2
+    printf 'GNU grep keeps a positive [0-9] ASCII but follows the locale for a letter,\n' >&2
+    printf 'mixed or negated range: run the call under LC_ALL=C, or mark the line\n' >&2
+    printf 'above it with: # %s: <reason>\n' "${MARKER}" >&2
     exit 1
   fi
-  printf 'regex-range-ascii: ok — scanned %d file(s), %d =~ test(s), %d with a regex in a variable, %d under a C locale\n' \
-    "${#files[@]}" "${tests}" "${resolved}" "${c_locale}"
+  printf 'regex-range-ascii: ok — scanned %d file(s), %d =~ test(s), %d with a regex in a variable, %d under a C locale; %d grep call(s), %d not regex (-F/-P), %d under a C locale, %d unresolved, %d marked\n' \
+    "${#files[@]}" "${tests}" "${resolved}" "${c_locale}" \
+    "${calls}" "${not_regex}" "${grep_c_locale}" "${unresolved}" "${marked}"
 }
 
 main "$@"

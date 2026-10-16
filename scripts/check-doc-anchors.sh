@@ -136,6 +136,7 @@ function lossy_heading_count() {
   count="$(printf '%s\n' "${body}" |
     grep --extended-regexp '^#+[[:space:]]+.+' |
     sed --regexp-extended 's/^#+[[:space:]]+//; s/<[^>]+>//g; s/[[:space:]]+$//' |
+    # regex-range-ascii: locale-bound: counts what the slug sed strips, so it keeps that sed's locale
     grep --count --extended-regexp '[^A-Za-z0-9 _-]' || true)"
   printf '%s\n' "${count:-0}"
 }

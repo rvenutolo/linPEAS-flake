@@ -76,6 +76,7 @@ trap 'rm -f "${referenced_file}" "${all_docs}"' EXIT
 # path looks like a docs-relative .md (no protocol, no leading slash).
 # Skip placeholder paths containing `<` or `>`.
 {
+  # regex-range-ascii: locale-bound: the path sed below reads the same class, so both keep one locale
   grep --line-number --extended-regexp \
     '\[[^]]+\]\([a-z][a-z0-9_/.-]*\.md([#][^)]*)?\)' \
     "${INDEX}" || true
