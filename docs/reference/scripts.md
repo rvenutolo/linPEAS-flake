@@ -2811,6 +2811,27 @@ it prints one line naming the locale and what the probe printed.
 - `0` — the locale shows the gap
 - `1` — it does not
 
+#### require_grep_locale_gap()
+
+Fail unless the `grep` on PATH, run under
+`LC_ALL=<locale>`, matches `é` against `^[a-z]$`. GNU grep does not use
+the C library's regex engine bash uses, so `require_locale_gap` says
+nothing about it: it keeps a lone `[0-9]` ASCII in every locale, and
+follows the locale's collation for a letter range or a mixed one
+(`[a-z]`, `[0-9a-f]`). A scenario whose subject is a grep range calls
+this one. `command grep` skips a shell function named `grep`, so the
+binary the scripts run is the one probed. On failure it prints one line
+naming the locale, the engine and what the probe printed.
+
+**Args:**
+
+- `$1` — locale name, such as `en_US.UTF-8`
+
+**Exit codes:**
+
+- `0` — the locale shows the gap in grep
+- `1` — it does not
+
 ### scripts/lib/log.sh
 
 Shared logging + ERR-trap helpers for repo bash scripts.
