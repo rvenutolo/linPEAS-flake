@@ -336,6 +336,14 @@ function main() {
   expect_en_us 'non-ASCII letter in a step id is not read as an outcome reference under en_US.UTF-8' \
     's/step-charlie/step-charlié/g' 1 \
     'DIR/workflow.yml: step id step-charlié has no steps.<id>.outcome entry in the attribution env'
+  # The ladder read is a grep whose name boundary is a range, so a
+  # non-ASCII letter next to the name is a boundary in every locale. The
+  # ladder also defaults to `unknown`, so the passing summary counts four
+  # reason tokens and tells this run apart from the good one.
+  require_grep_locale_gap en_US.UTF-8 || exit 1
+  expect_en_us 'non-ASCII letter after an env name in the ladder is a name boundary under en_US.UTF-8' \
+    "s/\\\${STEP_CHARLIE}/\${STEP_CHARLIEé}/; s/reason='ok'/reason='unknown'/" 0 ''
+  harness_assert_also '3 env entries, 4 reason tokens)'
   # A root key written as an alias of `jobs` is `jobs:`, as GitHub Actions
   # reads it, for every read of the verify job; one given twice, plain and
   # as an alias, is a workflow the check cannot read.

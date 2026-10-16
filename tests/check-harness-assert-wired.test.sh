@@ -27,6 +27,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 readonly REPO_ROOT
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 
 readonly SCRIPT="${REPO_ROOT}/scripts/check-harness-assert-wired.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/harness-assert-wired"
@@ -151,6 +153,24 @@ for row in "${ROWS[@]}"; do
   fi
   run_row "${fields[0]}" "${root}" "${fields[2]}" "${fields[3]}" "${fields[@]:4}"
 done
+
+# The assertion idiom's flag names are ASCII in every locale. Under
+# en_US.UTF-8 a `[A-Za-z]` range in grep also admits `é`, so a harness
+# whose only grep carries `--é` before its quiet flag would be held to
+# the wiring verdict. It is not an assertion idiom, so only the two wired
+# harnesses beside it are scored. The root is written at run time: its
+# shape belongs to this one scenario, not to the fixture tree the rows
+# share.
+require_grep_locale_gap en_US.UTF-8 || exit 1
+locale_root="${work}/non-ascii-flag"
+mkdir -- "${locale_root}"
+wired_text=$'#!/usr/bin/env bash\nsource scripts/lib/harness-assert.sh\ngrep --quiet PAYLOAD_RAN out.txt\nharness_assert_verify\n'
+printf '%s' "${wired_text}" >"${locale_root}/wired-alpha.test.sh"
+printf '%s' "${wired_text}" >"${locale_root}/wired-beta.test.sh"
+printf '#!/usr/bin/env bash\ngrep --é --quiet PAYLOAD_RAN out.txt\n' \
+  >"${locale_root}/accent-flag.test.sh"
+LC_ALL=en_US.UTF-8 run_row 'non-ascii-flag-under-en-us' "${locale_root}" 0 \
+  'accent-flag.test.sh' '2 output-asserting harness(es) wired to the gate'
 
 printf '\ncheck-harness-assert-wired: %d detection branch(es) exercised, %d diagnostic substring(s) asserted\n' \
   "${#ROWS[@]}" "${asserted}"
