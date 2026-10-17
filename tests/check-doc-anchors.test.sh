@@ -217,6 +217,16 @@ function main() {
     '' en_US.UTF-8
   rm --recursive --force -- "${root}"
 
+  # The generated slug of an anchored non-ASCII heading (`rsum`) resolves
+  # on neither renderer, so it is not a target: only the explicit anchor
+  # is.
+  root="$(scratch_anchor_root 'rsum' $'# Target\n\n## Résumé<a name="resume"></a>\n\nBody.')"
+  run_scenario 'generated slug of an anchored non-ASCII heading is a miss under en_US.UTF-8' \
+    "${root}" $'source.md\ndocs/target.md' 1 \
+    '[anchor-miss] source.md:3: #rsum not found in docs/target.md (available: target,resume)' \
+    '' en_US.UTF-8
+  rm --recursive --force -- "${root}"
+
   # Non-ASCII punctuation is deleted by both renderers, so it needs no
   # anchor.
   root="$(scratch_anchor_root 'build--release' $'# Target\n\n## Build — release\n\nBody.')"
