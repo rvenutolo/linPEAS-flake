@@ -2847,8 +2847,8 @@ a line break, a carriage return or a NUL.
 ### scripts/lib/locale-gap.sh
 
 Locale precondition for harness scenarios that pin a
-locale to show a locale-bound regex range. Source after
-`set -Eeuo pipefail`.
+locale to show a locale-bound regex range in bash, grep or sed. Source
+after `set -Eeuo pipefail`.
 
 #### require_locale_gap()
 
@@ -2891,6 +2891,23 @@ naming the locale, the engine and what the probe printed.
 **Exit codes:**
 
 - `0` — the locale shows the gap in grep
+- `1` — it does not
+
+#### require_sed_locale_gap()
+
+Fail unless the `sed` on PATH, run under `LC_ALL=<locale>`,
+matches `é` against `^[a-z]$`. GNU sed follows the same range rules as
+GNU grep, but it is a separate binary whose locale support can differ, so
+a scenario whose subject is a sed range probes sed itself. On failure it
+prints one line naming the locale, the engine and what the probe printed.
+
+**Args:**
+
+- `$1` — locale name, such as `en_US.UTF-8`
+
+**Exit codes:**
+
+- `0` — the locale shows the gap in sed
 - `1` — it does not
 
 ### scripts/lib/log.sh
