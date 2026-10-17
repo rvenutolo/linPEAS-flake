@@ -51,7 +51,9 @@
 #     source file and checked no link.
 #
 # Exits 0 on clean, 1 on any failure, 2 when the sources could not be
-# enumerated, a source could not be read, or the run covered nothing.
+# enumerated, a source could not be read, the run covered nothing, or
+# grep --perl-regexp under C.UTF-8 cannot read UTF-8 (startup probe) or
+# a source's headings cannot be read.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -118,12 +120,24 @@ function headings_of() {
   # Heading-derived slugs. Strip inline HTML (e.g. `<a name="...">`
   # anchors written by mdformat-toc) before slugging so the computed
   # slug matches the GFM/mkdocs auto-slug, which ignores HTML tags.
-  printf '%s\n' "${body}" |
+  # A heading holding a non-ASCII letter, mark or digit has no generated
+  # slug: GitHub keeps the character and mkdocs folds it, and the slug
+  # sed deletes it, so the result names the heading on neither renderer.
+  # Its explicit anchor, collected below, is its only target.
+  local headings heading rc
+  headings="$(printf '%s\n' "${body}" |
     grep --extended-regexp '^#+[[:space:]]+.+' |
-    sed --regexp-extended 's/^#+[[:space:]]+//; s/<[^>]+>//g' |
-    while IFS= read -r heading; do
-      slug "${heading}"
-    done
+    sed --regexp-extended 's/^#+[[:space:]]+//; s/<[^>]+>//g')" || true
+  while IFS= read -r heading; do
+    [[ -z ${heading} ]] && continue
+    rc=0
+    printf '%s\n' "${heading}" |
+      LC_ALL=C.UTF-8 grep --quiet --perl-regexp \
+        '[\p{L}\p{M}\p{N}](?<=[^\x00-\x7F])' || rc=$?
+    ((rc > 1)) && return 2
+    ((rc == 0)) && continue
+    slug "${heading}"
+  done <<<"${headings}"
   # Explicit `<a name="..."></a>` anchors are also valid targets.
   # mdformat-toc writes these next to every in-range heading so its
   # TOC fragments resolve regardless of the slug algorithm in use.
@@ -171,8 +185,9 @@ function non_ascii_headings() {
   # proves this grep does.
   # The text is read into a variable first: in a pipeline an awk read
   # failure leaves grep an empty input, and "no match" would hide it.
-  # --binary-files=text keeps a NUL byte from turning the result into a
-  # "binary file matches" notice that reads as a pass.
+  # The text passes through a bash variable, which drops a NUL byte before
+  # grep sees it; --binary-files=text is a second guard against a "binary
+  # file matches" notice reading as a pass.
   text="$(without_fences "${f}" 1)" || return 2
   hits="$(printf '%s\n' "${text}" |
     LC_ALL=C.UTF-8 grep --line-number --perl-regexp --binary-files=text \
@@ -273,7 +288,7 @@ for src_rel in "${SOURCES[@]}"; do
   heading_rc=0
   heading_out="$(non_ascii_headings "${src_abs}")" || heading_rc=$?
   if ((heading_rc != 0)); then
-    printf '%s: grep failed reading %s for headings\n' "${0##*/}" "${src_rel}" >&2
+    printf '%s: could not read %s for headings\n' "${0##*/}" "${src_rel}" >&2
     exit 2
   fi
   while IFS=$'\t' read -r h_line h_text; do

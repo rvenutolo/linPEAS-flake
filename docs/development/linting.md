@@ -81,9 +81,10 @@ deleted whatever locale the caller runs in. A heading whose text holds a
 non-ASCII letter, mark or digit must carry an explicit `<a name="...">`
 anchor on the heading line, because GitHub keeps the character in its slug
 while mkdocs folds it to ASCII and no generated slug resolves on both; a
-heading without one is a blocking `[non-ascii-heading]` finding. Non-ASCII
-punctuation such as `—` or `→` is deleted by both renderers and stays
-allowed. Finding such a heading needs `grep --perl-regexp` to read UTF-8
+heading without one is a blocking `[non-ascii-heading]` finding, and one
+with an anchor answers to that anchor alone, not to a generated slug.
+Non-ASCII punctuation such as `—` or `→` is deleted by both renderers and
+stays allowed. Finding such a heading needs `grep --perl-regexp` to read UTF-8
 under `C.UTF-8`; when it cannot, the lint exits 2 instead of passing, and
 it exits 2 as well when it cannot read a source file's headings.
 

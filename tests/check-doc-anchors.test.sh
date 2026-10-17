@@ -199,7 +199,7 @@ function main() {
   # Anchored, the heading is a valid target, and its slug lost a character
   # to the delete step: the slug sed and the lossy-count grep agree only
   # when both run under one locale.
-  root="$(scratch_anchor_root 'cafe' $'# Target\n\n## Café<a name="cafe"></a>\n\nBody.')"
+  root="$(scratch_anchor_root 'cafe' $'# Target\n\n## Café<a name="cafe"></a>\n\n## Plain\n\nBody.')"
   run_scenario 'anchored non-ASCII heading counts as lossy under en_US.UTF-8' \
     "${root}" $'source.md\ndocs/target.md' 0 '' \
     'ok — 1 anchor link(s) in 2 source file(s) resolved against 3 anchor(s) in 1 target file(s); 1 heading(s) required character deletion' \
@@ -207,9 +207,9 @@ function main() {
   rm --recursive --force -- "${root}"
 
   # A link spelled with the non-ASCII letter resolves on GitHub alone,
-  # since mkdocs folds the letter away. The slug sed deletes it under every
-  # locale, so the link is a miss in en_US.UTF-8 as it is in CI; unpinned,
-  # the sed keeps `é` and the link passes only there.
+  # since mkdocs folds the letter away. Pinned to LC_ALL=C, the slug sed
+  # deletes the letter in every locale, so the link misses as it does in
+  # CI; unpinned, en_US.UTF-8 keeps it and the link would pass.
   root="$(scratch_anchor_root 'naïve' $'# Target\n\n## Naïve<a name="naive"></a>\n\nBody.')"
   run_scenario 'GitHub-only non-ASCII anchor link is a miss under en_US.UTF-8' \
     "${root}" $'source.md\ndocs/target.md' 1 \
@@ -261,7 +261,9 @@ function main() {
   rm --recursive --force -- "${root}" "${shim_dir}"
 
   # A NUL byte makes grep call the text binary and print a notice instead
-  # of matches, which reads as a pass. The heading is still reported.
+  # of matches, which reads as a pass. The text passes through a bash
+  # variable, which drops the NUL before grep sees it, so the heading is
+  # still reported; --binary-files=text is a second guard.
   root="$(scratch_anchor_root 'target' $'# Target\n\n## Café\n\nBody.')"
   printf '# Source\n\nSee [x](docs/target.md#target).\n\0\n' >"${root}/source.md"
   printf '# Target\n\n## Ünïcode\n\0\n' >"${root}/docs/target.md"
@@ -286,7 +288,7 @@ function main() {
   root="$(scratch_anchor_root 'other' $'# Target\n\n## Other\n\nBody.')"
   PATH="${awk_shim_dir}:${PATH}" run_scenario 'awk failure reading headings is a could-not-run' \
     "${root}" $'source.md\ndocs/target.md' 2 \
-    'grep failed reading source.md for headings'
+    'could not read source.md for headings'
   rm --recursive --force -- "${root}" "${awk_shim_dir}"
 
   harness_assert_verify || failures=$((failures + 1))
