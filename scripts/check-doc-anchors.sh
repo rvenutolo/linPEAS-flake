@@ -30,7 +30,8 @@
 # A heading whose text holds a non-ASCII letter, mark or digit and that
 # carries no explicit `<a name="...">` anchor is a `[non-ascii-heading]`
 # finding: GitHub keeps the character in the slug and mkdocs folds it to
-# ASCII, so no link resolves on both. Finding such headings needs grep
+# ASCII, so no link resolves on both. An anchored one answers only to its
+# explicit anchor; no slug is generated for it. Finding such headings needs grep
 # --perl-regexp to read code points; a startup probe exits 2 when it
 # cannot.
 #
@@ -74,6 +75,8 @@ function slug() {
   s="${s#"${s%%[![:space:]]*}"}"
   s="${s%"${s##*[![:space:]]}"}"
   s="$(printf '%s' "${s}" | tr '[:upper:]' '[:lower:]')"
+  # The pin keeps the slug independent of the caller's locale whatever
+  # the heading filter in headings_of admits.
   s="$(printf '%s' "${s}" | LC_ALL=C sed --regexp-extended 's/[^a-z0-9 _-]+//g; s/ /-/g')"
   printf '%s\n' "${s}"
 }
@@ -134,7 +137,10 @@ function headings_of() {
     printf '%s\n' "${heading}" |
       LC_ALL=C.UTF-8 grep --quiet --perl-regexp \
         '[\p{L}\p{M}\p{N}](?<=[^\x00-\x7F])' || rc=$?
-    ((rc > 1)) && return 2
+    if ((rc > 1)); then
+      printf '%s: could not read %s for headings\n' "${0##*/}" "${f}" >&2
+      return 2
+    fi
     ((rc == 0)) && continue
     slug "${heading}"
   done <<<"${headings}"
@@ -147,10 +153,11 @@ function headings_of() {
     sed --regexp-extended 's/.*name="([^"]+)".*/\1/' || true
 }
 
-# @description Count the headings in a file whose slug loses characters to
-# the delete step. Those are exactly the slugs where mkdocs-material's
-# separator-collapsing slugify can disagree with GFM, so a clean run is
-# worth more when it says how much of it rested on them.
+# @description Count the headings in a file whose text holds a character
+# the slug delete step removes, anchored non-ASCII headings included
+# although they have no generated slug. Those are the headings where
+# mkdocs-material's separator-collapsing slugify can disagree with GFM,
+# so a clean run is worth more when it says how much of it rested on them.
 # @arg $1 file
 function lossy_heading_count() {
   local -r f="$1"

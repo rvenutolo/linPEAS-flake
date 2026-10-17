@@ -196,9 +196,9 @@ function main() {
     '' en_US.UTF-8
   rm --recursive --force -- "${root}"
 
-  # Anchored, the heading is a valid target, and its slug lost a character
-  # to the delete step: the slug sed and the lossy-count grep agree only
-  # when both run under one locale.
+  # Anchored, the heading is a valid target and still counts as lossy: the
+  # lossy-count grep runs under C, so it sees the `é` as a deleted
+  # character in en_US.UTF-8 too.
   root="$(scratch_anchor_root 'cafe' $'# Target\n\n## Café<a name="cafe"></a>\n\n## Plain\n\nBody.')"
   run_scenario 'anchored non-ASCII heading counts as lossy under en_US.UTF-8' \
     "${root}" $'source.md\ndocs/target.md' 0 '' \
@@ -206,10 +206,10 @@ function main() {
     en_US.UTF-8
   rm --recursive --force -- "${root}"
 
-  # A link spelled with the non-ASCII letter resolves on GitHub alone,
-  # since mkdocs folds the letter away. Pinned to LC_ALL=C, the slug sed
-  # deletes the letter in every locale, so the link misses as it does in
-  # CI; unpinned, en_US.UTF-8 keeps it and the link would pass.
+  # A link spelled as GitHub slugs the anchored heading (the letter kept)
+  # misses, since only the explicit anchor answers. This is the
+  # GitHub-spelled counterpart of the scenario below, whose link is the
+  # C-locale slug with the letter deleted.
   root="$(scratch_anchor_root 'naïve' $'# Target\n\n## Naïve<a name="naive"></a>\n\nBody.')"
   run_scenario 'GitHub-only non-ASCII anchor link is a miss under en_US.UTF-8' \
     "${root}" $'source.md\ndocs/target.md' 1 \
