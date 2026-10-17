@@ -13,6 +13,9 @@
 # (`.claude/CLAUDE.md` is intentionally untracked, so CI cannot scan it.
 # The pre-commit hook will scan it locally if present.)
 #
+# Slugging runs under a C locale, so a non-ASCII byte is always deleted
+# regardless of the caller's locale.
+#
 # Slug algorithm — GFM (github-slugger), ASCII scope:
 #   1. Trim surrounding whitespace, then lowercase.
 #   2. PRESERVE letters, digits, '_' and '-'. DELETE every other
@@ -23,6 +26,13 @@
 #      "release + tag" slugs to "release--tag".
 # Deleting rather than substituting is what makes step 3 safe: trailing
 # punctuation cannot produce a trailing '-', so no trimming is needed.
+#
+# A heading whose text holds a non-ASCII letter, mark or digit and that
+# carries no explicit `<a name="...">` anchor is a `[non-ascii-heading]`
+# finding: GitHub keeps the character in the slug and mkdocs folds it to
+# ASCII, so no link resolves on both. Finding such headings needs grep
+# --perl-regexp to read code points; a startup probe exits 2 when it
+# cannot.
 #
 # Headings inside fenced code blocks are not headings — a shell comment
 # in a ```bash block would otherwise mint a phantom slug that vouches for
@@ -62,7 +72,7 @@ function slug() {
   s="${s#"${s%%[![:space:]]*}"}"
   s="${s%"${s##*[![:space:]]}"}"
   s="$(printf '%s' "${s}" | tr '[:upper:]' '[:lower:]')"
-  s="$(printf '%s' "${s}" | sed --regexp-extended 's/[^a-z0-9 _-]+//g; s/ /-/g')"
+  s="$(printf '%s' "${s}" | LC_ALL=C sed --regexp-extended 's/[^a-z0-9 _-]+//g; s/ /-/g')"
   printf '%s\n' "${s}"
 }
 
@@ -72,8 +82,10 @@ function slug() {
 # least as long, with nothing after it, closes it. An unterminated fence
 # swallows the rest of the file, which is what a renderer does too.
 # @arg $1 file
+# @arg $2 blank: 1 prints an empty line for each dropped line, so line
+# numbers of the kept lines survive
 function without_fences() {
-  awk '
+  awk -v blank="${2:-0}" '
     {
       if (match($0, /^ ? ? ?(```+|~~~+)/)) {
         marker = substr($0, RSTART, RLENGTH)
@@ -82,16 +94,18 @@ function without_fences() {
           in_fence = 1
           fence_char = substr(marker, 1, 1)
           fence_len = length(marker)
+          if (blank) print ""
           next
         }
         if (substr(marker, 1, 1) == fence_char &&
             length(marker) >= fence_len &&
             substr($0, RSTART + RLENGTH) ~ /^[ \t]*$/) {
           in_fence = 0
+          if (blank) print ""
           next
         }
       }
-      if (!in_fence) { print }
+      if (!in_fence) { print } else if (blank) { print "" }
     }
   ' "$(awk_path "$1")"
 }
@@ -136,9 +150,32 @@ function lossy_heading_count() {
   count="$(printf '%s\n' "${body}" |
     grep --extended-regexp '^#+[[:space:]]+.+' |
     sed --regexp-extended 's/^#+[[:space:]]+//; s/<[^>]+>//g; s/[[:space:]]+$//' |
-    # regex-range-ascii: locale-bound: counts what the slug sed strips, so it keeps that sed's locale
-    grep --count --extended-regexp '[^A-Za-z0-9 _-]' || true)"
+    # The count and the slug sed read one class under one locale.
+    LC_ALL=C grep --count --extended-regexp '[^A-Za-z0-9 _-]' || true)"
   printf '%s\n' "${count:-0}"
+}
+
+# @description Emit `<line>\t<text>` for each heading in a file whose text
+# holds a non-ASCII letter, mark or digit and whose line carries no
+# explicit `<a name="...">` anchor. GitHub keeps such a character in the
+# slug and mkdocs folds it to ASCII, so no link resolves on both and only
+# an explicit anchor gives the heading one name. Non-ASCII punctuation is
+# deleted by both and is not reported.
+# @arg $1 file
+# @exitcode 0 records or none
+# @exitcode 2 grep could not read the text
+function non_ascii_headings() {
+  local -r f="$1"
+  local hits rc=0
+  # PCRE reads code points only in a UTF-8 locale; the startup probe
+  # proves this grep does.
+  hits="$(without_fences "${f}" 1 |
+    LC_ALL=C.UTF-8 grep --line-number --perl-regexp \
+      '^#+[[:space:]]+(?!.*<a[[:space:]]+name=")(?=.*[\p{L}\p{M}\p{N}](?<=[^\x00-\x7F]))')" || rc=$?
+  ((rc > 1)) && return 2
+  [[ -n ${hits} ]] || return 0
+  printf '%s\n' "${hits}" |
+    sed --regexp-extended 's/^([0-9]+):#+[[:space:]]+/\1\t/; s/[[:space:]]+$//'
 }
 
 # @description Emit every docs/**/*.md path, NUL-delimited and sorted,
@@ -185,6 +222,15 @@ fi
 
 failures=0
 
+# The non-ASCII heading check rests on grep reading code points under
+# --perl-regexp. A grep that cannot would match nothing and pass every
+# heading, so the run refuses instead.
+if [[ "$(printf 'é\n' | LC_ALL=C.UTF-8 grep --count --perl-regexp '^\p{L}$' 2>/dev/null || true)" != 1 ]]; then
+  printf '%s: grep --perl-regexp under C.UTF-8 does not read é as a letter, so headings holding a non-ASCII letter cannot be found\n' \
+    "${0##*/}" >&2
+  exit 2
+fi
+
 # Scope tallies for the summary line, plus a per-target cache so a target
 # linked many times is slugged once.
 declare -A anchor_cache=()
@@ -199,6 +245,19 @@ for src_rel in "${SOURCES[@]}"; do
   src_abs="${REPO_ROOT}/${src_rel}"
   [[ -f ${src_abs} ]] || continue
   sources_scanned=$((sources_scanned + 1))
+
+  heading_rc=0
+  heading_out="$(non_ascii_headings "${src_abs}")" || heading_rc=$?
+  if ((heading_rc != 0)); then
+    printf '%s: grep failed reading %s for headings\n' "${0##*/}" "${src_rel}" >&2
+    exit 2
+  fi
+  while IFS=$'\t' read -r h_line h_text; do
+    [[ -z ${h_line} ]] && continue
+    printf '[non-ascii-heading] %s:%s: heading "%s" holds a non-ASCII letter; add an explicit <a name="..."> anchor (GitHub and mkdocs slug it differently)\n' \
+      "${src_rel}" "${h_line}" "${h_text}" >&2
+    failures=$((failures + 1))
+  done <<<"${heading_out}"
   src_dir="$(dirname -- "${src_abs}")"
 
   # `--only-matching` emits one line per link (with its line number), so a
