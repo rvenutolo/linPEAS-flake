@@ -87,6 +87,22 @@ function main() {
     "${root}" 1 '[unreferenced-doc] docs/security/café.md exists' en_US.UTF-8
   rm --recursive --force -- "${root}"
 
+  # The path sed is greedy, so it reads the last link on a line. Under a
+  # C locale that is the last ASCII-only link; unpinned, en_US.UTF-8 lets it
+  # take the non-ASCII one, which flips which doc counts as referenced.
+  root="$(mktemp --directory)"
+  mkdir --parents "${root}/docs/security"
+  printf '# Invariant index\n\n## Security\n\n- **Foo** — x → [security/foo.md](security/foo.md) and [security/café.md](security/café.md).\n' \
+    >"${root}/index.md"
+  printf '# Foo\n' >"${root}/docs/security/foo.md"
+  printf '# Café\n' >"${root}/docs/security/café.md"
+  # A third, never-linked doc keeps this output apart from the single-link
+  # scenario above, which reports café alone.
+  printf '# Zed\n' >"${root}/docs/security/zed.md"
+  run_scenario 'last non-ASCII link on an index line leaves only that doc unreferenced' \
+    "${root}" 1 '[unreferenced-doc] docs/security/café.md exists' en_US.UTF-8
+  rm --recursive --force -- "${root}"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

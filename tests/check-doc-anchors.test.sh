@@ -206,6 +206,17 @@ function main() {
     en_US.UTF-8
   rm --recursive --force -- "${root}"
 
+  # A link spelled with the non-ASCII letter resolves on GitHub alone,
+  # since mkdocs folds the letter away. The slug sed deletes it under every
+  # locale, so the link is a miss in en_US.UTF-8 as it is in CI; unpinned,
+  # the sed keeps `é` and the link passes only there.
+  root="$(scratch_anchor_root 'naïve' $'# Target\n\n## Naïve<a name="naive"></a>\n\nBody.')"
+  run_scenario 'GitHub-only non-ASCII anchor link is a miss under en_US.UTF-8' \
+    "${root}" $'source.md\ndocs/target.md' 1 \
+    '[anchor-miss] source.md:3: #naïve not found in docs/target.md' \
+    '' en_US.UTF-8
+  rm --recursive --force -- "${root}"
+
   # Non-ASCII punctuation is deleted by both renderers, so it needs no
   # anchor.
   root="$(scratch_anchor_root 'build--release' $'# Target\n\n## Build — release\n\nBody.')"
