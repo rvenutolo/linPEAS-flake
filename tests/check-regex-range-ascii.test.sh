@@ -26,7 +26,7 @@ trap 'rm --recursive --force -- "${work}"' EXIT
 # with the blank line that sets it off from them.
 # @arg $1 finding count
 function footer() {
-  printf '\n\n%d finding(s). A range follows the locale: under en_US.UTF-8 [0-9] in a\nbash regex also matches digits such as U+0663 and U+FF15. Spell the class\nout ([0123456789]) or match through ascii_match (scripts/lib/ascii-match.sh).\nGNU grep keeps a positive [0-9] ASCII but follows the locale for a letter,\nmixed or negated range: run the call under LC_ALL=C, or mark the line\nabove it with: # regex-range-ascii: locale-bound: <reason>' "$1"
+  printf '\n\n%d finding(s). A range follows the locale: under en_US.UTF-8 [0-9] in a\nbash regex also matches digits such as U+0663 and U+FF15. Spell the class\nout ([0123456789]) or match through ascii_match (scripts/lib/ascii-match.sh).\nGNU grep and sed keep a positive [0-9] ASCII but follow the locale for a\nletter, mixed or negated range: run the call under LC_ALL=C, or mark the\nline above it with: # regex-range-ascii: locale-bound: <reason>' "$1"
 }
 
 # @description Write a file of the given lines under the scenario tree.
@@ -80,7 +80,7 @@ USE_DEFAULT_DIRS=0
 # shellcheck disable=SC2016,SC1003 # every put line is file text, not an expansion; a trailing backslash is file text
 {
   put spelled-out scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ ^[0123456789]+$ ]]'
-  run_case spelled-out 0 'regex-range-ascii: ok — scanned 1 file(s), 1 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case spelled-out 0 'regex-range-ascii: ok — scanned 1 file(s), 1 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put digit-range scripts/a.sh '#!/usr/bin/env bash' 'x=1' '[[ $1 =~ ^v[0-9]+$ ]]'
   run_case digit-range 1 '' "DIR/scripts/a.sh:3: regex range 0-9 follows the locale$(footer 1)"
@@ -107,16 +107,16 @@ USE_DEFAULT_DIRS=0
   run_case three-levels 1 '' "DIR/scripts/a.sh:5: regex range 3-6 (through C3) follows the locale$(footer 1)"
 
   put four-levels scripts/a.sh '#!/usr/bin/env bash' "D4='[4-5]'" 'C3="${D4}"' 'B2="(${C3})"' 'A1="x${B2}"' '[[ $1 =~ ${A1} ]]'
-  run_case four-levels 0 'regex-range-ascii: ok — scanned 1 file(s), 1 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case four-levels 0 'regex-range-ascii: ok — scanned 1 file(s), 1 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put local-c scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=C' '  [[ $1 =~ [0-9] ]]' '}' 'g() {' '  local LC_ALL=C.UTF-8' '  [[ $1 =~ [a-z] ]]' '}'
-  run_case local-c 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 0 with a regex in a variable, 2 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case local-c 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 0 with a regex in a variable, 2 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put local-posix scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=POSIX' '  [[ $1 =~ [8-9] ]]' '}'
   run_case local-posix 1 '' "DIR/scripts/a.sh:4: regex range 8-9 follows the locale$(footer 1)"
 
   put assignment-valued-like-operator scripts/a.sh '#!/usr/bin/env bash' 'x==~' '[[ $1 =~ x ]]' '[[ $1 =~ y ]]' '[[ $1 =~ z ]]' '[[ $1 =~ w ]]' '[[ $1 =~ v ]]'
-  run_case assignment-valued-like-operator 0 'regex-range-ascii: ok — scanned 1 file(s), 5 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case assignment-valued-like-operator 0 'regex-range-ascii: ok — scanned 1 file(s), 5 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put local-other-locale scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=en_US.UTF-8' '  [[ $1 =~ [5-9] ]]' '}'
   run_case local-other-locale 1 '' "DIR/scripts/a.sh:4: regex range 5-9 follows the locale$(footer 1)"
@@ -125,25 +125,25 @@ USE_DEFAULT_DIRS=0
   run_case c-in-other-function 1 '' "DIR/scripts/a.sh:6: regex range 6-9 follows the locale$(footer 1)"
 
   put export-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $1 =~ [a-c] ]]' '[[ $1 =~ [d-e] ]]'
-  run_case export-c 0 'regex-range-ascii: ok — scanned 1 file(s), 3 =~ test(s), 0 with a regex in a variable, 3 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case export-c 0 'regex-range-ascii: ok — scanned 1 file(s), 3 =~ test(s), 0 with a regex in a variable, 3 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put not-ranges scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [[:digit:]][[:alpha:]] ]]' "readonly R='[^-&[:alnum:]_]'" '[[ $1 =~ ${R} ]]' \
     '[[ $1 =~ \[0-9] ]]' '[[ $1 =~ [a-] ]]' "[[ \$1 =~ \$'[\\x01-\\x1f]' ]]" '[[ $1 == [0-9] ]]' '[[ $1 =~ [=a=][.-.] ]]'
-  run_case not-ranges 0 'regex-range-ascii: ok — scanned 1 file(s), 6 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case not-ranges 0 'regex-range-ascii: ok — scanned 1 file(s), 6 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put argument-regex scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local -r re="$1"' '  [[ $2 =~ ${re} ]]' '  [[ $2 =~ $1 ]]' '}' "f '[0-9]' x"
-  run_case argument-regex 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case argument-regex 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put hyphen-text-outside-brackets scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ ^id-ab-12$ ]]' '[[ $1 =~ x-y\[a-c\] ]]' '[[ $1 =~ ^p-q$ ]]' '[[ $1 =~ ^r-s$ ]]'
-  run_case hyphen-text-outside-brackets 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case hyphen-text-outside-brackets 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put unassigned-variable scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ ${NEVER_SET} ]]' '[[ $1 =~ a ]]' '[[ $1 =~ b ]]' '[[ $1 =~ c ]]' \
     '[[ $1 =~ d ]]' '[[ $1 =~ e ]]' '[[ $1 =~ f ]]'
-  run_case unassigned-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 7 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case unassigned-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 7 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put no-test scripts/a.sh '#!/usr/bin/env bash' "grep -E '[0-9]' x" '# [[ $1 =~ [0-9] ]] in a comment is text'
   put no-test scripts/b.sh '#!/usr/bin/env bash' "grep -E '[0-9]' y"
-  run_case no-test 0 'regex-range-ascii: ok — scanned 2 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 2 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case no-test 0 'regex-range-ascii: ok — scanned 2 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 2 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put lib-and-tests scripts/lib/l.sh '[[ $1 =~ [7-8] ]]'
   put lib-and-tests tests/t.test.sh '#!/usr/bin/env bash' '[[ $1 =~ [g-h] ]]'
@@ -175,7 +175,7 @@ DIR/scripts/a.sh:6: regex range e-j follows the locale$(footer 5)"
   run_case adjacent-brackets 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
 
   put punctuation-start scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =~ [+-9] ]]' '[[ $1 =~ [0-+] ]]' '[[ $1 =~ [,-.] ]]'
-  run_case punctuation-start 0 'regex-range-ascii: ok — scanned 1 file(s), 3 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case punctuation-start 0 'regex-range-ascii: ok — scanned 1 file(s), 3 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put test-over-two-lines scripts/a.sh '#!/usr/bin/env bash' '[[ $1' '  =~ ^v[0-9]$ ]]'
   run_case test-over-two-lines 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
@@ -185,7 +185,7 @@ DIR/scripts/a.sh:6: regex range e-j follows the locale$(footer 5)"
   run_case assigned-twice 1 '' "DIR/scripts/a.sh:4: regex range 0-9 (through re) follows the locale$(footer 1)"
 
   put assignments-read-apart scripts/a.sh '#!/usr/bin/env bash' 're=[x' 're=-9]' '[[ $1 =~ $re ]]' '[[ $1 =~ p ]]' '[[ $1 =~ q ]]'
-  run_case assignments-read-apart 0 'regex-range-ascii: ok — scanned 1 file(s), 3 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case assignments-read-apart 0 'regex-range-ascii: ok — scanned 1 file(s), 3 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put range-kept-past-clean-variable scripts/a.sh '#!/usr/bin/env bash' "a='\$c'" "c='x'" "b='[0-9]'" '[[ $1 =~ ${a}${b} ]]'
   run_case range-kept-past-clean-variable 1 '' "DIR/scripts/a.sh:5: regex range 0-9 (through b) follows the locale$(footer 1)"
@@ -194,13 +194,13 @@ DIR/scripts/a.sh:6: regex range e-j follows the locale$(footer 5)"
   run_case name-inside-earlier-name 1 '' "DIR/scripts/a.sh:4: regex range 0-9 (through b) follows the locale$(footer 1)"
 
   put bare-word-is-not-a-variable scripts/a.sh '#!/usr/bin/env bash' "v='[0-9]'" '[[ $1 =~ ^v+$ ]]' '[[ $1 =~ ^w+$ ]]'
-  run_case bare-word-is-not-a-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case bare-word-is-not-a-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put underscore-variable scripts/a.sh '#!/usr/bin/env bash' "_re='[0-9]'" '[[ $1 =~ $_re ]]'
   run_case underscore-variable 1 '' "DIR/scripts/a.sh:3: regex range 0-9 (through _re) follows the locale$(footer 1)"
 
   put underscore-variable-clean scripts/a.sh '#!/usr/bin/env bash' "_re='[0123456789]'" '[[ $1 =~ $_re ]]' '[[ $1 =~ r ]]' '[[ $1 =~ s ]]' '[[ $1 =~ t ]]'
-  run_case underscore-variable-clean 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case underscore-variable-clean 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 1 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   # Byte offsets index the text only if the lint reads it as bytes, whatever
   # locale it is started under.
@@ -225,7 +225,7 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   put for-loop-item scripts/a.sh '#!/usr/bin/env bash' 'for re in "[0-9]+" x; do' '  [[ $1 =~ $re ]]' 'done'
   run_case for-loop-item 1 '' "DIR/scripts/a.sh:3: regex range 0-9 (through re) follows the locale$(footer 1)"
   put for-loop-item-spelled scripts/a.sh '#!/usr/bin/env bash' 'for re in "[0123456789]+" x; do' '  [[ $1 =~ $re ]]' '  [[ $2 =~ $re ]]' 'done'
-  run_case for-loop-item-spelled 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 2 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case for-loop-item-spelled 0 'regex-range-ascii: ok — scanned 1 file(s), 2 =~ test(s), 2 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   # A C locale covers only the tests that follow it, in the scope it was
   # set in, and only as one unquoted word.
@@ -240,7 +240,7 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   put local-scope-ends scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; :; }' '[[ $1 =~ [0-9] ]]'
   run_case local-scope-ends 1 '' "DIR/scripts/a.sh:3: regex range 0-9 follows the locale$(footer 1)"
   put local-twice scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; [[ $1 =~ [0-9] ]]; local LC_ALL=C.UTF-8; [[ $2 =~ [0-9] ]]; [[ $3 =~ [0-9] ]]; [[ $4 =~ [0-9] ]]; [[ $5 =~ [0-9] ]]; }'
-  run_case local-twice 0 'regex-range-ascii: ok — scanned 1 file(s), 5 =~ test(s), 0 with a regex in a variable, 5 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case local-twice 0 'regex-range-ascii: ok — scanned 1 file(s), 5 =~ test(s), 0 with a regex in a variable, 5 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
   put for-loop-last-item scripts/a.sh '#!/usr/bin/env bash' 'for re in x "[0-9]+"; do' '  [[ $1 =~ $re ]]' 'done'
   run_case for-loop-last-item 1 '' "DIR/scripts/a.sh:3: regex range 0-9 (through re) follows the locale$(footer 1)"
 
@@ -263,25 +263,25 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   put local-in-conditional scripts/a.sh '#!/usr/bin/env bash' 'f() { if (($#)); then local LC_ALL=C; fi; [[ $1 =~ [0-9] ]]; }' '' '' ''
   run_case local-in-conditional 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
   put other-locale-elsewhere scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'f() { local LC_ALL=en_US.UTF-8; :; }' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]'
-  run_case other-locale-elsewhere 0 'regex-range-ascii: ok — scanned 1 file(s), 6 =~ test(s), 0 with a regex in a variable, 6 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case other-locale-elsewhere 0 'regex-range-ascii: ok — scanned 1 file(s), 6 =~ test(s), 0 with a regex in a variable, 6 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
   put prefix-assignment scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'LC_ALL=en_US.UTF-8 cmd' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]'
-  run_case prefix-assignment 0 'regex-range-ascii: ok — scanned 1 file(s), 7 =~ test(s), 0 with a regex in a variable, 7 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case prefix-assignment 0 'regex-range-ascii: ok — scanned 1 file(s), 7 =~ test(s), 0 with a regex in a variable, 7 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
   put local-nested-other scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; g() { local LC_ALL=en_US.UTF-8; :; }; [[ $1 =~ [0-9] ]]; [[ $2 =~ [0-9] ]]; [[ $3 =~ [0-9] ]]; [[ $4 =~ [0-9] ]]; [[ $5 =~ [0-9] ]]; [[ $6 =~ [0-9] ]]; [[ $7 =~ [0-9] ]]; [[ $8 =~ [0-9] ]]; }'
-  run_case local-nested-other 0 'regex-range-ascii: ok — scanned 1 file(s), 8 =~ test(s), 0 with a regex in a variable, 8 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case local-nested-other 0 'regex-range-ascii: ok — scanned 1 file(s), 8 =~ test(s), 0 with a regex in a variable, 8 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
   put export-twice-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'export LC_ALL=C.UTF-8' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]'
-  run_case export-twice-c 0 'regex-range-ascii: ok — scanned 1 file(s), 9 =~ test(s), 0 with a regex in a variable, 9 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case export-twice-c 0 'regex-range-ascii: ok — scanned 1 file(s), 9 =~ test(s), 0 with a regex in a variable, 9 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put write-before-export scripts/a.sh '#!/usr/bin/env bash' 'LC_ALL=en_US.UTF-8' 'export LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]'
-  run_case write-before-export 0 'regex-range-ascii: ok — scanned 1 file(s), 10 =~ test(s), 0 with a regex in a variable, 10 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case write-before-export 0 'regex-range-ascii: ok — scanned 1 file(s), 10 =~ test(s), 0 with a regex in a variable, 10 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
   put write-after-test scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' 'export LC_ALL=en_US.UTF-8'
-  run_case write-after-test 0 'regex-range-ascii: ok — scanned 1 file(s), 11 =~ test(s), 0 with a regex in a variable, 11 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case write-after-test 0 'regex-range-ascii: ok — scanned 1 file(s), 11 =~ test(s), 0 with a regex in a variable, 11 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
   put c-write-elsewhere scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '( export LC_ALL=C )' 'LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]'
-  run_case c-write-elsewhere 0 'regex-range-ascii: ok — scanned 1 file(s), 12 =~ test(s), 0 with a regex in a variable, 12 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case c-write-elsewhere 0 'regex-range-ascii: ok — scanned 1 file(s), 12 =~ test(s), 0 with a regex in a variable, 12 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   # Only an unset of LC_ALL ends a C locale; a background export never
   # starts one; the last word of a declaration is the one that counts.
   put unset-other-variable scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'foo=1' 'unset foo' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]'
-  run_case unset-other-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 13 =~ test(s), 0 with a regex in a variable, 13 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case unset-other-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 13 =~ test(s), 0 with a regex in a variable, 13 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
   put export-in-background scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C &' '[[ $1 =~ [0-9] ]]'
   run_case export-in-background 1 '' "DIR/scripts/a.sh:3: regex range 0-9 follows the locale$(footer 1)"
   put local-in-background scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=C &' '  [[ $1 =~ [0-9] ]]' '}'
@@ -289,9 +289,9 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   put local-last-word-wins scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=C LC_ALL=en_US.UTF-8' '  [[ $1 =~ [0-9] ]]' '}' ''
   run_case local-last-word-wins 1 '' "DIR/scripts/a.sh:4: regex range 0-9 follows the locale$(footer 1)"
   put local-last-word-c scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=en_US.UTF-8 LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '}'
-  run_case local-last-word-c 0 'regex-range-ascii: ok — scanned 1 file(s), 14 =~ test(s), 0 with a regex in a variable, 14 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case local-last-word-c 0 'regex-range-ascii: ok — scanned 1 file(s), 14 =~ test(s), 0 with a regex in a variable, 14 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
   put export-c-utf8 scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C.UTF-8' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '[[ $15 =~ [0-9] ]]'
-  run_case export-c-utf8 0 'regex-range-ascii: ok — scanned 1 file(s), 15 =~ test(s), 0 with a regex in a variable, 15 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case export-c-utf8 0 'regex-range-ascii: ok — scanned 1 file(s), 15 =~ test(s), 0 with a regex in a variable, 15 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   # Writers of LC_ALL other than assignments end a C locale; a line
   # continuation does not hide a test or a range.
@@ -338,9 +338,9 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   put variable-regex-continued scripts/a.sh '#!/usr/bin/env bash' 'r="[0-\' '9]"' '[[ $1 =~ $r ]]'
   run_case variable-regex-continued 1 '' "DIR/scripts/a.sh:4: regex range 0-9 (through r) follows the locale$(footer 1)"
   put unrelated-commands scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'builtin export LC_ALL=C' 'command printf %s LC_ALL' 'builtin unset foo' 'builtin export FOO=1' 'builtin export LC_ALL=C.UTF-8' 'printf -v foo x' 'read -r foo' 'for x in a; do :; done' 'let n=5' '(( n++ ))' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '[[ $15 =~ [0-9] ]]' '[[ $16 =~ [0-9] ]]'
-  run_case unrelated-commands 0 'regex-range-ascii: ok — scanned 1 file(s), 16 =~ test(s), 0 with a regex in a variable, 16 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case unrelated-commands 0 'regex-range-ascii: ok — scanned 1 file(s), 16 =~ test(s), 0 with a regex in a variable, 16 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
   put builtin-export-last-word-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'builtin export LC_ALL=en_US.UTF-8 LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '[[ $15 =~ [0-9] ]]' '[[ $16 =~ [0-9] ]]' '[[ $17 =~ [0-9] ]]'
-  run_case builtin-export-last-word-c 0 'regex-range-ascii: ok — scanned 1 file(s), 17 =~ test(s), 0 with a regex in a variable, 17 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case builtin-export-last-word-c 0 'regex-range-ascii: ok — scanned 1 file(s), 17 =~ test(s), 0 with a regex in a variable, 17 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put operator-split-by-continuation scripts/a.sh '#!/usr/bin/env bash' '[[ $1 =\' '~ [0-9] ]]'
   run_case operator-split-by-continuation 1 '' "DIR/scripts/a.sh:2: regex range 0-9 follows the locale$(footer 1)"
@@ -365,12 +365,12 @@ tests/t.test.sh:2: regex range h-k follows the locale$(footer 2)"
   put export-element-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL[0]=C' '[[ $1 =~ [0-9] ]]'
   run_case export-element-c 1 '' "DIR/scripts/a.sh:3: regex range 0-9 follows the locale$(footer 1)"
   put quoted-whole-assignment-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' 'export "LC_ALL=C"' 'exec {fd}>/dev/null' 'wait -n' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [0-9] ]]' '[[ $3 =~ [0-9] ]]' '[[ $4 =~ [0-9] ]]' '[[ $5 =~ [0-9] ]]' '[[ $6 =~ [0-9] ]]' '[[ $7 =~ [0-9] ]]' '[[ $8 =~ [0-9] ]]' '[[ $9 =~ [0-9] ]]' '[[ $10 =~ [0-9] ]]' '[[ $11 =~ [0-9] ]]' '[[ $12 =~ [0-9] ]]' '[[ $13 =~ [0-9] ]]' '[[ $14 =~ [0-9] ]]' '[[ $15 =~ [0-9] ]]' '[[ $16 =~ [0-9] ]]' '[[ $17 =~ [0-9] ]]' '[[ $18 =~ [0-9] ]]'
-  run_case quoted-whole-assignment-c 0 'regex-range-ascii: ok — scanned 1 file(s), 18 =~ test(s), 0 with a regex in a variable, 18 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case quoted-whole-assignment-c 0 'regex-range-ascii: ok — scanned 1 file(s), 18 =~ test(s), 0 with a regex in a variable, 18 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put export-before-test scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '[[ $1 =~ [0-9] ]]' '[[ $2 =~ [a-f] ]]' '[[ $3 =~ [A-Z] ]]' '[[ $4 =~ [a-z] ]]'
-  run_case export-before-test 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 0 with a regex in a variable, 4 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case export-before-test 0 'regex-range-ascii: ok — scanned 1 file(s), 4 =~ test(s), 0 with a regex in a variable, 4 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
   put local-before-test scripts/a.sh '#!/usr/bin/env bash' 'f() { local LC_ALL=C; [[ $1 =~ [0-9] ]]; }'
-  run_case local-before-test 0 'regex-range-ascii: ok — scanned 1 file(s), 1 =~ test(s), 0 with a regex in a variable, 1 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case local-before-test 0 'regex-range-ascii: ok — scanned 1 file(s), 1 =~ test(s), 0 with a regex in a variable, 1 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   # A grep pattern holding a letter, mixed or negated range follows the
   # locale; a positive digit-only bracket does not.
@@ -417,39 +417,39 @@ DIR/scripts/a.sh:6: grep range [t-u] follows the locale$(footer 4)"
   run_case grep-non-c-prefix 1 '' "DIR/scripts/a.sh:3: grep range [g-k] follows the locale$(footer 1)"
 
   put grep-digit-only scripts/a.sh '#!/usr/bin/env bash' "grep -E '^v[0-9]+\$' f" "grep 'Q[1-4]' f" "grep -E '[0-9.]+' f"
-  run_case grep-digit-only 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 3 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case grep-digit-only 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 3 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put grep-ordinary scripts/a.sh '#!/usr/bin/env bash' 'command -v grep >/dev/null' "command -v grep '[a-z]' >/dev/null" 'grep --quiet -- foo f' "grep -E '^(a|b)\$' f" "grep --count '[[:alpha:]]' f" "grep -E '[0123456789abcdef]' f" "grep -E 'v[0-9]+' f"
-  run_case grep-ordinary 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 5 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case grep-ordinary 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 5 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   # -F holds no regex and -P matches by code point.
   put grep-fixed scripts/a.sh '#!/usr/bin/env bash' "grep -F '[a-z]' f" "grep --fixed-strings -- '[A-Z]' f" "fgrep '[b-d]' f" "grep -qF '[e-f]' f"
-  run_case grep-fixed 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 4 grep call(s), 4 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case grep-fixed 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 4 grep call(s), 4 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put grep-perl scripts/a.sh '#!/usr/bin/env bash' "grep -P '[a-z]' f" "grep --perl-regexp '[A-Z]' f" "grep -oP '[c-e]' f"
-  run_case grep-perl 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 3 grep call(s), 3 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked' ''
+  run_case grep-perl 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 3 grep call(s), 3 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   # A C locale on the call, through env, or in the scopes =~ already reads.
   put grep-c-prefix scripts/a.sh '#!/usr/bin/env bash' "LC_ALL=C grep -E '[a-z]' f" "LC_ALL=C.UTF-8 grep -E '[A-Z]' f"
-  run_case grep-c-prefix 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 2 grep call(s), 0 not regex (-F/-P), 2 under a C locale, 0 unresolved, 0 marked' ''
+  run_case grep-c-prefix 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 2 grep call(s), 0 not regex (-F/-P), 2 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put grep-env-c scripts/a.sh '#!/usr/bin/env bash' "env LC_ALL=C.UTF-8 grep -E '[a-z]' f" "env -i LC_ALL=C grep '[x-z]' f" "command env LC_ALL=C grep '[q-r]' f"
-  run_case grep-env-c 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 3 grep call(s), 0 not regex (-F/-P), 3 under a C locale, 0 unresolved, 0 marked' ''
+  run_case grep-env-c 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 3 grep call(s), 0 not regex (-F/-P), 3 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put grep-local-c scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=C' "  grep -E '[a-z]' \"\$1\"" '}'
-  run_case grep-local-c 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 1 grep call(s), 0 not regex (-F/-P), 1 under a C locale, 0 unresolved, 0 marked' ''
+  run_case grep-local-c 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 1 grep call(s), 0 not regex (-F/-P), 1 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put grep-export-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' "grep -E '[a-z]' f" "grep -E '[A-Z]' f" "grep '[^0-9]' f" "grep -E '[0-9a-f]' f"
-  run_case grep-export-c 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 4 grep call(s), 0 not regex (-F/-P), 4 under a C locale, 0 unresolved, 0 marked' ''
+  run_case grep-export-c 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 4 grep call(s), 0 not regex (-F/-P), 4 under a C locale, 0 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   # An operand the lint cannot read is counted, not reported.
   put grep-unresolved scripts/a.sh '#!/usr/bin/env bash' 'grep -f pats.txt f' 'grep "${flags[@]}" -e foo f' 'grep -E "$1" f' 'grep -E "$(cat p)" f' 'grep -E "${undefined_re}" f' "grep -E 'v[0-9]' f"
-  run_case grep-unresolved 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 6 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 5 unresolved, 0 marked' ''
+  run_case grep-unresolved 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 6 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 5 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   # An option held in a plain variable may stand where the pattern seems to
   # be; a variable in a pattern position, or holding no option, is followed.
   put grep-option-in-variable scripts/a.sh '#!/usr/bin/env bash' "opt='-i'" "grep \"\${opt}\" '[b-c]' f" "grep \$opt '[d-e]' f" "grep -E 'v[0-9]' f"
-  run_case grep-option-in-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 3 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 2 unresolved, 0 marked' ''
+  run_case grep-option-in-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 3 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 2 unresolved, 0 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put grep-pattern-variable-read scripts/a.sh '#!/usr/bin/env bash' "re='-[f-g]'" "word='[h-i]'" 'grep -e "$re" f' 'grep -E -- "${re}" f' 'grep "$word" f'
   run_case grep-pattern-variable-read 1 '' "DIR/scripts/a.sh:4: grep range [f-g] (through re) follows the locale
@@ -459,10 +459,10 @@ DIR/scripts/a.sh:6: grep range [h-i] (through word) follows the locale$(footer 3
   # The reasoned marker on the line above exempts the call; a marker with no
   # reason, or one that exempts nothing, is itself a finding.
   put grep-marker-reason scripts/a.sh '#!/usr/bin/env bash' '# regex-range-ascii: locale-bound: probes the locale on purpose' "LC_ALL=\"\${loc}\" grep -E '^[a-z]\$' f"
-  run_case grep-marker-reason 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 1 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 1 marked' ''
+  run_case grep-marker-reason 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 1 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 1 marked; 0 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put grep-pipeline-marker scripts/a.sh '#!/usr/bin/env bash' "count=\"\$(printf '%s\\n' a |" "  sed 's/x//' |" '  # regex-range-ascii: locale-bound: shares its class with the sed' "  grep --count -E '[^A-Za-z]' || true)\"" "grep -E '[0-9]' f"
-  run_case grep-pipeline-marker 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 2 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 1 marked' ''
+  run_case grep-pipeline-marker 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 2 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 1 marked; 1 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
   put grep-marker-no-reason scripts/a.sh '#!/usr/bin/env bash' '# regex-range-ascii: locale-bound:' "grep -E '[a-c]' f"
   run_case grep-marker-no-reason 1 '' "DIR/scripts/a.sh:2: marker has no reason
@@ -483,6 +483,84 @@ DIR/scripts/a.sh:3: grep range [d-e] follows the locale$(footer 2)"
 
   put grep-marker-under-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' '# regex-range-ascii: locale-bound: deliberate' "grep -E '[a-z]' f"
   run_case grep-marker-under-c 1 '' "DIR/scripts/a.sh:3: marker exempts nothing$(footer 1)"
+
+  # GNU sed follows GNU grep's range rules: a letter endpoint or a negated
+  # bracket follows the locale, a positive digit-only bracket does not.
+  put sed-letter-range scripts/a.sh '#!/usr/bin/env bash' "sed -E 's/[a-z]+//' f"
+  run_case sed-letter-range 1 '' "DIR/scripts/a.sh:2: sed range [a-z] follows the locale$(footer 1)"
+
+  put sed-negated-digit scripts/a.sh '#!/usr/bin/env bash' "sed --quiet '/^[^0-9]*\$/p' f"
+  run_case sed-negated-digit 1 '' "DIR/scripts/a.sh:2: sed range [^0-9] follows the locale$(footer 1)"
+
+  put sed-mixed-range scripts/a.sh '#!/usr/bin/env bash' "sed -e 's/[0-9a-f]\\{40\\}//' f"
+  run_case sed-mixed-range 1 '' "DIR/scripts/a.sh:2: sed range [0-9a-f] follows the locale$(footer 1)"
+
+  put sed-digit-only scripts/a.sh '#!/usr/bin/env bash' "sed -E 's/^v[0-9]+//' f" "sed 's/Q[1-4]//' f" "sed -E 's/[0-9.]+//' f"
+  run_case sed-digit-only 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 3 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
+
+  # Not a call (`command -v`), no range, a class: none reported.
+  put sed-ordinary scripts/a.sh '#!/usr/bin/env bash' 'command -v sed >/dev/null' "sed 's/x/y/' f" "sed -n '1p' f" "sed --quiet '/[[:alpha:]]/p' f" "sed -E 's/v[0-9]+//' f"
+  run_case sed-ordinary 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 4 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
+
+  # The whole script is read: a bracket in replacement text is reported
+  # although sed prints it literally. The marker covers such a call.
+  put sed-replacement-read scripts/a.sh '#!/usr/bin/env bash' "sed 's/x/[b-d]/' f"
+  run_case sed-replacement-read 1 '' "DIR/scripts/a.sh:2: sed range [b-d] follows the locale$(footer 1)"
+
+  put sed-c-prefix scripts/a.sh '#!/usr/bin/env bash' "LC_ALL=C sed -E 's/[a-z]//' f" "env LC_ALL=C.UTF-8 sed 's/[A-Z]//' f" "LC_ALL=C command sed 's/[b-c]//' f"
+  run_case sed-c-prefix 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 3 sed call(s), 3 under a C locale, 0 unresolved, 0 marked' ''
+
+  put sed-local-c scripts/a.sh '#!/usr/bin/env bash' 'f() {' '  local LC_ALL=C' "  sed 's/[a-z]//' \"\$1\"" '}'
+  run_case sed-local-c 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 1 sed call(s), 1 under a C locale, 0 unresolved, 0 marked' ''
+
+  put sed-export-c scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' "sed 's/[a-z]//' f" "sed '/[^0-9]/d' f"
+  run_case sed-export-c 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 2 sed call(s), 2 under a C locale, 0 unresolved, 0 marked' ''
+
+  put sed-non-c-prefix scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' "LC_ALL=en_US.UTF-8 sed 's/[g-k]//' f"
+  run_case sed-non-c-prefix 1 '' "DIR/scripts/a.sh:3: sed range [g-k] follows the locale$(footer 1)"
+
+  put sed-env-unset scripts/a.sh '#!/usr/bin/env bash' 'export LC_ALL=C' "env -u LC_ALL sed 's/[n-o]//' f"
+  run_case sed-env-unset 1 '' "DIR/scripts/a.sh:3: sed range [n-o] follows the locale$(footer 1)"
+
+  put sed-through-variable scripts/a.sh '#!/usr/bin/env bash' "re='s/[A-Z_]+//'" 'sed -E -- "${re}" f'
+  run_case sed-through-variable 1 '' "DIR/scripts/a.sh:3: sed range [A-Z_] (through re) follows the locale$(footer 1)"
+
+  # Where the script is: -e operands (alone, attached, long, ending a
+  # cluster, repeated), else the first operand past options that take
+  # no argument (-i SUFFIX ends a cluster), -l N, and --. With -e, a
+  # later operand is a file.
+  put sed-options scripts/a.sh '#!/usr/bin/env bash' \
+    "sed -n -e 's/[a-c]//' f" \
+    "sed --expression='s/[d-e]//' f" \
+    "sed -ne 's/[f-g]//' f" \
+    "sed -i.bak 's/[h-i]//' f" \
+    "sed -ni 's/[j-k]//' f" \
+    "sed -l 80 's/[l-m]//' f" \
+    "sed --line-length 80 's/[p-q]//' f" \
+    "sed -E --posix -- 's/[r-s]//' f" \
+    "sed -e 's/x//' -e 's/[t-u]//' f" \
+    "sed -e 's/x//' '[v-w]' f"
+  run_case sed-options 1 '' "DIR/scripts/a.sh:2: sed range [a-c] follows the locale
+DIR/scripts/a.sh:3: sed range [d-e] follows the locale
+DIR/scripts/a.sh:4: sed range [f-g] follows the locale
+DIR/scripts/a.sh:5: sed range [h-i] follows the locale
+DIR/scripts/a.sh:6: sed range [j-k] follows the locale
+DIR/scripts/a.sh:7: sed range [l-m] follows the locale
+DIR/scripts/a.sh:8: sed range [p-q] follows the locale
+DIR/scripts/a.sh:9: sed range [r-s] follows the locale
+DIR/scripts/a.sh:10: sed range [t-u] follows the locale$(footer 9)"
+
+  put sed-unresolved scripts/a.sh '#!/usr/bin/env bash' 'sed -f script.sed f' 'sed --file=x.sed f' 'sed -E "$1" f' 'sed "$(cat p)" f' "sed 's/[0-9]//' f"
+  run_case sed-unresolved 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 5 sed call(s), 0 under a C locale, 4 unresolved, 0 marked' ''
+
+  put sed-option-in-variable scripts/a.sh '#!/usr/bin/env bash' "opt='-n'" "sed \"\${opt}\" 's/[b-c]//' f" "sed -E 's/v[0-9]//' f"
+  run_case sed-option-in-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 2 sed call(s), 0 under a C locale, 1 unresolved, 0 marked' ''
+
+  put sed-marker-reason scripts/a.sh '#!/usr/bin/env bash' '# regex-range-ascii: locale-bound: probes the locale on purpose' "LC_ALL=\"\${loc}\" sed -n '/^[a-z]\$/p' f"
+  run_case sed-marker-reason 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 1 sed call(s), 0 under a C locale, 0 unresolved, 1 marked' ''
+
+  put sed-marker-stale scripts/a.sh '#!/usr/bin/env bash' '# regex-range-ascii: locale-bound: deliberate' "sed 's/[0-9]//' f"
+  run_case sed-marker-stale 1 '' "DIR/scripts/a.sh:2: marker exempts nothing$(footer 1)"
 
   # The pattern is found among grep's options in each spelling; an option's
   # own argument is never read as the pattern.
