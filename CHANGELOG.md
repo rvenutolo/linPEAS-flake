@@ -6,6 +6,19 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261017-c2b70018] - 2026-10-17
+
+### Chores
+- Bump linpeas to 20261017-c2b70018 ([#1331](https://github.com/rvenutolo/linPEAS-flake/pull/1331))
+
+### Features
+- Read sed scripts in regex-range-ascii ([#1330](https://github.com/rvenutolo/linPEAS-flake/pull/1330))
+
+### Fixes
+- Fail closed on NUL-bearing or unreadable doc-anchors reads ([#1329](https://github.com/rvenutolo/linPEAS-flake/pull/1329))
+- Settle locale-bound sed ranges and refuse non-ASCII headings ([#1328](https://github.com/rvenutolo/linPEAS-flake/pull/1328))
+- Read grep patterns in regex-range-ascii ([#1325](https://github.com/rvenutolo/linPEAS-flake/pull/1325))
+
 ## [20261015-57155ef8] - 2026-10-16
 
 ### Chores
