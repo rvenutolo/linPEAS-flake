@@ -21,6 +21,10 @@ manifest digest-pinning rules and is indexed below like any other
 rule-bearing page. The array in
 `scripts/check-orphan-invariants.sh` is the authoritative list.
 
+Entry paths are ASCII-only and are read under a C locale: a doc whose path
+holds a non-ASCII letter never matches an entry, so it is reported as an
+unreferenced doc in every locale.
+
 Each entry carries an `enforcer: ...; ci: ...; hook: ...` annotation
 that `scripts/refresh-enforcement-matrix.sh` renders into
 `security/enforcement-matrix.md`. `ci:` names the `ci.yml` job(s) that

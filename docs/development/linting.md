@@ -76,6 +76,17 @@ hook and as a member check of the `lint-doc-invariants` CI job; a run that
 finds zero anchor links fails unless `LINT_ALLOW_EMPTY_SCAN=1` states that
 the empty scan is deliberate.
 
+Slugs are computed under a C locale, so a non-ASCII byte in a heading is
+deleted whatever locale the caller runs in. A heading whose text holds a
+non-ASCII letter, mark or digit must carry an explicit `<a name="...">`
+anchor on the heading line, because GitHub keeps the character in its slug
+while mkdocs folds it to ASCII and no generated slug resolves on both; a
+heading without one is a blocking `[non-ascii-heading]` finding. Non-ASCII
+punctuation such as `—` or `→` is deleted by both renderers and stays
+allowed. Finding such a heading needs `grep --perl-regexp` to read UTF-8
+under `C.UTF-8`; when it cannot, the lint exits 2 instead of passing, and
+it exits 2 as well when it cannot read a source file's headings.
+
 ## Config schema validation
 
 `renovate.json`, every workflow YAML, every composite-action YAML and
@@ -701,6 +712,14 @@ under `LC_ALL=C`, as a prefix assignment or in a function or script that
 sets a C locale. A call that must follow the locale, such as a probe of
 it, carries the marker `# regex-range-ascii: locale-bound: <reason>` on
 the line directly above it.
+
+GNU `sed` follows the same range rules as GNU `grep`: a positive bracket
+of digit ranges is ASCII in every locale, while a letter endpoint or a
+negation follows the locale. A `sed` script whose range is of the second
+kind runs under `LC_ALL=C`. `gawk` matches a range by code point in every
+locale (also under `--posix`, with `IGNORECASE`, and in a dynamic regex),
+so an `awk` range needs no pin. `check-regex-range-ascii.sh` reads neither
+`sed` nor `awk`; the rules here are the only guard for those.
 
 Other matchers measured on this tree do not need this: a positive
 `[0-9]` is ASCII in GNU `grep`, `sed`, `gawk`, `mawk`, `jq` and `yq` in
