@@ -102,6 +102,22 @@ function scratch_anchor_root() {
   printf '%s\n' "${root}"
 }
 
+# @description Build a PATH dir whose `awk` fails the Nth call that passes
+# `blank=0` and names a `docs/target.md`, and runs the real awk otherwise.
+# A POSIX sh shim: a bash one would source BASH_ENV, whose profile runs
+# awk, and recurse into itself. Prints the dir.
+# @arg $1 N
+function target_awk_shim() {
+  local dir
+  dir="$(mktemp --directory)"
+  printf '0\n' >"${dir}/count"
+  # shellcheck disable=SC2016 # the shim body expands when the shim runs, not here
+  printf '#!/bin/sh\nz=0; t=0\nfor a in "$@"; do\n  [ "$a" = blank=0 ] && z=1\n  case "$a" in */docs/target.md) t=1 ;; esac\ndone\nif [ "$z" = 1 ] && [ "$t" = 1 ]; then\n  n=$(($(cat %s) + 1))\n  printf "%%s\\n" "$n" >%s\n  [ "$n" = %s ] && exit 2\nfi\nexec %s "$@"\n' \
+    "${dir}/count" "${dir}/count" "$1" "$(command -v awk)" >"${dir}/awk"
+  chmod 755 -- "${dir}/awk"
+  printf '%s\n' "${dir}"
+}
+
 function main() {
   # Two links, one cross-file and one same-file, so two target files are
   # resolved and neither heading loses a character to slugging.
@@ -261,17 +277,68 @@ function main() {
   rm --recursive --force -- "${root}" "${shim_dir}"
 
   # A NUL byte makes grep call the text binary and print a notice instead
-  # of matches, which reads as a pass. The text passes through a bash
-  # variable, which drops the NUL before grep sees it, so the heading is
-  # still reported; --binary-files=text is a second guard.
-  root="$(scratch_anchor_root 'target' $'# Target\n\n## Café\n\nBody.')"
-  printf '# Source\n\nSee [x](docs/target.md#target).\n\0\n' >"${root}/source.md"
-  printf '# Target\n\n## Ünïcode\n\0\n' >"${root}/docs/target.md"
-  run_scenario 'NUL byte in a source does not hide a non-ASCII heading' \
-    "${root}" $'source.md\ndocs/target.md' 1 \
-    '[non-ascii-heading] docs/target.md:3: heading "Ünïcode" holds a non-ASCII letter, mark or digit;' \
-    '' en_US.UTF-8
+  # of its links, and a bash variable drops it, so a NUL-bearing file is
+  # refused. The clean second source keeps the run's link tally nonzero:
+  # without it the empty-scan floor, not the refusal, ends the run.
+  root="$(scratch_anchor_root 'target' $'# Target\n\nBody.')"
+  printf '# Source\n\nSee [x](docs/target.md#missing).\n\0\n' >"${root}/source.md"
+  printf 'See [y](docs/target.md#target).\n' >"${root}/other.md"
+  run_scenario 'NUL byte in a source is a could-not-run' \
+    "${root}" $'source.md\nother.md' 2 \
+    'refusing source.md: it holds a NUL byte'
   rm --recursive --force -- "${root}"
+
+  # A NUL-bearing link target is refused too, before its headings are read.
+  root="$(scratch_anchor_root 'target' $'# Target\n\nBody.')"
+  printf '# Target\n\0\n' >"${root}/docs/target.md"
+  run_scenario 'NUL byte in a link target is a could-not-run' \
+    "${root}" 'source.md' 2 \
+    'refusing docs/target.md: it holds a NUL byte'
+  rm --recursive --force -- "${root}"
+
+  # A byte that is not UTF-8 makes grep call the text binary in a UTF-8
+  # locale, C.UTF-8 included, and print no links, so such a file is
+  # refused too.
+  root="$(scratch_anchor_root 'target' $'# Target\n\nBody.')"
+  printf '# Source\n\nSee [\xe9](docs/target.md#missing).\n' >"${root}/source.md"
+  printf 'See [y](docs/target.md#target).\n' >"${root}/other.md"
+  run_scenario 'non-UTF-8 byte in a source is a could-not-run' \
+    "${root}" $'source.md\nother.md' 2 \
+    'refusing source.md: it is not valid UTF-8' '' C.UTF-8
+  rm --recursive --force -- "${root}"
+  root="$(scratch_anchor_root 'target' $'# Target\n\nBody.')"
+  printf '# Target\n\n\xe9.\n' >"${root}/docs/target.md"
+  run_scenario 'non-UTF-8 byte in a link target is a could-not-run' \
+    "${root}" 'source.md' 2 \
+    'refusing docs/target.md: it is not valid UTF-8' '' C.UTF-8
+  rm --recursive --force -- "${root}"
+
+  # A target nothing can read must end the run, not read as a target
+  # with no headings and report every link into it as a miss.
+  root="$(scratch_anchor_root 'target' $'# Target\n\nBody.')"
+  chmod 000 -- "${root}/docs/target.md"
+  run_scenario 'unreadable link target is a could-not-run' \
+    "${root}" 'source.md' 2 \
+    'could not read docs/target.md to check it for a NUL byte'
+  chmod 644 -- "${root}/docs/target.md"
+  rm --recursive --force -- "${root}"
+
+  # An awk failure on a target that grep can read: the heading read and
+  # the lossy count each run awk on the target with `blank=0`, in that
+  # order, so the shim fails the Nth such call alone.
+  local target_shim_dir
+  target_shim_dir="$(target_awk_shim 1)"
+  root="$(scratch_anchor_root 'target' $'# Target\n\nBody.')"
+  PATH="${target_shim_dir}:${PATH}" run_scenario 'awk failure reading target headings is a could-not-run' \
+    "${root}" 'source.md' 2 \
+    'could not read docs/target.md for headings'
+  rm --recursive --force -- "${root}" "${target_shim_dir}"
+  target_shim_dir="$(target_awk_shim 2)"
+  root="$(scratch_anchor_root 'target' $'# Target\n\nBody.')"
+  PATH="${target_shim_dir}:${PATH}" run_scenario 'awk failure counting lossy target headings is a could-not-run' \
+    "${root}" 'source.md' 2 \
+    'could not read docs/target.md for its lossy-heading count'
+  rm --recursive --force -- "${root}" "${target_shim_dir}"
 
   # An awk read failure while collecting headings must end the run, not
   # read as "no headings". Only the blank-mode call of without_fences
