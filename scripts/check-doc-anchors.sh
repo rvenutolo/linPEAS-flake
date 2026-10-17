@@ -55,7 +55,7 @@
 # enumerated, a source could not be read, the run covered nothing, or
 # grep --perl-regexp under C.UTF-8 cannot read UTF-8 (startup probe), a
 # source's or link target's headings cannot be read, or a source or link
-# target holds a NUL byte or cannot be read.
+# target holds a NUL byte, is not valid UTF-8, or cannot be read.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -250,12 +250,13 @@ else
   fi
 fi
 
-# @description Exit 2 when a file holds a NUL byte or cannot be read. grep
-# calls NUL-bearing text binary and prints a notice in place of its
-# matches, and a bash variable drops the byte, so the reads below would
-# check such a file only in part.
+# @description Exit 2 when a file holds a NUL byte, is not valid UTF-8, or
+# cannot be read. grep calls such text binary and prints a notice in place
+# of its matches, and a bash variable drops a NUL, so the reads below would
+# check such a file only in part. `.` matches a NUL under
+# --binary-files=text, so the encoding check alone does not find one.
 # @arg $1 file  @arg $2 name to report
-function refuse_nul() {
+function refuse_binary() {
   local rc=0
   LC_ALL=C grep --quiet --binary-files=text --perl-regexp '\x00' -- "$1" || rc=$?
   if ((rc == 0)); then
@@ -263,6 +264,15 @@ function refuse_nul() {
     exit 2
   elif ((rc > 1)); then
     printf '%s: could not read %s to check it for a NUL byte\n' "${0##*/}" "$2" >&2
+    exit 2
+  fi
+  rc=0
+  LC_ALL=C.UTF-8 grep --quiet --binary-files=text --line-regexp --invert-match '.*' -- "$1" || rc=$?
+  if ((rc == 0)); then
+    printf '%s: refusing %s: it is not valid UTF-8\n' "${0##*/}" "$2" >&2
+    exit 2
+  elif ((rc > 1)); then
+    printf '%s: could not read %s to check its encoding\n' "${0##*/}" "$2" >&2
     exit 2
   fi
 }
@@ -311,9 +321,10 @@ for src_rel in "${SOURCES[@]}"; do
       "${0##*/}" "${src_rel}" >&2
     exit 2
   fi
-  # A NUL-bearing source reads as matching with no links printed, so it is
-  # refused here, once grep has shown the file can be read.
-  refuse_nul "${src_abs}" "${src_rel}"
+  # A NUL-bearing or non-UTF-8 source reads as matching with no links
+  # printed, so it is refused here, once grep has shown the file can be
+  # read.
+  refuse_binary "${src_abs}" "${src_rel}"
 
   heading_rc=0
   heading_out="$(non_ascii_headings "${src_abs}")" || heading_rc=$?
@@ -365,7 +376,7 @@ for src_rel in "${SOURCES[@]}"; do
     fi
     if [[ -z ${anchor_cache[${target_abs}]+set} ]]; then
       target_rel="$(realpath --relative-to="${REPO_ROOT}" -- "${target_abs}")"
-      refuse_nul "${target_abs}" "${target_rel}"
+      refuse_binary "${target_abs}" "${target_rel}"
       target_headings="$(headings_of "${target_abs}")" || {
         printf '%s: could not read %s for headings\n' "${0##*/}" "${target_rel}" >&2
         exit 2
