@@ -4,12 +4,12 @@
 # @description Lint: a bash `[[ … =~ … ]]` regex, a GNU `grep` regex
 # pattern, or a GNU `sed` script, in `scripts/*.sh`, `scripts/lib/*.sh`
 # or `tests/*.sh` must not hold a locale-bound range between ASCII
-# letters or digits unless it is matched under a C locale. A range follows the locale's collation: under
-# `en_US.UTF-8` `[0-9]` in a bash regex also matches digits such as `٣`
-# and `５`, and `[a-f]` matches `é`, while the CI runner's `C.UTF-8`
-# matches ASCII only. A validator written with a range therefore passes on
-# a developer's machine a value CI refuses, and the difference is
-# invisible to CI.
+# letters or digits unless it is matched under a C locale. A range
+# follows the locale's collation: under `en_US.UTF-8` `[0-9]` in a bash
+# regex also matches digits such as `٣` and `５`, and `[a-f]` matches
+# `é`, while the CI runner's `C.UTF-8` matches ASCII only. A validator
+# written with a range therefore passes on a developer's machine a value
+# CI refuses, and the difference is invisible to CI.
 #
 # In bash, every such range is reported. GNU grep keeps a positive bracket
 # whose ranges all run between digits (`[0-9]`, `Q[1-4]`, `[0-9.]`) ASCII
@@ -43,17 +43,18 @@
 # The `=~` tests are read from the `shfmt --tojson` parse tree, and the
 # operator from the source text between the two operands, since shfmt
 # releases encode the operator differently. A file is parsed when it
-# holds `~`, holds the marker text, or holds a `grep`, `egrep`, `fgrep` or
-# `sed` word together with range-shaped text (a bracket-aware match:
+# holds `~`, holds the marker text, or holds a `grep`, `egrep`, `fgrep`
+# or `sed` word together with range-shaped text (a bracket-aware match:
 # classes, equivalence classes, collating symbols, and a leading `]` or
 # `^]`); any other file is not parsed. That match reads line by line, so
 # a grep or sed range split by a backslash-newline inside its bracket,
-# in a file with no other sign, is not seen. A regex held in a variable is read through the
-# assignments to that variable and the items of a `for` loop over it in
-# the same file, following variables they name, three levels deep.
-# A quoted operand (`=~ "[0-9]"`) is a literal match, but is read like
-# an unquoted one and reported; so is a function whose `local LC_ALL`
-# value is in double quotes. Unquote it or spell the class out.
+# in a file with no other sign, is not seen. A regex held in a variable
+# is read through the assignments to that variable and the items of a
+# `for` loop over it in the same file, following variables they name,
+# three levels deep. A quoted operand (`=~ "[0-9]"`) is a literal match,
+# but is read like an unquoted one and reported; so is a function whose
+# `local LC_ALL` value is in double quotes. Unquote it or spell the
+# class out.
 #
 # A grep call is a command whose word, after leading `command` or
 # `builtin` words and their options and `env` with its options and
@@ -103,17 +104,18 @@
 # N grep call(s), N not regex (-F/-P), N under a C locale, N unresolved,
 # N marked; N sed call(s), N under a C locale, N unresolved, N marked`.
 #
-# Not read: a regex or pattern that reaches the test or call as a function
-# argument, from a function's output or a command substitution, from an
-# array assigned as a list (`re=(…)`), from a sourced file, or from a
-# `-f` file or a sed `-f` script file; a call whose options come from an array or `$@` expansion;
-# an abbreviated long option (`--regex=`) or a separate-argument long
-# option outside the listed set (`--group-separator SEP`); a regex inside
-# `eval` or `bash -c` text; grep in workflow and composite-action `run:`
-# blocks, which run only on the runner, whose locale is `C.UTF-8`; grep
-# run through a wrapper command (`xargs`, `find -exec`, `timeout`, `nice`,
-# `sudo` and the like), which is neither read nor counted, and so is sed
-# run through one; and `awk`, `jq` and `yq` patterns.
+# Not read: a regex or pattern that reaches the test or call as a
+# function argument, from a function's output or a command substitution,
+# from an array assigned as a list (`re=(…)`), from a sourced file, or
+# from a `-f` file or a sed `-f` script file; a call whose options come
+# from an array or `$@` expansion; an abbreviated long option
+# (`--regex=`) or a separate-argument long option outside the listed set
+# (`--group-separator SEP`); a regex inside `eval` or `bash -c` text;
+# grep in workflow and composite-action `run:` blocks, which run only on
+# the runner, whose locale is `C.UTF-8`; grep run through a wrapper
+# command (`xargs`, `find -exec`, `timeout`, `nice`, `sudo` and the
+# like), which is neither read nor counted, and so is sed run through
+# one; and `awk`, `jq` and `yq` patterns.
 #
 # The summary counts each grep or sed call once, in the first bucket it
 # fits: not regex (`-F`/`-P`, grep only), then under a C locale, then
@@ -572,8 +574,9 @@ function main() {
     # or sed range is read only from the file's own text. The bracket
     # text may hold classes, equivalence classes, collating symbols or a
     # leading `]` before the range, as grep_range reads them. The match
-    # is line by line, so a range split by a backslash-newline inside its bracket is
-    # not seen here, and a file holding no other sign is not parsed.
+    # is line by line, so a range split by a backslash-newline inside
+    # its bracket is not seen here, and a file holding no other sign is
+    # not parsed.
     if ! grep --quiet --fixed-strings -- '~' "${file}" &&
       ! grep --quiet --fixed-strings -- "${MARKER}" "${file}" &&
       ! { grep --quiet --word-regexp --regexp=grep --regexp=egrep --regexp=fgrep --regexp=sed -- "${file}" &&
@@ -617,8 +620,9 @@ function main() {
       fi
     done <<<"${records}"
 
-    # G and S records: call id, line, mode, C locale, unresolved, pattern start
-    # and end (-1 when the call has no pattern operand), option position.
+    # G and S records: call id, line, mode, C locale, unresolved,
+    # pattern start and end (-1 when the call has no pattern operand),
+    # option position.
     while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8 f9; do
       [[ ${kind} == G || ${kind} == S ]] || continue
       call_tool["${f2}"]="${kind}"
