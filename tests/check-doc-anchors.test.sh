@@ -239,6 +239,35 @@ function main() {
     'grep --perl-regexp under C.UTF-8 does not read é as a letter'
   rm --recursive --force -- "${root}" "${shim_dir}"
 
+  # A NUL byte makes grep call the text binary and print a notice instead
+  # of matches, which reads as a pass. The heading is still reported.
+  root="$(scratch_anchor_root 'target' $'# Target\n\n## Café\n\nBody.')"
+  printf '# Source\n\nSee [x](docs/target.md#target).\n\0\n' >"${root}/source.md"
+  printf '# Target\n\n## Ünïcode\n\0\n' >"${root}/docs/target.md"
+  run_scenario 'NUL byte in a source does not hide a non-ASCII heading' \
+    "${root}" $'source.md\ndocs/target.md' 1 \
+    '[non-ascii-heading] docs/target.md:3: heading "Ünïcode" holds a non-ASCII letter, mark or digit;' \
+    '' en_US.UTF-8
+  rm --recursive --force -- "${root}"
+
+  # An awk read failure while collecting headings must end the run, not
+  # read as "no headings". Only the blank-mode call of without_fences
+  # passes `blank=1`, so the shim breaks that call alone.
+  local awk_shim_dir real_awk
+  awk_shim_dir="$(mktemp --directory)"
+  real_awk="$(command -v awk)"
+  # A POSIX sh shim: a bash one would source BASH_ENV, whose profile runs
+  # awk, and recurse into itself.
+  # shellcheck disable=SC2016 # the shim body expands when the shim runs, not here
+  printf '#!/bin/sh\nfor a in "$@"; do [ "$a" = blank=1 ] && exit 2; done\nexec %s "$@"\n' \
+    "${real_awk}" >"${awk_shim_dir}/awk"
+  chmod 755 -- "${awk_shim_dir}/awk"
+  root="$(scratch_anchor_root 'other' $'# Target\n\n## Other\n\nBody.')"
+  PATH="${awk_shim_dir}:${PATH}" run_scenario 'awk failure reading headings is a could-not-run' \
+    "${root}" $'source.md\ndocs/target.md' 2 \
+    'grep failed reading source.md for headings'
+  rm --recursive --force -- "${root}" "${awk_shim_dir}"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if [[ ${failures} -gt 0 ]]; then

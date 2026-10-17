@@ -166,11 +166,16 @@ function lossy_heading_count() {
 # @exitcode 2 grep could not read the text
 function non_ascii_headings() {
   local -r f="$1"
-  local hits rc=0
+  local hits text rc=0
   # PCRE reads code points only in a UTF-8 locale; the startup probe
   # proves this grep does.
-  hits="$(without_fences "${f}" 1 |
-    LC_ALL=C.UTF-8 grep --line-number --perl-regexp \
+  # The text is read into a variable first: in a pipeline an awk read
+  # failure leaves grep an empty input, and "no match" would hide it.
+  # --binary-files=text keeps a NUL byte from turning the result into a
+  # "binary file matches" notice that reads as a pass.
+  text="$(without_fences "${f}" 1)" || return 2
+  hits="$(printf '%s\n' "${text}" |
+    LC_ALL=C.UTF-8 grep --line-number --perl-regexp --binary-files=text \
       '^#+[[:space:]]+(?!.*<a[[:space:]]+name=")(?=.*[\p{L}\p{M}\p{N}](?<=[^\x00-\x7F]))')" || rc=$?
   ((rc > 1)) && return 2
   [[ -n ${hits} ]] || return 0
@@ -245,19 +250,6 @@ for src_rel in "${SOURCES[@]}"; do
   src_abs="${REPO_ROOT}/${src_rel}"
   [[ -f ${src_abs} ]] || continue
   sources_scanned=$((sources_scanned + 1))
-
-  heading_rc=0
-  heading_out="$(non_ascii_headings "${src_abs}")" || heading_rc=$?
-  if ((heading_rc != 0)); then
-    printf '%s: grep failed reading %s for headings\n' "${0##*/}" "${src_rel}" >&2
-    exit 2
-  fi
-  while IFS=$'\t' read -r h_line h_text; do
-    [[ -z ${h_line} ]] && continue
-    printf '[non-ascii-heading] %s:%s: heading "%s" holds a non-ASCII letter; add an explicit <a name="..."> anchor (GitHub and mkdocs slug it differently)\n' \
-      "${src_rel}" "${h_line}" "${h_text}" >&2
-    failures=$((failures + 1))
-  done <<<"${heading_out}"
   src_dir="$(dirname -- "${src_abs}")"
 
   # `--only-matching` emits one line per link (with its line number), so a
@@ -277,6 +269,19 @@ for src_rel in "${SOURCES[@]}"; do
       "${0##*/}" "${src_rel}" >&2
     exit 2
   fi
+
+  heading_rc=0
+  heading_out="$(non_ascii_headings "${src_abs}")" || heading_rc=$?
+  if ((heading_rc != 0)); then
+    printf '%s: grep failed reading %s for headings\n' "${0##*/}" "${src_rel}" >&2
+    exit 2
+  fi
+  while IFS=$'\t' read -r h_line h_text; do
+    [[ -z ${h_line} ]] && continue
+    printf '[non-ascii-heading] %s:%s: heading "%s" holds a non-ASCII letter, mark or digit; add an explicit <a name="..."> anchor (GitHub and mkdocs slug it differently)\n' \
+      "${src_rel}" "${h_line}" "${h_text}" >&2
+    failures=$((failures + 1))
+  done <<<"${heading_out}"
 
   while IFS= read -r match; do
     [[ -z ${match} ]] && continue
