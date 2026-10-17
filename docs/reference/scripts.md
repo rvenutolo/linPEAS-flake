@@ -1455,8 +1455,8 @@ future edits cannot silently weaken it.
 
 ### scripts/check-regex-range-ascii.sh
 
-Lint: a bash `[[ … =~ … ]]` regex, or a GNU `grep` regex
-pattern, in `scripts/*.sh`, `scripts/lib/*.sh` or `tests/*.sh` must not
+Lint: a bash `[[ … =~ … ]]` regex, a GNU `grep` regex
+pattern, or a GNU `sed` script, in `scripts/*.sh`, `scripts/lib/*.sh` or `tests/*.sh` must not
 hold a locale-bound range between ASCII letters or digits unless it is
 matched under a C locale. A range follows the locale's collation: under
 `en_US.UTF-8` `[0-9]` in a bash regex also matches digits such as `٣`
@@ -1469,7 +1469,8 @@ In bash, every such range is reported. GNU grep keeps a positive bracket
 whose ranges all run between digits (`[0-9]`, `Q[1-4]`, `[0-9.]`) ASCII
 in every locale, so only a bracket that holds a letter endpoint
 (`[a-z]`, `[0-9a-f]`, `[A-Za-z0-9._/-]`) or is negated (`[^0-9]`: under
-`en_US.UTF-8` `٣` falls outside it) is reported for grep.
+`en_US.UTF-8` `٣` falls outside it) is reported for grep. GNU sed follows
+the same bracket rules, so a sed script is judged the same way.
 
 A test is matched under a C locale when it follows a
 `local LC_ALL=C` or `local LC_ALL=C.UTF-8` that is a direct statement
@@ -1496,8 +1497,8 @@ a regex is joined before it is read. Otherwise the class is spelled out
 The `=~` tests are read from the `shfmt --tojson` parse tree, and the
 operator from the source text between the two operands, since shfmt
 releases encode the operator differently. A file is parsed when it
-holds `~`, holds the marker text, or holds a `grep`, `egrep` or `fgrep`
-word together with range-shaped text (a bracket-aware match: classes,
+holds `~`, holds the marker text, or holds a `grep`, `egrep`, `fgrep` or
+`sed` word together with range-shaped text (a bracket-aware match: classes,
 equivalence classes, collating symbols, and a leading `]` or `^]`); any
 other file is not parsed. That match reads line by line, so a grep range
 split by a backslash-newline inside its bracket, in a file with no other
@@ -1531,7 +1532,16 @@ in single quotes is still read as an expansion, as for `=~`: a
 single-quoted `$name` is followed, and a backtick counts the call as
 unresolved.
 
-A grep call that is locale-bound on purpose carries the marker
+A sed call is found as a grep call is: the same leading `command`,
+`builtin` and `env` handling, and the same prefix and scope C-locale
+rules. Its scripts are its `-e`/`--expression` operands, or, when there
+are none and no `-f`/`--file`, its first operand; `-f`/`--file` makes the
+call unresolved. `-l`/`--line-length` take an argument, and `-i` takes
+the rest of its word as a backup suffix. The whole script text is read,
+so a range in replacement text or in a `y` command is reported too; mark
+such a call.
+
+A grep or sed call that is locale-bound on purpose carries the marker
 `# regex-range-ascii: locale-bound: <reason>` on the line directly
 above the line its command starts on (inside a pipeline too); the word
 is exactly `locale-bound`, so `locale-boundary` is not a marker. A marker
@@ -1540,23 +1550,24 @@ reported. The marker never exempts a `=~` test. A marker-shaped line
 inside a heredoc is read as a marker.
 
 Findings print sorted by line within a file, ties broken by message
-text. The final line is the summary: `regex-range-ascii: ok — scanned N file(s), N =~ test(s), N with a regex in a variable, N under a C locale; N grep call(s), N not regex (-F/-P), N under a C locale, N unresolved, N marked`.
+text. The final line is the summary: `regex-range-ascii: ok — scanned N file(s), N =~ test(s), N with a regex in a variable, N under a C locale; N grep call(s), N not regex (-F/-P), N under a C locale, N unresolved, N marked; N sed call(s), N under a C locale, N unresolved, N marked`.
 
 Not read: a regex or pattern that reaches the test or call as a function
 argument, from a function's output or a command substitution, from an
 array assigned as a list (`re=(…)`), from a sourced file, or from a
-`-f` file; a call whose options come from an array or `$@` expansion;
+`-f` file or a sed `-f` script file; a call whose options come from an array or `$@` expansion;
 an abbreviated long option (`--regex=`) or a separate-argument long
 option outside the listed set (`--group-separator SEP`); a regex inside
 `eval` or `bash -c` text; grep in workflow and composite-action `run:`
 blocks, which run only on the runner, whose locale is `C.UTF-8`; grep
 run through a wrapper command (`xargs`, `find -exec`, `timeout`, `nice`,
-`sudo` and the like), which is neither read nor counted; and `sed`,
-`awk`, `jq` and `yq` patterns.
+`sudo` and the like), which is neither read nor counted, and so is sed
+run through one; and `awk`, `jq` and `yq` patterns.
 
-The summary counts each grep call once, in the first bucket it fits: not
-regex (`-F`/`-P`), then under a C locale, then reported or marked when a
-range is found, then unresolved when a pattern or option cannot be read.
+The summary counts each grep or sed call once, in the first bucket it
+fits: not regex (`-F`/`-P`, grep only), then under a C locale, then
+reported or marked when a range is found, then unresolved when a pattern
+or option cannot be read.
 
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and TESTS_DIR_OVERRIDE
 (default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
