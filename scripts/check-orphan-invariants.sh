@@ -13,7 +13,7 @@
 #            has an index entry.
 #
 # Entries inside the index use paths RELATIVE TO docs/ (e.g.
-# `[security/foo.md](security/foo.md)`). Entry paths are ASCII-only: a path
+# `[security/foo.md](security/foo.md)`). Entry paths are lowercase ASCII: a path
 # with a non-ASCII letter is never an entry, so its doc reports
 # [unreferenced-doc] in every locale.
 #
