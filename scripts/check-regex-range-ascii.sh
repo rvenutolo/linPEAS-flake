@@ -2,9 +2,9 @@
 # scripts/check-regex-range-ascii.sh
 #
 # @description Lint: a bash `[[ … =~ … ]]` regex, a GNU `grep` regex
-# pattern, or a GNU `sed` script, in `scripts/*.sh`, `scripts/lib/*.sh` or `tests/*.sh` must not
-# hold a locale-bound range between ASCII letters or digits unless it is
-# matched under a C locale. A range follows the locale's collation: under
+# pattern, or a GNU `sed` script, in `scripts/*.sh`, `scripts/lib/*.sh`
+# or `tests/*.sh` must not hold a locale-bound range between ASCII
+# letters or digits unless it is matched under a C locale. A range follows the locale's collation: under
 # `en_US.UTF-8` `[0-9]` in a bash regex also matches digits such as `٣`
 # and `５`, and `[a-f]` matches `é`, while the CI runner's `C.UTF-8`
 # matches ASCII only. A validator written with a range therefore passes on
@@ -44,11 +44,11 @@
 # operator from the source text between the two operands, since shfmt
 # releases encode the operator differently. A file is parsed when it
 # holds `~`, holds the marker text, or holds a `grep`, `egrep`, `fgrep` or
-# `sed` word together with range-shaped text (a bracket-aware match: classes,
-# equivalence classes, collating symbols, and a leading `]` or `^]`); any
-# other file is not parsed. That match reads line by line, so a grep range
-# split by a backslash-newline inside its bracket, in a file with no other
-# sign, is not seen. A regex held in a variable is read through the
+# `sed` word together with range-shaped text (a bracket-aware match:
+# classes, equivalence classes, collating symbols, and a leading `]` or
+# `^]`); any other file is not parsed. That match reads line by line, so
+# a grep or sed range split by a backslash-newline inside its bracket,
+# in a file with no other sign, is not seen. A regex held in a variable is read through the
 # assignments to that variable and the items of a `for` loop over it in
 # the same file, following variables they name, three levels deep.
 # A quoted operand (`=~ "[0-9]"`) is a literal match, but is read like
@@ -85,7 +85,9 @@
 # call unresolved. `-l`/`--line-length` take an argument, and `-i` takes
 # the rest of its word as a backup suffix. The whole script text is read,
 # so a range in replacement text or in a `y` command is reported too; mark
-# such a call.
+# such a call. A sed script held in a variable is followed as a grep
+# pattern is, and a first operand that is a variable holding an option
+# makes the call unresolved.
 #
 # A grep or sed call that is locale-bound on purpose carries the marker
 # `# regex-range-ascii: locale-bound: <reason>` on the line directly
@@ -115,8 +117,8 @@
 #
 # The summary counts each grep or sed call once, in the first bucket it
 # fits: not regex (`-F`/`-P`, grep only), then under a C locale, then
-# reported or marked when a range is found, then unresolved when a pattern
-# or option cannot be read.
+# reported or marked when a range is found, then unresolved when a
+# pattern or option cannot be read.
 #
 # Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and TESTS_DIR_OVERRIDE
 # (default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
@@ -566,11 +568,11 @@ function main() {
   for file in "${files[@]}"; do
     # A file is parsed only if it can hold a finding: a `~` (the `=~`
     # operator, whose `=` and `~` a backslash-newline can separate), a
-    # marker, or a grep word beside a bracket range, since a grep range is
-    # read only from the file's own text. The bracket text may hold
-    # classes, equivalence classes, collating symbols or a leading `]`
-    # before the range, as grep_range reads them. The match is line by
-    # line, so a range split by a backslash-newline inside its bracket is
+    # marker, or a grep or sed word beside a bracket range, since a grep
+    # or sed range is read only from the file's own text. The bracket
+    # text may hold classes, equivalence classes, collating symbols or a
+    # leading `]` before the range, as grep_range reads them. The match
+    # is line by line, so a range split by a backslash-newline inside its bracket is
     # not seen here, and a file holding no other sign is not parsed.
     if ! grep --quiet --fixed-strings -- '~' "${file}" &&
       ! grep --quiet --fixed-strings -- "${MARKER}" "${file}" &&
@@ -615,7 +617,7 @@ function main() {
       fi
     done <<<"${records}"
 
-    # G records: call id, line, mode, C locale, unresolved, pattern start
+    # G and S records: call id, line, mode, C locale, unresolved, pattern start
     # and end (-1 when the call has no pattern operand), option position.
     while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8 f9; do
       [[ ${kind} == G || ${kind} == S ]] || continue

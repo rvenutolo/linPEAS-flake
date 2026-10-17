@@ -663,7 +663,7 @@ its input. In a `(( ))` condition the error reads as false.
 
 A script that puts text it did not compute itself into arithmetic
 first matches it against a regex whose digit class is ASCII under any
-locale (see [Locale-bound ranges in bash regexes and grep](#locale-bound-ranges-in-bash-regexes-and-grep))
+locale (see [Locale-bound ranges in bash regexes, grep and sed](#locale-bound-ranges-in-bash-regexes-grep-and-sed))
 and bounds its length, or it compares the text as text. A number a tool prints is text too when it
 travels in a delimited row beside free text: a field holding the
 delimiter moves the fields after it, and one holding a line break as
@@ -680,7 +680,7 @@ counter, a `grep -c` or `wc` count, `date +%s` output, or a number the
 script's own `awk`, `jq` or `yq` program printed. A provenance label
 also misses text that reaches a field through its delimiter.
 
-## Locale-bound ranges in bash regexes and grep
+## Locale-bound ranges in bash regexes, grep and sed
 
 A range in a bash `[[ … =~ … ]]` regex follows the locale's collation.
 Under `en_US.UTF-8`, a typical developer shell's locale, which the
@@ -706,21 +706,22 @@ case-insensitive regex flag (`(?i)`) is not used for this, because it
 also folds letters outside ASCII: `yq` reads the Kelvin sign as `k` and
 the long s as `s` under it.
 
-In a GNU `grep` pattern, a bracket with a letter endpoint (`[a-z]`,
-`[0-9a-f]`) or a negated one (`[^0-9]`) follows the locale the same way;
-a positive bracket of digit ranges (`[0-9]`) does not. Run such a call
-under `LC_ALL=C`, as a prefix assignment or in a function or script that
-sets a C locale. A call that must follow the locale, such as a probe of
-it, carries the marker `# regex-range-ascii: locale-bound: <reason>` on
-the line directly above it.
+In a GNU `grep` pattern or a GNU `sed` script, a bracket with a letter
+endpoint (`[a-z]`, `[0-9a-f]`) or a negated one (`[^0-9]`) follows the
+locale the same way; a positive bracket of digit ranges (`[0-9]`) does
+not. Run such a call under `LC_ALL=C`, as a prefix assignment or in a
+function or script that sets a C locale. A call that must follow the
+locale, such as a probe of it, carries the marker
+`# regex-range-ascii: locale-bound: <reason>` on the line directly above
+it.
 
 GNU `sed` follows the same range rules as GNU `grep`: a positive bracket
 of digit ranges is ASCII in every locale, while a letter endpoint or a
-negation follows the locale. A `sed` script whose range is of the second
-kind runs under `LC_ALL=C`. `gawk` matches a range by code point in every
-locale (also under `--posix`, with `IGNORECASE`, and in a dynamic regex),
-so an `awk` range needs no pin. `check-regex-range-ascii.sh` reads neither
-`sed` nor `awk`; the rules here are the only guard for those.
+negation follows the locale. The lint reads the whole `sed` script, so a
+bracket in replacement text or in a `y` command is reported too; mark
+such a call. `gawk` matches a range by code point in every locale (also
+under `--posix`, with `IGNORECASE`, and in a dynamic regex), so an `awk`
+range needs no pin and the lint does not read `awk`.
 
 Other matchers measured on this tree do not need this: a positive
 `[0-9]` is ASCII in GNU `grep`, `sed`, `gawk`, `mawk`, `jq` and `yq` in
