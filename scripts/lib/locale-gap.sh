@@ -1,8 +1,8 @@
 # scripts/lib/locale-gap.sh
 #
 # @description Locale precondition for harness scenarios that pin a
-# locale to show a locale-bound regex range. Source after
-# `set -Eeuo pipefail`.
+# locale to show a locale-bound regex range in bash, grep or sed. Source
+# after `set -Eeuo pipefail`.
 # shellcheck shell=bash
 
 # @description Fail unless a bash run under `LC_ALL=<locale>` matches the
@@ -51,6 +51,25 @@ function require_grep_locale_gap() {
   probe="$({ printf 'é\n' | LC_ALL="${locale}" command grep --extended-regexp --count '^[a-z]$'; } 2>&1)" || true
   if [[ ${probe} != 1 ]]; then
     printf '%s: locale %s cannot show a locale-bound [a-z] range in grep (probe printed %q); scenarios pinned to it would pass without testing it\n' \
+      "${0##*/}" "${locale}" "${probe}" >&2
+    return 1
+  fi
+}
+
+# @description Fail unless the `sed` on PATH, run under `LC_ALL=<locale>`,
+# matches `é` against `^[a-z]$`. GNU sed follows the same range rules as
+# GNU grep, but it is a separate binary whose locale support can differ, so
+# a scenario whose subject is a sed range probes sed itself. On failure it
+# prints one line naming the locale, the engine and what the probe printed.
+# @arg $1 locale name, such as `en_US.UTF-8`
+# @exitcode 0 the locale shows the gap in sed
+# @exitcode 1 it does not
+function require_sed_locale_gap() {
+  local -r locale="$1"
+  local probe=''
+  probe="$({ printf 'é\n' | LC_ALL="${locale}" command sed --regexp-extended --quiet '/^[a-z]$/p'; } 2>&1)" || true
+  if [[ ${probe} != é ]]; then
+    printf '%s: locale %s cannot show a locale-bound [a-z] range in sed (probe printed %q); scenarios pinned to it would pass without testing it\n' \
       "${0##*/}" "${locale}" "${probe}" >&2
     return 1
   fi

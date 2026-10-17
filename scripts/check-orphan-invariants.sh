@@ -13,7 +13,9 @@
 #            has an index entry.
 #
 # Entries inside the index use paths RELATIVE TO docs/ (e.g.
-# `[security/foo.md](security/foo.md)`).
+# `[security/foo.md](security/foo.md)`). Entry paths are lowercase ASCII: a path
+# with a non-ASCII letter is never an entry, so its doc reports
+# [unreferenced-doc] in every locale.
 #
 # Env overrides (test-only):
 #   INVARIANT_INDEX_OVERRIDE — alternate index path
@@ -75,13 +77,15 @@ trap 'rm -f "${referenced_file}" "${all_docs}"' EXIT
 # Extract paths from markdown links of the form [text](path) where
 # path looks like a docs-relative .md (no protocol, no leading slash).
 # Skip placeholder paths containing `<` or `>`.
+# The link path class is ASCII and both commands read it under C, so a path
+# holding a non-ASCII letter is never an entry and its doc reports
+# [unreferenced-doc] in every locale.
 {
-  # regex-range-ascii: locale-bound: the path sed below reads the same class, so both keep one locale
-  grep --line-number --extended-regexp \
+  LC_ALL=C grep --line-number --extended-regexp \
     '\[[^]]+\]\([a-z][a-z0-9_/.-]*\.md([#][^)]*)?\)' \
     "${INDEX}" || true
 } |
-  sed --regexp-extended 's|.*\]\(([a-z][a-z0-9_/.-]*\.md)([#][^)]*)?\).*|\1|' |
+  LC_ALL=C sed --regexp-extended 's|.*\]\(([a-z][a-z0-9_/.-]*\.md)([#][^)]*)?\).*|\1|' |
   (grep --invert-match --extended-regexp '[<>]' || true) |
   sort --unique >"${referenced_file}"
 

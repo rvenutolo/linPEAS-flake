@@ -13,6 +13,8 @@ source "${REPO_ROOT}/scripts/lib/scratch-tree.sh"
 reexec_in_scratch_tree "$@"
 # shellcheck source=scripts/lib/harness-assert.sh
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
+# shellcheck source=scripts/lib/locale-gap.sh
+source "${REPO_ROOT}/scripts/lib/locale-gap.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-doc-anchors.sh"
 readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-doc-anchors"
 
@@ -30,6 +32,7 @@ failures=0
 # own source enumeration — rather than a handed-in list — under test.
 # @arg $1 name  @arg $2 fixture dir or absolute root  @arg $3 source rel path
 # @arg $4 expected exit  @arg $5 stderr substring  @arg $6 stdout substring
+# @arg $7 locale (empty: inherit)
 function run_scenario() {
   local -r name="$1"
   local -r fixture_dir="$2"
@@ -37,6 +40,7 @@ function run_scenario() {
   local -r expected_exit="$4"
   local -r expected_stderr="$5"
   local -r expected_stdout="${6:-}"
+  local -r locale="${7:-}"
 
   local root="${FIXTURES}/${fixture_dir}"
   if [[ ${fixture_dir} == /* ]]; then
@@ -48,10 +52,14 @@ function run_scenario() {
   stdout_file="$(mktemp)"
   outcome_file="$(mktemp)"
 
+  local -a env_prefix=()
+  if [[ -n ${locale} ]]; then
+    env_prefix=(env "LC_ALL=${locale}")
+  fi
   local actual_exit=0
   DOC_ANCHOR_ROOT_OVERRIDE="${root}" \
     DOC_ANCHOR_SOURCES_OVERRIDE="${source_rel}" \
-    "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
+    ${env_prefix[@]+"${env_prefix[@]}"} "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
 
   if [[ ${actual_exit} -ne ${expected_exit} ]]; then
@@ -79,6 +87,19 @@ function run_scenario() {
     harness_assert_also "${expected_stdout}"
   fi
   rm --force -- "${outcome_file}" "${stdout_file}" "${stderr_file}"
+}
+
+# @description Build a doc-anchors root holding source.md (one link to
+# docs/target.md#<anchor>) and docs/target.md (<target body>). Prints the
+# root.
+# @arg $1 anchor  @arg $2 target body
+function scratch_anchor_root() {
+  local root
+  root="$(mktemp --directory)"
+  mkdir --parents "${root}/docs"
+  printf '# Source\n\nSee [x](docs/target.md#%s).\n' "$1" >"${root}/source.md"
+  printf '%s\n' "$2" >"${root}/docs/target.md"
+  printf '%s\n' "${root}"
 }
 
 function main() {
@@ -160,6 +181,115 @@ function main() {
     "${newline_root}" '' 1 \
     '[anchor-miss] docs/evil'
   rm --recursive --force -- "${newline_root}"
+
+  # The two renderers slug a non-ASCII letter differently (GitHub keeps
+  # it, mkdocs folds it to ASCII), so no link can resolve on both and the
+  # heading must carry an explicit anchor. en_US.UTF-8 is where the slug
+  # sed would otherwise keep `é` and vouch for the GitHub-only link.
+  require_grep_locale_gap en_US.UTF-8 || exit 1
+  require_sed_locale_gap en_US.UTF-8 || exit 1
+  local root
+  root="$(scratch_anchor_root 'café' $'# Target\n\n## Café\n\nBody.')"
+  run_scenario 'non-ASCII letter heading without an anchor fails under en_US.UTF-8' \
+    "${root}" $'source.md\ndocs/target.md' 1 \
+    '[non-ascii-heading] docs/target.md:3: heading "Café" holds a non-ASCII letter' \
+    '' en_US.UTF-8
+  rm --recursive --force -- "${root}"
+
+  # Anchored, the heading is a valid target and still counts as lossy: the
+  # lossy-count grep runs under C, so it sees the `é` as a deleted
+  # character in en_US.UTF-8 too.
+  root="$(scratch_anchor_root 'cafe' $'# Target\n\n## Café<a name="cafe"></a>\n\n## Plain\n\nBody.')"
+  run_scenario 'anchored non-ASCII heading counts as lossy under en_US.UTF-8' \
+    "${root}" $'source.md\ndocs/target.md' 0 '' \
+    'ok — 1 anchor link(s) in 2 source file(s) resolved against 3 anchor(s) in 1 target file(s); 1 heading(s) required character deletion' \
+    en_US.UTF-8
+  rm --recursive --force -- "${root}"
+
+  # A link spelled as GitHub slugs the anchored heading (the letter kept)
+  # misses, since only the explicit anchor answers. This is the
+  # GitHub-spelled counterpart of the scenario below, whose link is the
+  # C-locale slug with the letter deleted.
+  root="$(scratch_anchor_root 'naïve' $'# Target\n\n## Naïve<a name="naive"></a>\n\nBody.')"
+  run_scenario 'GitHub-only non-ASCII anchor link is a miss under en_US.UTF-8' \
+    "${root}" $'source.md\ndocs/target.md' 1 \
+    '[anchor-miss] source.md:3: #naïve not found in docs/target.md' \
+    '' en_US.UTF-8
+  rm --recursive --force -- "${root}"
+
+  # The generated slug of an anchored non-ASCII heading (`rsum`) resolves
+  # on neither renderer, so it is not a target: only the explicit anchor
+  # is.
+  root="$(scratch_anchor_root 'rsum' $'# Target\n\n## Résumé<a name="resume"></a>\n\nBody.')"
+  run_scenario 'generated slug of an anchored non-ASCII heading is a miss under en_US.UTF-8' \
+    "${root}" $'source.md\ndocs/target.md' 1 \
+    '[anchor-miss] source.md:3: #rsum not found in docs/target.md (available: target,resume)' \
+    '' en_US.UTF-8
+  rm --recursive --force -- "${root}"
+
+  # Non-ASCII punctuation is deleted by both renderers, so it needs no
+  # anchor.
+  root="$(scratch_anchor_root 'build--release' $'# Target\n\n## Build — release\n\nBody.')"
+  run_scenario 'non-ASCII punctuation heading passes under en_US.UTF-8' \
+    "${root}" $'source.md\ndocs/target.md' 0 '' \
+    'ok — 1 anchor link(s) in 2 source file(s) resolved against 2 anchor(s) in 1 target file(s); 1 heading(s) required character deletion' \
+    en_US.UTF-8
+  rm --recursive --force -- "${root}"
+
+  # A heading inside a fenced block is not a heading.
+  root="$(scratch_anchor_root 'target' $'# Target\n\n```text\n## Café\n```')"
+  run_scenario 'non-ASCII letter heading inside a fence passes under en_US.UTF-8' \
+    "${root}" $'source.md\ndocs/target.md' 0 '' \
+    'ok — 1 anchor link(s) in 2 source file(s) resolved against 1 anchor(s) in 1 target file(s); 0 heading(s) required character deletion' \
+    en_US.UTF-8
+  rm --recursive --force -- "${root}"
+
+  # The non-ASCII heading check rests on grep reading UTF-8 under
+  # --perl-regexp. Where it cannot, the check matches nothing, so the run
+  # must refuse rather than pass.
+  local shim_dir real_grep
+  shim_dir="$(mktemp --directory)"
+  real_grep="$(command -v grep)"
+  # shellcheck disable=SC2016 # the shim body expands when the shim runs, not here
+  printf '#!%s\nfor a in "$@"; do [[ $a == --perl-regexp ]] && exit 1; done\nexec %q "$@"\n' \
+    "$(command -v bash)" "${real_grep}" >"${shim_dir}/grep"
+  chmod 755 -- "${shim_dir}/grep"
+  root="$(scratch_anchor_root 'other' $'# Target\n\n## Other\n\nBody.')"
+  PATH="${shim_dir}:${PATH}" run_scenario 'grep without UTF-8 PCRE is a could-not-run' \
+    "${root}" $'source.md\ndocs/target.md' 2 \
+    'grep --perl-regexp under C.UTF-8 does not read é as a letter'
+  rm --recursive --force -- "${root}" "${shim_dir}"
+
+  # A NUL byte makes grep call the text binary and print a notice instead
+  # of matches, which reads as a pass. The text passes through a bash
+  # variable, which drops the NUL before grep sees it, so the heading is
+  # still reported; --binary-files=text is a second guard.
+  root="$(scratch_anchor_root 'target' $'# Target\n\n## Café\n\nBody.')"
+  printf '# Source\n\nSee [x](docs/target.md#target).\n\0\n' >"${root}/source.md"
+  printf '# Target\n\n## Ünïcode\n\0\n' >"${root}/docs/target.md"
+  run_scenario 'NUL byte in a source does not hide a non-ASCII heading' \
+    "${root}" $'source.md\ndocs/target.md' 1 \
+    '[non-ascii-heading] docs/target.md:3: heading "Ünïcode" holds a non-ASCII letter, mark or digit;' \
+    '' en_US.UTF-8
+  rm --recursive --force -- "${root}"
+
+  # An awk read failure while collecting headings must end the run, not
+  # read as "no headings". Only the blank-mode call of without_fences
+  # passes `blank=1`, so the shim breaks that call alone.
+  local awk_shim_dir real_awk
+  awk_shim_dir="$(mktemp --directory)"
+  real_awk="$(command -v awk)"
+  # A POSIX sh shim: a bash one would source BASH_ENV, whose profile runs
+  # awk, and recurse into itself.
+  # shellcheck disable=SC2016 # the shim body expands when the shim runs, not here
+  printf '#!/bin/sh\nfor a in "$@"; do [ "$a" = blank=1 ] && exit 2; done\nexec %s "$@"\n' \
+    "${real_awk}" >"${awk_shim_dir}/awk"
+  chmod 755 -- "${awk_shim_dir}/awk"
+  root="$(scratch_anchor_root 'other' $'# Target\n\n## Other\n\nBody.')"
+  PATH="${awk_shim_dir}:${PATH}" run_scenario 'awk failure reading headings is a could-not-run' \
+    "${root}" $'source.md\ndocs/target.md' 2 \
+    'could not read source.md for headings'
+  rm --recursive --force -- "${root}" "${awk_shim_dir}"
 
   harness_assert_verify || failures=$((failures + 1))
 
