@@ -296,6 +296,23 @@ function main() {
     'refusing docs/target.md: it holds a NUL byte'
   rm --recursive --force -- "${root}"
 
+  # A byte that is not UTF-8 makes grep call the text binary in a UTF-8
+  # locale, C.UTF-8 included, and print no links, so such a file is
+  # refused too.
+  root="$(scratch_anchor_root 'target' $'# Target\n\nBody.')"
+  printf '# Source\n\nSee [\xe9](docs/target.md#missing).\n' >"${root}/source.md"
+  printf 'See [y](docs/target.md#target).\n' >"${root}/other.md"
+  run_scenario 'non-UTF-8 byte in a source is a could-not-run' \
+    "${root}" $'source.md\nother.md' 2 \
+    'refusing source.md: it is not valid UTF-8' '' C.UTF-8
+  rm --recursive --force -- "${root}"
+  root="$(scratch_anchor_root 'target' $'# Target\n\nBody.')"
+  printf '# Target\n\n\xe9.\n' >"${root}/docs/target.md"
+  run_scenario 'non-UTF-8 byte in a link target is a could-not-run' \
+    "${root}" 'source.md' 2 \
+    'refusing docs/target.md: it is not valid UTF-8' '' C.UTF-8
+  rm --recursive --force -- "${root}"
+
   # A target nothing can read must end the run, not read as a target
   # with no headings and report every link into it as a miss.
   root="$(scratch_anchor_root 'target' $'# Target\n\nBody.')"
