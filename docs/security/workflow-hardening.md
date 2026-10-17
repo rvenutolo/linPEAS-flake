@@ -279,11 +279,11 @@ Enforced by `scripts/check-tool-guarded.sh`. Wired as the `lint-script-hygiene` 
 
 ## regex-range-ascii
 
-A bash `[[ … =~ … ]]` regex, or a GNU `grep` pattern, in a script under `scripts/` (its libraries included) or a harness directly under `tests/` holds no range between ASCII letters or digits unless the test or call runs under a C locale. For grep a positive bracket of digit ranges only (`[0-9]`) is not reported, since GNU grep keeps it ASCII in every locale. The rule and the two ways to meet it are in [linting.md, Locale-bound ranges in bash regexes and grep](../development/linting.md#locale-bound-ranges-in-bash-regexes-and-grep): a range follows the locale's collation, so under `en_US.UTF-8` a validator accepts characters the CI runner's `C.UTF-8` refuses, and CI cannot see it.
+A bash `[[ … =~ … ]]` regex, a GNU `grep` pattern or a GNU `sed` script, in a script under `scripts/` (its libraries included) or a harness directly under `tests/` holds no range between ASCII letters or digits unless the test or call runs under a C locale. For grep and sed a positive bracket of digit ranges only (`[0-9]`) is not reported, since GNU grep and sed keep it ASCII in every locale. The rule and the two ways to meet it are in [linting.md, Locale-bound ranges in bash regexes, grep and sed](../development/linting.md#locale-bound-ranges-in-bash-regexes-grep-and-sed): a range follows the locale's collation, so under `en_US.UTF-8` a validator accepts characters the CI runner's `C.UTF-8` refuses, and CI cannot see it.
 
 What counts as a C locale, how a regex held in a variable is read, and what the lint does not read are stated in the header of `scripts/check-regex-range-ascii.sh`.
 
-A `=~` hit is fixed by spelling the class out or matching through `ascii_match`; a grep hit by running the call under `LC_ALL=C`. A grep call that is locale-bound on purpose carries the reasoned marker, which the script header describes.
+A `=~` hit is fixed by spelling the class out or matching through `ascii_match`; a grep or sed hit by running the call under `LC_ALL=C`. A grep or sed call that is locale-bound on purpose carries the reasoned marker, which the script header describes.
 
 Enforced by `scripts/check-regex-range-ascii.sh`. Wired as the `lint-script-hygiene` CI job (member check `regex-range-ascii`).
 

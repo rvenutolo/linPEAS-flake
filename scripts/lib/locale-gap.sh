@@ -67,6 +67,7 @@ function require_grep_locale_gap() {
 function require_sed_locale_gap() {
   local -r locale="$1"
   local probe=''
+  # regex-range-ascii: locale-bound: probes the locale's collation on purpose
   probe="$({ printf 'é\n' | LC_ALL="${locale}" command sed --regexp-extended --quiet '/^[a-z]$/p'; } 2>&1)" || true
   if [[ ${probe} != é ]]; then
     printf '%s: locale %s cannot show a locale-bound [a-z] range in sed (probe printed %q); scenarios pinned to it would pass without testing it\n' \

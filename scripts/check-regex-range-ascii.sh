@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 # scripts/check-regex-range-ascii.sh
 #
-# @description Lint: a bash `[[ … =~ … ]]` regex, or a GNU `grep` regex
-# pattern, in `scripts/*.sh`, `scripts/lib/*.sh` or `tests/*.sh` must not
-# hold a locale-bound range between ASCII letters or digits unless it is
-# matched under a C locale. A range follows the locale's collation: under
-# `en_US.UTF-8` `[0-9]` in a bash regex also matches digits such as `٣`
-# and `５`, and `[a-f]` matches `é`, while the CI runner's `C.UTF-8`
-# matches ASCII only. A validator written with a range therefore passes on
-# a developer's machine a value CI refuses, and the difference is
-# invisible to CI.
+# @description Lint: a bash `[[ … =~ … ]]` regex, a GNU `grep` regex
+# pattern, or a GNU `sed` script, in `scripts/*.sh`, `scripts/lib/*.sh`
+# or `tests/*.sh` must not hold a locale-bound range between ASCII
+# letters or digits unless it is matched under a C locale. A range
+# follows the locale's collation: under `en_US.UTF-8` `[0-9]` in a bash
+# regex also matches digits such as `٣` and `５`, and `[a-f]` matches
+# `é`, while the CI runner's `C.UTF-8` matches ASCII only. A validator
+# written with a range therefore passes on a developer's machine a value
+# CI refuses, and the difference is invisible to CI.
 #
 # In bash, every such range is reported. GNU grep keeps a positive bracket
 # whose ranges all run between digits (`[0-9]`, `Q[1-4]`, `[0-9.]`) ASCII
 # in every locale, so only a bracket that holds a letter endpoint
 # (`[a-z]`, `[0-9a-f]`, `[A-Za-z0-9._/-]`) or is negated (`[^0-9]`: under
-# `en_US.UTF-8` `٣` falls outside it) is reported for grep.
+# `en_US.UTF-8` `٣` falls outside it) is reported for grep. GNU sed follows
+# the same bracket rules, so a sed script is judged the same way.
 #
 # A test is matched under a C locale when it follows a
 # `local LC_ALL=C` or `local LC_ALL=C.UTF-8` that is a direct statement
@@ -42,17 +43,18 @@
 # The `=~` tests are read from the `shfmt --tojson` parse tree, and the
 # operator from the source text between the two operands, since shfmt
 # releases encode the operator differently. A file is parsed when it
-# holds `~`, holds the marker text, or holds a `grep`, `egrep` or `fgrep`
-# word together with range-shaped text (a bracket-aware match: classes,
-# equivalence classes, collating symbols, and a leading `]` or `^]`); any
-# other file is not parsed. That match reads line by line, so a grep range
-# split by a backslash-newline inside its bracket, in a file with no other
-# sign, is not seen. A regex held in a variable is read through the
-# assignments to that variable and the items of a `for` loop over it in
-# the same file, following variables they name, three levels deep.
-# A quoted operand (`=~ "[0-9]"`) is a literal match, but is read like
-# an unquoted one and reported; so is a function whose `local LC_ALL`
-# value is in double quotes. Unquote it or spell the class out.
+# holds `~`, holds the marker text, or holds a `grep`, `egrep`, `fgrep`
+# or `sed` word together with range-shaped text (a bracket-aware match:
+# classes, equivalence classes, collating symbols, and a leading `]` or
+# `^]`); any other file is not parsed. That match reads line by line, so
+# a grep or sed range split by a backslash-newline inside its bracket,
+# in a file with no other sign, is not seen. A regex held in a variable
+# is read through the assignments to that variable and the items of a
+# `for` loop over it in the same file, following variables they name,
+# three levels deep. A quoted operand (`=~ "[0-9]"`) is a literal match,
+# but is read like an unquoted one and reported; so is a function whose
+# `local LC_ALL` value is in double quotes. Unquote it or spell the
+# class out.
 #
 # A grep call is a command whose word, after leading `command` or
 # `builtin` words and their options and `env` with its options and
@@ -75,9 +77,22 @@
 # followed as a `=~` regex is. Inside a pattern, a `$name` or a backtick
 # in single quotes is still read as an expansion, as for `=~`: a
 # single-quoted `$name` is followed, and a backtick counts the call as
-# unresolved.
+# unresolved. That also reads a sed `$` address followed by a command
+# letter (`'$d'`) as the variable `d`, so such a call can be reported
+# through a same-file `d` value.
 #
-# A grep call that is locale-bound on purpose carries the marker
+# A sed call is found as a grep call is: the same leading `command`,
+# `builtin` and `env` handling, and the same prefix and scope C-locale
+# rules. Its scripts are its `-e`/`--expression` operands, or, when there
+# are none and no `-f`/`--file`, its first operand; `-f`/`--file` makes the
+# call unresolved. `-l`/`--line-length` take an argument, and `-i` takes
+# the rest of its word as a backup suffix. The whole script text is read,
+# so a range in replacement text or in a `y` command is reported too; mark
+# such a call. A sed script held in a variable is followed as a grep
+# pattern is, and a first operand that is a variable holding an option
+# makes the call unresolved.
+#
+# A grep or sed call that is locale-bound on purpose carries the marker
 # `# regex-range-ascii: locale-bound: <reason>` on the line directly
 # above the line its command starts on (inside a pipeline too); the word
 # is exactly `locale-bound`, so `locale-boundary` is not a marker. A marker
@@ -89,23 +104,25 @@
 # text. The final line is the summary: `regex-range-ascii: ok — scanned N
 # file(s), N =~ test(s), N with a regex in a variable, N under a C locale;
 # N grep call(s), N not regex (-F/-P), N under a C locale, N unresolved,
-# N marked`.
+# N marked; N sed call(s), N under a C locale, N unresolved, N marked`.
 #
-# Not read: a regex or pattern that reaches the test or call as a function
-# argument, from a function's output or a command substitution, from an
-# array assigned as a list (`re=(…)`), from a sourced file, or from a
-# `-f` file; a call whose options come from an array or `$@` expansion;
-# an abbreviated long option (`--regex=`) or a separate-argument long
-# option outside the listed set (`--group-separator SEP`); a regex inside
-# `eval` or `bash -c` text; grep in workflow and composite-action `run:`
-# blocks, which run only on the runner, whose locale is `C.UTF-8`; grep
-# run through a wrapper command (`xargs`, `find -exec`, `timeout`, `nice`,
-# `sudo` and the like), which is neither read nor counted; and `sed`,
-# `awk`, `jq` and `yq` patterns.
+# Not read: a regex or pattern that reaches the test or call as a
+# function argument, from a function's output or a command substitution,
+# from an array assigned as a list (`re=(…)`), from a sourced file, or
+# from a `-f` file or a sed `-f` script file; a call whose options come
+# from an array or `$@` expansion; an abbreviated long option
+# (`--regex=`) or a separate-argument long option outside the listed set
+# (`--group-separator SEP`); a regex inside `eval` or `bash -c` text;
+# grep or sed in workflow and composite-action `run:` blocks, which run
+# only on the runner, whose locale is `C.UTF-8`; grep run through a
+# wrapper command (`xargs`, `find -exec`, `timeout`, `nice`, `sudo` and
+# the like), which is neither read nor counted, and so is sed run
+# through one; and `awk`, `jq` and `yq` patterns.
 #
-# The summary counts each grep call once, in the first bucket it fits: not
-# regex (`-F`/`-P`), then under a C locale, then reported or marked when a
-# range is found, then unresolved when a pattern or option cannot be read.
+# The summary counts each grep or sed call once, in the first bucket it
+# fits: not regex (`-F`/`-P`, grep only), then under a C locale, then
+# reported or marked when a range is found, then unresolved when a
+# pattern or option cannot be read.
 #
 # Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and TESTS_DIR_OVERRIDE
 # (default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
@@ -150,8 +167,9 @@ require_tool jq
 # `export LC_ALL=C` or `=C.UTF-8`), `A name value_pos value_end` for
 # each assignment and each `for` loop item, and
 # `G call line mode c_locale unresolved pat_start pat_end optpos` for each
-# pattern of a `grep`, `egrep` or `fgrep` call: `call` is the call's byte
-# offset, shared by its patterns; `mode` is `G`, `E`, `F` or `P`;
+# pattern of a `grep`, `egrep` or `fgrep` call, and the same fields under
+# kind `S` for each script of a `sed` call: `call` is the call's byte
+# offset, shared by its patterns; `mode` is `G`, `E`, `F` or `P`, or `S`;
 # `c_locale` is 1 when the call runs under `LC_ALL=C` or `C.UTF-8`;
 # `unresolved` is 1 when a pattern source cannot be read (`-f`, or a word
 # that may expand to options); `pat_start` and `pat_end` are the pattern
@@ -253,6 +271,39 @@ function records_of() {
         elif ($l | startswith("-")) and $l != "-" then cluster($a; $l; 1)
         elif list_exp($a) then .unres = 1
         else .ops += [[$a.Pos.Offset, $a.End.Offset, 1]] end;
+    # One sed short-option cluster, letter by letter from index $t. `-i`
+    # takes the rest of its word as a backup suffix, so it ends the
+    # cluster; `-e`, `-f` and `-l` take the rest of the word or the next.
+    def sed_cluster($a; $l; $t):
+      if $t >= ($l | length) then .
+      else $l[$t:$t + 1] as $c
+        | if $c == "i" then .
+          elif ("efl" | contains($c)) then
+            ($a.Pos.Offset + $t + 1) as $r
+            | if $r < $a.End.Offset then
+                (if $c == "e" then .pats += [[$r, $a.End.Offset]]
+                  elif $c == "f" then .unres = 1 | .hasf = true
+                  else . end)
+              else .skip = (if $c == "e" then "e" elif $c == "f" then "f" else "x" end) end
+          else sed_cluster($a; $l; $t + 1) end
+      end;
+    # Fold one word after a sed command word into the operand state.
+    def sed_operand($a; $s):
+      opt_text($a; $s) as $l
+      | if .skip == "e" then .pats += [[$a.Pos.Offset, $a.End.Offset]] | .skip = null
+        elif .skip == "f" then .unres = 1 | .hasf = true | .skip = null
+        elif .skip == "x" then .skip = null
+        elif .dd then .ops += [[$a.Pos.Offset, $a.End.Offset]]
+        elif $s == "--" then .dd = true
+        elif ($l | startswith("--")) then
+          ($l[2:] | split("=")[0]) as $n | ($l | contains("=")) as $eq
+          | if $n == "expression" then (if $eq then .pats += [[$a.Pos.Offset + 13, $a.End.Offset]] else .skip = "e" end)
+            elif $n == "file" then (if $eq then .unres = 1 | .hasf = true else .skip = "f" end)
+            elif $n == "line-length" and ($eq | not) then .skip = "x"
+            else . end
+        elif ($l | startswith("-")) and $l != "-" then sed_cluster($a; $l; 1)
+        elif list_exp($a) then .unres = 1
+        else .ops += [[$a.Pos.Offset, $a.End.Offset, 1]] end;
     # Every object node, collected once: each stream below scans this
     # list instead of walking the tree again.
     [.. | objects] as $all
@@ -322,7 +373,7 @@ function records_of() {
         | . as $call
         | [.Args[] | wstr] as $w
         | lead($w; 0) as $k
-        | select($k >= 0 and ($w[$k] | IN("grep", "egrep", "fgrep")))
+        | select($k >= 0 and ($w[$k] | IN("grep", "egrep", "fgrep", "sed")))
         | ([range(0; $k) | select($w[.] | startswith("LC_ALL="))] | last) as $env_at
         # An `env` unset of LC_ALL: `-u NAME` (alone or ending a cluster of
         # `-i`, `-0`, `-v`), `-uNAME`, `--unset NAME`, `--unset=NAME`.
@@ -335,14 +386,20 @@ function records_of() {
             elif $env_at != null then ($w[$env_at][7:] | IN("C", "C.UTF-8"))
             elif $pre_lc != null then ($pre_lc | c_locale)
             else safe_at($call.Pos.Offset) end) as $safe
-        | ({"grep": "G", "egrep": "E", "fgrep": "F"}[$w[$k]]) as $mode
-        | (reduce range($k + 1; $w | length) as $i (
-            {mode: $mode, pats: [], ops: [], unres: 0, hasf: false, dd: false, skip: null};
-            operand($call.Args[$i]; $w[$i]))) as $st
+        | (if $w[$k] == "sed" then
+            reduce range($k + 1; $w | length) as $i (
+              {mode: "S", pats: [], ops: [], unres: 0, hasf: false, dd: false, skip: null};
+              sed_operand($call.Args[$i]; $w[$i]))
+          else
+            ({"grep": "G", "egrep": "E", "fgrep": "F"}[$w[$k]]) as $mode
+            | reduce range($k + 1; $w | length) as $i (
+                {mode: $mode, pats: [], ops: [], unres: 0, hasf: false, dd: false, skip: null};
+                operand($call.Args[$i]; $w[$i]))
+          end) as $st
         | ($st.pats | if length > 0 then . elif $st.hasf then [] else $st.ops[0:1] end) as $p
         | select(($p | length) > 0 or $st.unres == 1)
         | (if ($p | length) == 0 then [[-1, -1]] else $p end)[]
-        | [ "G", $call.Pos.Offset, $call.Pos.Line, $st.mode,
+        | [ (if $st.mode == "S" then "S" else "G" end), $call.Pos.Offset, $call.Pos.Line, $st.mode,
             (if $safe then 1 else 0 end), $st.unres, .[0], .[1], (.[2] // 0) ] )
     | @tsv' <<<"${tree}"
 }
@@ -509,19 +566,22 @@ function main() {
 
   local file text records kind f2 f3 f4 f5 f6 f7 f8 f9 op regex value line cid markers rc
   local found=0 tests=0 resolved=0 c_locale=0
-  local calls=0 not_regex=0 grep_c_locale=0 unresolved=0 marked=0
+  local not_regex=0 tool
+  local -A n_calls=([grep]=0 [sed]=0) n_c_locale=([grep]=0 [sed]=0)
+  local -A n_unresolved=([grep]=0 [sed]=0) n_marked=([grep]=0 [sed]=0)
   for file in "${files[@]}"; do
     # A file is parsed only if it can hold a finding: a `~` (the `=~`
     # operator, whose `=` and `~` a backslash-newline can separate), a
-    # marker, or a grep word beside a bracket range, since a grep range is
-    # read only from the file's own text. The bracket text may hold
-    # classes, equivalence classes, collating symbols or a leading `]`
-    # before the range, as grep_range reads them. The match is line by
-    # line, so a range split by a backslash-newline inside its bracket is
-    # not seen here, and a file holding no other sign is not parsed.
+    # marker, or a grep or sed word beside a bracket range, since a grep
+    # or sed range is read only from the file's own text. The bracket
+    # text may hold classes, equivalence classes, collating symbols or a
+    # leading `]` before the range, as grep_range reads them. The match
+    # is line by line, so a range split by a backslash-newline inside
+    # its bracket is not seen here, and a file holding no other sign is
+    # not parsed.
     if ! grep --quiet --fixed-strings -- '~' "${file}" &&
       ! grep --quiet --fixed-strings -- "${MARKER}" "${file}" &&
-      ! { grep --quiet --word-regexp --regexp=grep --regexp=egrep --regexp=fgrep -- "${file}" &&
+      ! { grep --quiet --word-regexp --regexp=grep --regexp=egrep --regexp=fgrep --regexp=sed -- "${file}" &&
         grep --quiet --extended-regexp -- \
           '\[\^?\]?([^]]|\[[:=.][^]]*[:=.]\])*[[:alnum:]]-[[:alnum:]]' "${file}"; }; then
       continue
@@ -530,7 +590,7 @@ function main() {
     if ! records="$(records_of "${file}")"; then
       exit 2
     fi
-    local -A values=() call_line=() call_mode=() call_c=() call_unres=() call_range=() call_via=()
+    local -A values=() call_line=() call_mode=() call_c=() call_unres=() call_range=() call_via=() call_tool=()
     local -A marker_ok=() marker_used=()
     local -a findings=()
     while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8 f9; do
@@ -562,10 +622,12 @@ function main() {
       fi
     done <<<"${records}"
 
-    # G records: call id, line, mode, C locale, unresolved, pattern start
-    # and end (-1 when the call has no pattern operand), option position.
+    # G and S records: call id, line, mode, C locale, unresolved,
+    # pattern start and end (-1 when the call has no pattern operand),
+    # option position.
     while IFS=$'\t' read -r kind f2 f3 f4 f5 f6 f7 f8 f9; do
-      [[ ${kind} == G ]] || continue
+      [[ ${kind} == G || ${kind} == S ]] || continue
+      call_tool["${f2}"]="${kind}"
       call_line["${f2}"]="${f3}"
       call_mode["${f2}"]="${f4}"
       call_c["${f2}"]="${f5}"
@@ -606,23 +668,25 @@ function main() {
     done <<<"${markers}"
 
     for cid in "${!call_line[@]}"; do
-      calls=$((calls + 1))
+      tool="grep"
+      [[ ${call_tool[${cid}]} == S ]] && tool="sed"
+      n_calls[${tool}]=$((n_calls[${tool}] + 1))
       line="${call_line[${cid}]}"
       if [[ ${call_mode[${cid}]} == F || ${call_mode[${cid}]} == P ]]; then
         not_regex=$((not_regex + 1))
       elif [[ ${call_c[${cid}]} == 1 ]]; then
-        grep_c_locale=$((grep_c_locale + 1))
+        n_c_locale[${tool}]=$((n_c_locale[${tool}] + 1))
       elif [[ -n ${call_range[${cid}]:-} ]]; then
         if [[ -n ${marker_ok[$((line - 1))]:-} ]]; then
-          marked=$((marked + 1))
+          n_marked[${tool}]=$((n_marked[${tool}] + 1))
           marker_used[$((line - 1))]=1
         elif [[ -n ${call_via[${cid}]} ]]; then
-          findings+=("${line}"$'\t'"${file}:${line}: grep range ${call_range[${cid}]} (through ${call_via[${cid}]}) follows the locale")
+          findings+=("${line}"$'\t'"${file}:${line}: ${tool} range ${call_range[${cid}]} (through ${call_via[${cid}]}) follows the locale")
         else
-          findings+=("${line}"$'\t'"${file}:${line}: grep range ${call_range[${cid}]} follows the locale")
+          findings+=("${line}"$'\t'"${file}:${line}: ${tool} range ${call_range[${cid}]} follows the locale")
         fi
       elif [[ -n ${call_unres[${cid}]:-} ]]; then
-        unresolved=$((unresolved + 1))
+        n_unresolved[${tool}]=$((n_unresolved[${tool}] + 1))
       fi
     done
     for line in "${!marker_ok[@]}"; do
@@ -636,21 +700,22 @@ function main() {
         sort --field-separator=$'\t' --key=1,1n --key=2 |
         cut --fields=2- >&2
     fi
-    unset values call_line call_mode call_c call_unres call_range call_via marker_ok marker_used findings
+    unset values call_line call_mode call_c call_unres call_range call_via call_tool marker_ok marker_used findings
   done
 
   if ((found)); then
     printf '\n%d finding(s). A range follows the locale: under en_US.UTF-8 [0-9] in a\n' "${found}" >&2
     printf 'bash regex also matches digits such as U+0663 and U+FF15. Spell the class\n' >&2
     printf 'out ([0123456789]) or match through ascii_match (scripts/lib/ascii-match.sh).\n' >&2
-    printf 'GNU grep keeps a positive [0-9] ASCII but follows the locale for a letter,\n' >&2
-    printf 'mixed or negated range: run the call under LC_ALL=C, or mark the line\n' >&2
-    printf 'above it with: # %s: <reason>\n' "${MARKER}" >&2
+    printf 'GNU grep and sed keep a positive [0-9] ASCII but follow the locale for a\n' >&2
+    printf 'letter, mixed or negated range: run the call under LC_ALL=C, or mark the\n' >&2
+    printf 'line above it with: # %s: <reason>\n' "${MARKER}" >&2
     exit 1
   fi
-  printf 'regex-range-ascii: ok — scanned %d file(s), %d =~ test(s), %d with a regex in a variable, %d under a C locale; %d grep call(s), %d not regex (-F/-P), %d under a C locale, %d unresolved, %d marked\n' \
+  printf 'regex-range-ascii: ok — scanned %d file(s), %d =~ test(s), %d with a regex in a variable, %d under a C locale; %d grep call(s), %d not regex (-F/-P), %d under a C locale, %d unresolved, %d marked; %d sed call(s), %d under a C locale, %d unresolved, %d marked\n' \
     "${#files[@]}" "${tests}" "${resolved}" "${c_locale}" \
-    "${calls}" "${not_regex}" "${grep_c_locale}" "${unresolved}" "${marked}"
+    "${n_calls[grep]}" "${not_regex}" "${n_c_locale[grep]}" "${n_unresolved[grep]}" "${n_marked[grep]}" \
+    "${n_calls[sed]}" "${n_c_locale[sed]}" "${n_unresolved[sed]}" "${n_marked[sed]}"
 }
 
 main "$@"
