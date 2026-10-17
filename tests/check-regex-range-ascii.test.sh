@@ -8,8 +8,10 @@
 # are a could-not-run. It also proves the grep reading: pattern operands
 # located among grep's options, -F/-P and C-locale calls left alone, a
 # positive digit-only bracket left alone, negated and letter brackets
-# reported, the reasoned marker, and findings sorted by line. Every tree is
-# built at run time.
+# reported, the reasoned marker, and findings sorted by line. It proves the
+# sed reading too: scripts found among sed's options (-e, -i SUFFIX, -l N,
+# --), -f left unresolved, the whole script read, and the C-locale and
+# marker rules as for grep. Every tree is built at run time.
 set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -498,7 +500,8 @@ DIR/scripts/a.sh:3: grep range [d-e] follows the locale$(footer 2)"
   put sed-digit-only scripts/a.sh '#!/usr/bin/env bash' "sed -E 's/^v[0-9]+//' f" "sed 's/Q[1-4]//' f" "sed -E 's/[0-9.]+//' f"
   run_case sed-digit-only 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 3 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 
-  # Not a call (`command -v`), no range, a class: none reported.
+  # Not a call (`command -v`), no range, a class, a digit-only range:
+  # none reported.
   put sed-ordinary scripts/a.sh '#!/usr/bin/env bash' 'command -v sed >/dev/null' "sed 's/x/y/' f" "sed -n '1p' f" "sed --quiet '/[[:alpha:]]/p' f" "sed -E 's/v[0-9]+//' f"
   run_case sed-ordinary 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 4 sed call(s), 0 under a C locale, 0 unresolved, 0 marked' ''
 

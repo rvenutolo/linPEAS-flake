@@ -77,7 +77,9 @@
 # followed as a `=~` regex is. Inside a pattern, a `$name` or a backtick
 # in single quotes is still read as an expansion, as for `=~`: a
 # single-quoted `$name` is followed, and a backtick counts the call as
-# unresolved.
+# unresolved. That also reads a sed `$` address followed by a command
+# letter (`'$d'`) as the variable `d`, so such a call can be reported
+# through a same-file `d` value.
 #
 # A sed call is found as a grep call is: the same leading `command`,
 # `builtin` and `env` handling, and the same prefix and scope C-locale
@@ -111,11 +113,11 @@
 # from an array or `$@` expansion; an abbreviated long option
 # (`--regex=`) or a separate-argument long option outside the listed set
 # (`--group-separator SEP`); a regex inside `eval` or `bash -c` text;
-# grep in workflow and composite-action `run:` blocks, which run only on
-# the runner, whose locale is `C.UTF-8`; grep run through a wrapper
-# command (`xargs`, `find -exec`, `timeout`, `nice`, `sudo` and the
-# like), which is neither read nor counted, and so is sed run through
-# one; and `awk`, `jq` and `yq` patterns.
+# grep or sed in workflow and composite-action `run:` blocks, which run
+# only on the runner, whose locale is `C.UTF-8`; grep run through a
+# wrapper command (`xargs`, `find -exec`, `timeout`, `nice`, `sudo` and
+# the like), which is neither read nor counted, and so is sed run
+# through one; and `awk`, `jq` and `yq` patterns.
 #
 # The summary counts each grep or sed call once, in the first bucket it
 # fits: not regex (`-F`/`-P`, grep only), then under a C locale, then

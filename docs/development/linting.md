@@ -715,9 +715,7 @@ locale, such as a probe of it, carries the marker
 `# regex-range-ascii: locale-bound: <reason>` on the line directly above
 it.
 
-GNU `sed` follows the same range rules as GNU `grep`: a positive bracket
-of digit ranges is ASCII in every locale, while a letter endpoint or a
-negation follows the locale. The lint reads the whole `sed` script, so a
+The lint reads the whole `sed` script, so a
 bracket in replacement text or in a `y` command is reported too; mark
 such a call. `gawk` matches a range by code point in every locale (also
 under `--posix`, with `IGNORECASE`, and in a dynamic regex), so an `awk`
