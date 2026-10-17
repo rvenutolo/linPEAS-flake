@@ -53,8 +53,9 @@
 #
 # Exits 0 on clean, 1 on any failure, 2 when the sources could not be
 # enumerated, a source could not be read, the run covered nothing, or
-# grep --perl-regexp under C.UTF-8 cannot read UTF-8 (startup probe) or
-# a source's headings cannot be read.
+# grep --perl-regexp under C.UTF-8 cannot read UTF-8 (startup probe), a
+# source's or link target's headings cannot be read, or a source or link
+# target holds a NUL byte or cannot be read.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -115,11 +116,15 @@ function without_fences() {
   ' "$(awk_path "$1")"
 }
 
+# @description Emit every anchor a file answers to: the generated slug of
+# each heading that has one, then each explicit `<a name="...">` anchor.
+# @arg $1 file
+# @exitcode 2 the file could not be read
 function headings_of() {
   local -r f="$1"
   [[ -f ${f} ]] || return 0
   local body
-  body="$(without_fences "${f}")"
+  body="$(without_fences "${f}")" || return 2
   # Heading-derived slugs. Strip inline HTML (e.g. `<a name="...">`
   # anchors written by mdformat-toc) before slugging so the computed
   # slug matches the GFM/mkdocs auto-slug, which ignores HTML tags.
@@ -137,10 +142,7 @@ function headings_of() {
     printf '%s\n' "${heading}" |
       LC_ALL=C.UTF-8 grep --quiet --perl-regexp \
         '[\p{L}\p{M}\p{N}](?<=[^\x00-\x7F])' || rc=$?
-    if ((rc > 1)); then
-      printf '%s: could not read %s for headings\n' "${0##*/}" "${f}" >&2
-      return 2
-    fi
+    ((rc > 1)) && return 2
     ((rc == 0)) && continue
     slug "${heading}"
   done <<<"${headings}"
@@ -159,6 +161,7 @@ function headings_of() {
 # mkdocs-material's separator-collapsing slugify can disagree with GFM,
 # so a clean run is worth more when it says how much of it rested on them.
 # @arg $1 file
+# @exitcode 2 the file could not be read
 function lossy_heading_count() {
   local -r f="$1"
   local body count
@@ -166,7 +169,7 @@ function lossy_heading_count() {
     printf '0\n'
     return 0
   fi
-  body="$(without_fences "${f}")"
+  body="$(without_fences "${f}")" || return 2
   # Trailing whitespace is trimmed before slugging, so it is not a deletion.
   count="$(printf '%s\n' "${body}" |
     grep --extended-regexp '^#+[[:space:]]+.+' |
@@ -247,6 +250,23 @@ else
   fi
 fi
 
+# @description Exit 2 when a file holds a NUL byte or cannot be read. grep
+# calls NUL-bearing text binary and prints a notice in place of its
+# matches, and a bash variable drops the byte, so the reads below would
+# check such a file only in part.
+# @arg $1 file  @arg $2 name to report
+function refuse_nul() {
+  local rc=0
+  LC_ALL=C grep --quiet --binary-files=text --perl-regexp '\x00' -- "$1" || rc=$?
+  if ((rc == 0)); then
+    printf '%s: refusing %s: it holds a NUL byte\n' "${0##*/}" "$2" >&2
+    exit 2
+  elif ((rc > 1)); then
+    printf '%s: could not read %s to check it for a NUL byte\n' "${0##*/}" "$2" >&2
+    exit 2
+  fi
+}
+
 failures=0
 
 # The non-ASCII heading check rests on grep reading code points under
@@ -291,6 +311,9 @@ for src_rel in "${SOURCES[@]}"; do
       "${0##*/}" "${src_rel}" >&2
     exit 2
   fi
+  # A NUL-bearing source reads as matching with no links printed, so it is
+  # refused here, once grep has shown the file can be read.
+  refuse_nul "${src_abs}" "${src_rel}"
 
   heading_rc=0
   heading_out="$(non_ascii_headings "${src_abs}")" || heading_rc=$?
@@ -341,14 +364,24 @@ for src_rel in "${SOURCES[@]}"; do
       continue
     fi
     if [[ -z ${anchor_cache[${target_abs}]+set} ]]; then
-      anchor_cache["${target_abs}"]="$(headings_of "${target_abs}")"
+      target_rel="$(realpath --relative-to="${REPO_ROOT}" -- "${target_abs}")"
+      refuse_nul "${target_abs}" "${target_rel}"
+      target_headings="$(headings_of "${target_abs}")" || {
+        printf '%s: could not read %s for headings\n' "${0##*/}" "${target_rel}" >&2
+        exit 2
+      }
+      anchor_cache["${target_abs}"]="${target_headings}"
       targets_scanned=$((targets_scanned + 1))
       target_anchors=0
       if [[ -n ${anchor_cache[${target_abs}]} ]]; then
         target_anchors="$(printf '%s\n' "${anchor_cache[${target_abs}]}" | wc -l)"
       fi
       anchors_total=$((anchors_total + target_anchors))
-      lossy_total=$((lossy_total + $(lossy_heading_count "${target_abs}")))
+      target_lossy="$(lossy_heading_count "${target_abs}")" || {
+        printf '%s: could not read %s for its lossy-heading count\n' "${0##*/}" "${target_rel}" >&2
+        exit 2
+      }
+      lossy_total=$((lossy_total + target_lossy))
     fi
     local_headings="${anchor_cache[${target_abs}]}"
     links_checked=$((links_checked + 1))
