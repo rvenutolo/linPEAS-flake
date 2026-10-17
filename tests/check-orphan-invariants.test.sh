@@ -66,7 +66,7 @@ function main() {
   run_scenario 'orphan index link fails' \
     'bad-orphan-link' 1 '[orphan-link]'
   run_scenario 'unreferenced doc fails' \
-    'bad-unreferenced-doc' 1 '[unreferenced-doc]'
+    'bad-unreferenced-doc' 1 '[unreferenced-doc] docs/security/bar.md exists'
   # An absent index is a missing input, not a docs/index divergence: the
   # tooling code keeps it out of the drift bucket.
   run_scenario 'absent index is a tooling error' \
