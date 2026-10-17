@@ -528,7 +528,10 @@ DIR/scripts/a.sh:3: grep range [d-e] follows the locale$(footer 2)"
   # Where the script is: -e operands (alone, attached, long, ending a
   # cluster, repeated), else the first operand past options that take
   # no argument (-i SUFFIX ends a cluster), -l N, and --. With -e, a
-  # later operand is a file.
+  # later operand is a file. -i takes the rest of its word as the backup
+  # suffix, so -if ends the cluster there and is not read as -f; a
+  # separate --expression argument is a script; after --, a word that
+  # starts with - is the script.
   put sed-options scripts/a.sh '#!/usr/bin/env bash' \
     "sed -n -e 's/[a-c]//' f" \
     "sed --expression='s/[d-e]//' f" \
@@ -539,7 +542,10 @@ DIR/scripts/a.sh:3: grep range [d-e] follows the locale$(footer 2)"
     "sed --line-length 80 's/[p-q]//' f" \
     "sed -E --posix -- 's/[r-s]//' f" \
     "sed -e 's/x//' -e 's/[t-u]//' f" \
-    "sed -e 's/x//' '[v-w]' f"
+    "sed -e 's/x//' '[v-w]' f" \
+    "sed -if 's/[x-y]//' f" \
+    "sed --expression 's/x//' --expression 's/[c-d]//' f" \
+    "sed -n -- '-[e-f]' f"
   run_case sed-options 1 '' "DIR/scripts/a.sh:2: sed range [a-c] follows the locale
 DIR/scripts/a.sh:3: sed range [d-e] follows the locale
 DIR/scripts/a.sh:4: sed range [f-g] follows the locale
@@ -548,10 +554,13 @@ DIR/scripts/a.sh:6: sed range [j-k] follows the locale
 DIR/scripts/a.sh:7: sed range [l-m] follows the locale
 DIR/scripts/a.sh:8: sed range [p-q] follows the locale
 DIR/scripts/a.sh:9: sed range [r-s] follows the locale
-DIR/scripts/a.sh:10: sed range [t-u] follows the locale$(footer 9)"
+DIR/scripts/a.sh:10: sed range [t-u] follows the locale
+DIR/scripts/a.sh:12: sed range [x-y] follows the locale
+DIR/scripts/a.sh:13: sed range [c-d] follows the locale
+DIR/scripts/a.sh:14: sed range [e-f] follows the locale$(footer 12)"
 
-  put sed-unresolved scripts/a.sh '#!/usr/bin/env bash' 'sed -f script.sed f' 'sed --file=x.sed f' 'sed -E "$1" f' 'sed "$(cat p)" f' "sed 's/[0-9]//' f"
-  run_case sed-unresolved 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 5 sed call(s), 0 under a C locale, 4 unresolved, 0 marked' ''
+  put sed-unresolved scripts/a.sh '#!/usr/bin/env bash' 'sed -f script.sed f' 'sed --file=x.sed f' 'sed -fx.sed f' 'sed -E "$1" f' 'sed "$(cat p)" f' "sed 's/[0-9]//' f"
+  run_case sed-unresolved 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 6 sed call(s), 0 under a C locale, 5 unresolved, 0 marked' ''
 
   put sed-option-in-variable scripts/a.sh '#!/usr/bin/env bash' "opt='-n'" "sed \"\${opt}\" 's/[b-c]//' f" "sed -E 's/v[0-9]//' f"
   run_case sed-option-in-variable 0 'regex-range-ascii: ok — scanned 1 file(s), 0 =~ test(s), 0 with a regex in a variable, 0 under a C locale; 0 grep call(s), 0 not regex (-F/-P), 0 under a C locale, 0 unresolved, 0 marked; 2 sed call(s), 0 under a C locale, 1 unresolved, 0 marked' ''
