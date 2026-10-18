@@ -1579,9 +1579,9 @@ Honors SCRIPTS_DIR_OVERRIDE (default: scripts) and TESTS_DIR_OVERRIDE
 (default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
 
 Exits 0 when no such range is found, 1 when one is. Exits 2 when the
-check cannot run: `shfmt` or `jq` absent from PATH, a file in the parse
-set (described above) that `shfmt` cannot parse, or a scan set matching
-no file.
+check cannot run: `shfmt` or `jq` absent from PATH, a file in the scan
+set it cannot read, a file in the parse set (described above) that
+`shfmt` cannot parse, or a scan set matching no file.
 
 ### scripts/check-renovate-config-validator.sh
 
