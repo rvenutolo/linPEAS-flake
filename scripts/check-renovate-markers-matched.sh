@@ -19,9 +19,10 @@
 # Exits 0 when every marker is live, 1 on any dead marker, 2 on a tooling
 # error — the config cannot be read at all (absent, unreadable, or not a
 # regular file), its shape fails validation, the file enumeration failed
-# or came back empty, or jq cannot read a customManager's declarations —
-# so no verdict about the markers is available and reporting one would
-# blame a marker for a config-shape problem.
+# or came back empty, a scanned file cannot be read, or jq cannot read a
+# customManager's declarations — so no verdict about the markers is
+# available and reporting one would blame a marker for a config-shape
+# problem.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -225,10 +226,16 @@ fail=0
 live=''
 for rel in "${files[@]}"; do
   file="${SCAN_ROOT}/${rel}"
-  # Only files carrying a real renovate marker need coverage.
-  if ! grep --quiet --perl-regexp -- "${MARKER_RE}" "${file}"; then
-    continue
+  # Only files carrying a real renovate marker need coverage. grep's
+  # status 2 is a file it could not read, which would otherwise pass as a
+  # file with no marker and leave a dead marker inside it unreported.
+  rc=0
+  grep --quiet --perl-regexp -- "${MARKER_RE}" "${file}" 2>/dev/null || rc=$?
+  if ((rc > 1)); then
+    printf '%s: could not read %s for renovate markers\n' "${0##*/}" "${rel}" >&2
+    exit 2
   fi
+  ((rc == 0)) || continue
   # A marker dies two ways, and they call for different edits to
   # renovate.json: no managerFilePattern brings the file into any
   # manager's scope, or a manager does scope it but none of that

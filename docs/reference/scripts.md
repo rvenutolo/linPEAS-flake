@@ -1623,9 +1623,10 @@ fixture testing, and LINT_ALLOW_EMPTY_SCAN=1 to accept an empty scan set.
 Exits 0 when every marker is live, 1 on any dead marker, 2 on a tooling
 error — the config cannot be read at all (absent, unreadable, or not a
 regular file), its shape fails validation, the file enumeration failed
-or came back empty, or jq cannot read a customManager's declarations —
-so no verdict about the markers is available and reporting one would
-blame a marker for a config-shape problem.
+or came back empty, a scanned file cannot be read, or jq cannot read a
+customManager's declarations — so no verdict about the markers is
+available and reporting one would blame a marker for a config-shape
+problem.
 
 ### scripts/check-required-check-counts.sh
 
