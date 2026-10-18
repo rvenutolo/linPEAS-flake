@@ -4,14 +4,14 @@
 # or through same-file assignments up to three levels, unless the test runs
 # under a C locale; that it reads scripts/, scripts/lib/ and tests/; that it
 # leaves classes, escaped brackets, glob tests and byte ranges alone; and
-# that a file shfmt cannot parse, an empty scan set and an absent shfmt
-# are a could-not-run. It also proves the grep reading: pattern operands
-# located among grep's options, -F/-P and C-locale calls left alone, a
-# positive digit-only bracket left alone, negated and letter brackets
-# reported, the reasoned marker, and findings sorted by line. It proves the
-# sed reading too: scripts found among sed's options (-e, -i SUFFIX, -l N,
-# --), -f left unresolved, the whole script read, and the C-locale and
-# marker rules as for grep. Every tree is built at run time.
+# that a file shfmt cannot parse, a file it cannot read, an empty scan set
+# and an absent shfmt are a could-not-run. It also proves the grep reading:
+# pattern operands located among grep's options, -F/-P and C-locale calls
+# left alone, a positive digit-only bracket left alone, negated and letter
+# brackets reported, the reasoned marker, and findings sorted by line. It
+# proves the sed reading too: scripts found among sed's options (-e,
+# -i SUFFIX, -l N, --), -f left unresolved, the whole script read, and the
+# C-locale and marker rules as for grep. Every tree is built at run time.
 set -Eeuo pipefail
 IFS=$'\n\t'
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -610,6 +610,15 @@ DIR/scripts/a.sh:3: regex range 0-9 follows the locale$(footer 2)"
   # A file holding a grep range is parsed even with no =~ in it.
   put grep-unparsable scripts/a.sh '#!/usr/bin/env bash' "grep -E '[a-z]' f" 'if then fi )'
   run_case grep-unparsable 2 '' 'ERROR cannot parse DIR/scripts/a.sh'
+
+  # A file nothing can read must end the run, not read as a file holding
+  # no sign of a finding and be skipped while counted as scanned. The
+  # readable sibling keeps the scan set from being the only file.
+  put unreadable scripts/a.sh '#!/usr/bin/env bash' 'echo PAYLOAD_RAN'
+  put unreadable scripts/b.sh '#!/usr/bin/env bash' '[[ $1 =~ [0-9] ]]'
+  chmod 000 -- "${work}/unreadable/scripts/b.sh"
+  run_case unreadable 2 '' 'ERROR cannot read DIR/scripts/b.sh'
+  chmod 644 -- "${work}/unreadable/scripts/b.sh"
 
   # An absolute bash and a PATH holding no shfmt: the script is reached,
   # and its own guard is what fires.
