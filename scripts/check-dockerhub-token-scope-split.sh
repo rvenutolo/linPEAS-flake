@@ -208,8 +208,8 @@ for wf in "${workflow_files[@]}"; do
   matches="$(sort --unique <<<"${matches}")"
   while IFS= read -r match; do
     [[ -z ${match} ]] && continue
-    # Under LC_ALL=C the match holds ASCII only, so upper-casing its name
-    # folds nothing else.
+    # The name holds ASCII only (secret_ref_name matches it through
+    # ascii_match), so upper-casing it folds nothing else.
     name="$(secret_ref_name "${match}")"
     if [[ ${name^^} != 'DOCKERHUB_TOKEN_RW' &&
       ${name^^} != 'DOCKERHUB_TOKEN_DELETE' ]]; then

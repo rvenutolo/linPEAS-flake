@@ -21,9 +21,10 @@ manifest digest-pinning rules and is indexed below like any other
 rule-bearing page. The array in
 `scripts/check-orphan-invariants.sh` is the authoritative list.
 
-Entry paths are lowercase ASCII and are read under a C locale: a doc whose path
-holds a non-ASCII letter never matches an entry, so it is reported as an
-unreferenced doc in every locale.
+Entry paths are lowercase ASCII and are read under a C locale against the
+link-path class in `scripts/check-orphan-invariants.sh`: a doc whose path
+falls outside that class (an uppercase or non-ASCII letter, say) never
+matches an entry, so it is reported as an unreferenced doc in every locale.
 
 Each entry carries an `enforcer: ...; ci: ...; hook: ...` annotation
 that `scripts/refresh-enforcement-matrix.sh` renders into
@@ -42,7 +43,8 @@ exercises the enforcer — even against the checkout, as
 value is asserted rather than described: the generator reads the roster
 through `scripts/run-harness-group.sh --print-roster` and fails if an
 entry claims `ci: harness-group` without naming an enforce script the
-roster runs, or if a roster enforce script is annotated nowhere.
+roster runs, or if a roster enforce script is named by no entry that says
+`ci: harness-group`.
 `doc-freshness` is different by construction: its
 `tests/refresh-*.test.sh` harnesses run the generators over the real
 tree and are the job's whole purpose, so the generator-owned rules
