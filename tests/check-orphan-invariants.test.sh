@@ -61,7 +61,31 @@ function run_scenario() {
   rm --force -- "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
+# Build an index holding one in-class pointer to an existing doc and the
+# given extra link, then run the lint against it. An optional docs-relative
+# path is created as a doc.
+function run_off_class_scenario() {
+  local -r name="$1"
+  local -r link="$2"
+  local -r extra_doc="$3"
+  local -r expected_stderr="$4"
+
+  local root
+  root="$(mktemp --directory)"
+  mkdir --parents "${root}/docs"
+  printf '# Invariant index\n\n- **Ok** — x → [ok.md](ok.md).\n- **Extra** — x → %s.\n' \
+    "${link}" >"${root}/index.md"
+  printf '# Ok\n' >"${root}/docs/ok.md"
+  if [[ -n ${extra_doc} ]]; then
+    printf '# Extra\n' >"${root}/docs/${extra_doc}"
+  fi
+  run_scenario "${name}" "${root}" 1 "${expected_stderr}"
+  rm --recursive --force -- "${root}"
+}
+
 function main() {
+  # The good index also holds a placeholder pointer, which documents the
+  # entry shape and must not be reported.
   run_scenario 'good tree passes' 'good' 0 ''
   run_scenario 'orphan index link fails' \
     'bad-orphan-link' 1 '[orphan-link]'
@@ -102,6 +126,25 @@ function main() {
   run_scenario 'last non-ASCII link on an index line leaves only that doc unreferenced' \
     "${root}" 1 '[unreferenced-doc] docs/security/café.md exists' en_US.UTF-8
   rm --recursive --force -- "${root}"
+
+  # A pointer outside the link-path class is reported rather than skipped,
+  # so a broken pointer of that shape cannot pass the forward check.
+  run_off_class_scenario 'uppercase index pointer is reported' \
+    '[Missing.md](Missing.md)' '' 'Missing.md is outside'
+  run_off_class_scenario 'leading-digit index pointer is reported' \
+    '[1foo.md](1foo.md)' '' '1foo.md is outside'
+  run_off_class_scenario 'non-ASCII index pointer is reported' \
+    '[naïve.md](naïve.md)' '' 'naïve.md is outside'
+  run_off_class_scenario 'URL index pointer is reported' \
+    '[a.md](https://example.com/a.md)' '' 'https://example.com/a.md is outside'
+  run_off_class_scenario 'parent-relative index pointer is reported' \
+    '[README.md](../README.md#top)' '' '../README.md is outside'
+  # The target exists, so only the class check can fail the forward half;
+  # the reverse half still reports the doc as unreferenced.
+  run_off_class_scenario 'off-class pointer to an existing doc is still reported' \
+    '[Present.md](Present.md)' 'Present.md' 'Present.md is outside'
+  run_off_class_scenario 'off-class pointer to an existing doc leaves the doc unreferenced' \
+    '[Here.md](Here.md)' 'Here.md' '[unreferenced-doc] docs/Here.md exists'
 
   harness_assert_verify || failures=$((failures + 1))
 
