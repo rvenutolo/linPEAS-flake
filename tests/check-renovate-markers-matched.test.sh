@@ -17,7 +17,8 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/renovate-markers"
 failures=0
 
 # @description Run the script against a fixture dir; assert exit, stderr,
-# and the coverage summary the clean path prints to stdout.
+# and the coverage summary the clean path prints to stdout. SCENARIO_DIR,
+# when set, names a scratch copy to run against instead of the fixture.
 # @arg $1 scenario name
 # @arg $2 fixture dir name under FIXTURES
 # @arg $3 expected exit code (0 live, 1 dead marker, 2 tooling error)
@@ -36,8 +37,9 @@ function run_scenario() {
   outcome_file="$(mktemp)"
 
   local actual_exit=0
-  RENOVATE_JSON_OVERRIDE="${FIXTURES}/${fixture}/renovate.json" \
-    SCAN_ROOT="${FIXTURES}/${fixture}" \
+  local -r dir="${SCENARIO_DIR:-${FIXTURES}/${fixture}}"
+  RENOVATE_JSON_OVERRIDE="${dir}/renovate.json" \
+    SCAN_ROOT="${dir}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   harness_assert_record "${name}" "${expected_stderr}" \
@@ -199,6 +201,17 @@ function main() {
   run_scenario 'non-object customManagers entry is a tooling error' \
     'bad-custom-managers-item-type' 2 \
     'renovate markers: unexpected payload shape from RENOVATE_JSON_OVERRIDE: a customManagers entry is not an object'
+  # A file nothing can read must end the run, not read as a file with no
+  # marker: the dead marker inside it would go unreported and the run
+  # pass. The scratch copy keeps the chmod off the tracked fixture.
+  local unreadable
+  unreadable="$(mktemp --directory)"
+  cp --recursive -- "${FIXTURES}/dead-path/." "${unreadable}"
+  chmod 000 -- "${unreadable}/sub/app.yml"
+  SCENARIO_DIR="${unreadable}" run_scenario 'unreadable scanned file is a tooling error' \
+    'dead-path' 2 'could not read sub/app.yml for renovate markers'
+  chmod 644 -- "${unreadable}/sub/app.yml"
+  rm --recursive --force -- "${unreadable}"
   run_live_tree
   run_broken_index
   harness_assert_verify || failures=$((failures + 1))
