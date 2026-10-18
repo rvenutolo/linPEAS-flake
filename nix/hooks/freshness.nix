@@ -287,7 +287,7 @@ in
   check-doc-anchors = {
     enable = true;
     name = "check-doc-anchors";
-    description = "Every markdown #anchor link resolves to a heading slug or an explicit HTML anchor in its target file.";
+    description = "Every markdown #anchor link resolves to a heading slug or an explicit `<a name>` anchor in its target file.";
     entry = "${pkgs-unstable.writeShellScript "check-doc-anchors-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'

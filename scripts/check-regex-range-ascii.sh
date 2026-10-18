@@ -30,10 +30,11 @@
 # `mapfile`, `getopts`, `printf -v`, a `let`, `(( ))` or `$(( ))` that
 # holds a literal `LC_ALL`, read or written, a C-style `for` whose header
 # or body holds one (`echo LC_ALL` counts; `$LC_ALL` is not a literal),
-# `exec {LC_ALL}>` or `for LC_ALL in`, in the same
-# function or outside any function, ends that; an element name
-# (`LC_ALL[0]`) counts as `LC_ALL`. A write through `eval` or a nameref is
-# not read, nor is the order in which functions are called. A declaration
+# `exec {LC_ALL}>` or `for LC_ALL in`, in the same function or outside
+# any function, ends that; an element name (`LC_ALL[0]`) counts as
+# `LC_ALL`, except inside a `let`, `(( ))`, `$(( ))` or C-style `for`
+# header. A write through `eval` or a nameref is not read, nor is the
+# order in which functions are called. A declaration
 # inside a subshell, a command substitution, a conditional or a
 # background statement does not start a C locale; an `unset` or write in
 # one still ends it, as do `unset -f`, `unset -n` and

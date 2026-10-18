@@ -312,9 +312,9 @@ Exit codes:
 
 Lint: every markdown #anchor link pointing at an
 in-tree .md (or same-file fragment) must match a heading slug or an
-explicit `<a name>` anchor in the target file; a link to a missing
-`.md`, and a non-ASCII heading with no explicit anchor, are reported
-too.
+explicit `<a name>` anchor in the target file; an anchor link whose
+target `.md` is missing, and a non-ASCII heading with no explicit
+anchor, are reported too.
 
 ### scripts/check-doc-cron-restatement.sh
 
@@ -1486,10 +1486,11 @@ with the whole assignment quoted) that sets anything but one lone `C` or
 `mapfile`, `getopts`, `printf -v`, a `let`, `(( ))` or `$(( ))` that
 holds a literal `LC_ALL`, read or written, a C-style `for` whose header
 or body holds one (`echo LC_ALL` counts; `$LC_ALL` is not a literal),
-`exec {LC_ALL}>` or `for LC_ALL in`, in the same
-function or outside any function, ends that; an element name
-(`LC_ALL[0]`) counts as `LC_ALL`. A write through `eval` or a nameref is
-not read, nor is the order in which functions are called. A declaration
+`exec {LC_ALL}>` or `for LC_ALL in`, in the same function or outside
+any function, ends that; an element name (`LC_ALL[0]`) counts as
+`LC_ALL`, except inside a `let`, `(( ))`, `$(( ))` or C-style `for`
+header. A write through `eval` or a nameref is not read, nor is the
+order in which functions are called. A declaration
 inside a subshell, a command substitution, a conditional or a
 background statement does not start a C locale; an `unset` or write in
 one still ends it, as do `unset -f`, `unset -n` and

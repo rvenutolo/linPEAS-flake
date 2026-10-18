@@ -3,9 +3,9 @@
 #
 # @description Lint: every markdown #anchor link pointing at an
 # in-tree .md (or same-file fragment) must match a heading slug or an
-# explicit `<a name>` anchor in the target file; a link to a missing
-# `.md`, and a non-ASCII heading with no explicit anchor, are reported
-# too.
+# explicit `<a name>` anchor in the target file; an anchor link whose
+# target `.md` is missing, and a non-ASCII heading with no explicit
+# anchor, are reported too.
 
 # Sources scanned: docs/invariant-index.md, README.md, docs/**/*.md.
 # (`.claude/CLAUDE.md` is intentionally untracked, so CI cannot scan it.
