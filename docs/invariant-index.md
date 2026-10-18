@@ -25,6 +25,10 @@ Entry paths are lowercase ASCII and are read under a C locale against the
 link-path class in `scripts/check-orphan-invariants.sh`: a doc whose path
 falls outside that class (an uppercase or non-ASCII letter, say) never
 matches an entry, so it is reported as an unreferenced doc in every locale.
+A `.md` link target here that falls outside that class (an uppercase or
+non-ASCII letter, a leading digit, a URL or a `../` path) is reported as an
+off-class link rather than skipped, so a broken pointer of that shape fails
+the lint too.
 
 Each entry carries an `enforcer: ...; ci: ...; hook: ...` annotation
 that `scripts/refresh-enforcement-matrix.sh` renders into

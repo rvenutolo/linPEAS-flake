@@ -14,9 +14,11 @@
 #
 # Entries inside the index use paths RELATIVE TO docs/ (e.g.
 # `[security/foo.md](security/foo.md)`). Entry paths are lowercase ASCII,
-# matched by the link-path class in the extraction below: a path outside it
-# (an uppercase or non-ASCII letter, say) is never an entry, so its doc
-# reports [unreferenced-doc] in every locale.
+# matched by the link-path class in the extraction below. A `.md` link
+# target outside it (an uppercase or non-ASCII letter, a leading digit, a
+# URL or a `../` path, say) is reported as [off-class-link] rather than
+# checked, and is never an entry, so its doc reports [unreferenced-doc]
+# in every locale.
 #
 # Env overrides (test-only):
 #   INVARIANT_INDEX_OVERRIDE — alternate index path
@@ -73,14 +75,16 @@ failures=0
 
 referenced_file="$(make_temp)"
 all_docs="$(make_temp)"
-trap 'rm -f "${referenced_file}" "${all_docs}"' EXIT
+off_class_file="$(make_temp)"
+trap 'rm -f "${referenced_file}" "${all_docs}" "${off_class_file}"' EXIT
 
 # Extract paths from markdown links of the form [text](path) where
 # path looks like a docs-relative .md (no protocol, no leading slash).
 # Skip placeholder paths containing `<` or `>`.
 # The link path class is lowercase ASCII and both commands read it under C,
 # so a path outside it (an uppercase or non-ASCII letter, say) is never an
-# entry and its doc reports [unreferenced-doc] in every locale.
+# entry and its doc reports [unreferenced-doc] in every locale; the
+# off-class half of the forward check reports the pointer itself.
 {
   LC_ALL=C grep --line-number --extended-regexp \
     '\[[^]]+\]\([a-z][a-z0-9_/.-]*\.md([#][^)]*)?\)' \
@@ -90,7 +94,29 @@ trap 'rm -f "${referenced_file}" "${all_docs}"' EXIT
   (grep --invert-match --extended-regexp '[<>]' || true) |
   sort --unique >"${referenced_file}"
 
-# Forward check.
+# Forward check, off-class half. A `.md` link target the class above does
+# not match is never extracted, so the resolve loop below cannot see it;
+# report it here instead, or a broken pointer of that shape would pass.
+# Targets holding `<` or `>` are placeholders, skipped as above.
+{
+  LC_ALL=C grep --line-number --only-matching --extended-regexp \
+    '\[[^]]+\]\([^)#]*\.md([#][^)]*)?\)' \
+    "${INDEX}" || true
+} |
+  LC_ALL=C sed --regexp-extended 's|^([0-9]+):\[[^]]+\]\(([^)#]*\.md)([#][^)]*)?\)$|\1:\2|' |
+  {
+    LC_ALL=C grep --invert-match --extended-regexp \
+      '^[0-9]+:([a-z][a-z0-9_/.-]*\.md|.*[<>].*)$' || true
+  } >"${off_class_file}"
+
+while IFS=: read -r line target; do
+  [[ -z ${line} ]] && continue
+  printf '[off-class-link] %s:%s: %s is outside the index link-path class (a lowercase ASCII docs-relative .md path), so it cannot be checked\n' \
+    "${INDEX}" "${line}" "${target}" >&2
+  failures=$((failures + 1))
+done <"${off_class_file}"
+
+# Forward check, in-class half.
 while IFS= read -r rel; do
   [[ -z ${rel} ]] && continue
   if [[ ! -f "${DOCS_ROOT}/${rel}" ]]; then
