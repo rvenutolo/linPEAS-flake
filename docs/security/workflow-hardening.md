@@ -279,7 +279,7 @@ Enforced by `scripts/check-tool-guarded.sh`. Wired as the `lint-script-hygiene` 
 
 ## regex-range-ascii
 
-A bash `[[ … =~ … ]]` regex, a GNU `grep` pattern or a GNU `sed` script, in a script under `scripts/` (its libraries included) or a harness directly under `tests/` holds no range between ASCII letters or digits unless the test or call runs under a C locale. For grep and sed a positive bracket of digit ranges only (`[0-9]`) is not reported, since GNU grep and sed keep it ASCII in every locale. The rule and the two ways to meet it are in [linting.md, Locale-bound ranges in bash regexes, grep and sed](../development/linting.md#locale-bound-ranges-in-bash-regexes-grep-and-sed): a range follows the locale's collation, so under `en_US.UTF-8` a validator accepts characters the CI runner's `C.UTF-8` refuses, and CI cannot see it.
+A bash `[[ … =~ … ]]` regex, a GNU `grep` pattern or a GNU `sed` script, in a script under `scripts/` (its libraries included) or a harness directly under `tests/` holds no range between ASCII letters or digits unless the test or call runs under a C locale. For grep and sed a positive bracket of digit ranges only (`[0-9]`) is not reported, since GNU grep and sed keep it ASCII in every locale. The rule and how to meet it are in [linting.md, Locale-bound ranges in bash regexes, grep and sed](../development/linting.md#locale-bound-ranges-in-bash-regexes-grep-and-sed): a range follows the locale's collation, so under `en_US.UTF-8` a validator accepts characters the CI runner's `C.UTF-8` refuses, and CI cannot see it.
 
 What counts as a C locale, how a regex held in a variable is read, and what the lint does not read are stated in the header of `scripts/check-regex-range-ascii.sh`.
 

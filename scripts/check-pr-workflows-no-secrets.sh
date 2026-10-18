@@ -140,8 +140,8 @@ function report_use() {
       "${at}" "${suffix}" >&2
     ;;
   named)
-    # Under LC_ALL=C the reference holds ASCII only, so upper-casing its
-    # name folds nothing else.
+    # The name holds ASCII only (secret_ref_name matches it through
+    # ascii_match), so upper-casing it folds nothing else.
     name="$(secret_ref_name "${text}")"
     if [[ ${name^^} == 'GITHUB_TOKEN' ]]; then
       return 1

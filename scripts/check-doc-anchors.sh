@@ -2,19 +2,17 @@
 # scripts/check-doc-anchors.sh
 #
 # @description Lint: every markdown #anchor link pointing at an
-# in-tree .md (or same-file fragment) must match a heading slug in
-# the target file.
+# in-tree .md (or same-file fragment) must match a heading slug or an
+# explicit `<a name>` anchor in the target file; an anchor link whose
+# target `.md` is missing, and a non-ASCII heading with no explicit
+# anchor, are reported too.
 
-# Lint: every markdown link with a #anchor fragment whose target is
-# an in-tree .md (or same-file fragment) must match a heading slug
-# in the target.
-#
 # Sources scanned: docs/invariant-index.md, README.md, docs/**/*.md.
 # (`.claude/CLAUDE.md` is intentionally untracked, so CI cannot scan it.
 # The pre-commit hook will scan it locally if present.)
 #
-# Slugging runs under a C locale, so a non-ASCII byte is always deleted
-# regardless of the caller's locale.
+# The delete step (step 2 below) runs under a C locale, so a non-ASCII byte
+# is always deleted whatever the caller's locale.
 #
 # Slug algorithm — GFM (github-slugger), ASCII scope:
 #   1. Trim surrounding whitespace, then lowercase.
@@ -41,7 +39,8 @@
 # and explicit anchors are collected.
 #
 # mkdocs-material's toc slugify collapses separator runs, so it can
-# disagree with GFM on such a heading. Those headings carry an explicit
+# disagree with GFM on a heading whose deleted characters leave a
+# separator run (`release + tag`). Those headings carry an explicit
 # `<a name="...">` anchor, which this lint accepts as a target too.
 #
 # Env overrides (test-only):
@@ -51,11 +50,11 @@
 #   LINT_ALLOW_EMPTY_SCAN — set to 1 to accept a run that scanned no
 #     source file and checked no link.
 #
-# Exits 0 on clean, 1 on any failure, 2 when the sources could not be
-# enumerated, a source could not be read, the run covered nothing, or
-# grep --perl-regexp under C.UTF-8 cannot read UTF-8 (startup probe), a
-# source's or link target's headings cannot be read, or a source or link
-# target holds a NUL byte, is not valid UTF-8, or cannot be read.
+# Exits 0 on clean, 1 on any failure. Exits 2 when the check cannot run:
+# the sources could not be enumerated; grep --perl-regexp under C.UTF-8
+# cannot read UTF-8 (startup probe); a source or link target cannot be
+# read, holds a NUL byte, is not valid UTF-8, or its headings cannot be
+# read; or the run covered nothing.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -76,8 +75,8 @@ function slug() {
   s="${s#"${s%%[![:space:]]*}"}"
   s="${s%"${s##*[![:space:]]}"}"
   s="$(printf '%s' "${s}" | tr '[:upper:]' '[:lower:]')"
-  # The pin keeps the slug independent of the caller's locale whatever
-  # the heading filter in headings_of admits.
+  # The pin keeps the delete step independent of the caller's locale
+  # whatever the heading filter in headings_of admits.
   s="$(printf '%s' "${s}" | LC_ALL=C sed --regexp-extended 's/[^a-z0-9 _-]+//g; s/ /-/g')"
   printf '%s\n' "${s}"
 }

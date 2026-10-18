@@ -147,7 +147,7 @@ Hooks (alphabetical):
 | `auto-merge-decline-gate`           | Auto-merge run-blocks carry the CLOSED/MERGED decline gate.                                                                                              |
 | `bump-script-integrity`             | scripts/bump-linpeas.sh keeps its URL-prefix, .digest, and atomic-write guards.                                                                          |
 | `check-cron-table`                  | Cron schedule table in docs/architecture/ci.md matches workflow cron triggers, and the ordering paragraph matches the table's daily rows.                |
-| `check-doc-anchors`                 | Every markdown #anchor link resolves to a heading slug in its target file.                                                                               |
+| `check-doc-anchors`                 | Every markdown #anchor link resolves to a heading slug or an explicit `<a name>` anchor in its target file.                                              |
 | `check-doc-cron-restatement`        | Docs outside ci.md must link the cron schedule table, not restate literal workflow times.                                                                |
 | `check-ephemeral-refs`              | Markdown prose and shell/Nix/YAML comments carry no ephemeral references (PR/issue refs, prose dates, planning/review labels, literal .claude/ paths).   |
 | `check-jsonschema`                  | Schema-shape validation of repo config (renovate.json, workflows, actions).                                                                              |

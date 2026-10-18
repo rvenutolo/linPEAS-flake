@@ -21,9 +21,10 @@ manifest digest-pinning rules and is indexed below like any other
 rule-bearing page. The array in
 `scripts/check-orphan-invariants.sh` is the authoritative list.
 
-Entry paths are lowercase ASCII and are read under a C locale: a doc whose path
-holds a non-ASCII letter never matches an entry, so it is reported as an
-unreferenced doc in every locale.
+Entry paths are lowercase ASCII and are read under a C locale against the
+link-path class in `scripts/check-orphan-invariants.sh`: a doc whose path
+falls outside that class (an uppercase or non-ASCII letter, say) never
+matches an entry, so it is reported as an unreferenced doc in every locale.
 
 Each entry carries an `enforcer: ...; ci: ...; hook: ...` annotation
 that `scripts/refresh-enforcement-matrix.sh` renders into
@@ -42,7 +43,8 @@ exercises the enforcer — even against the checkout, as
 value is asserted rather than described: the generator reads the roster
 through `scripts/run-harness-group.sh --print-roster` and fails if an
 entry claims `ci: harness-group` without naming an enforce script the
-roster runs, or if a roster enforce script is annotated nowhere.
+roster runs, or if a roster enforce script is named by no entry that says
+`ci: harness-group`.
 `doc-freshness` is different by construction: its
 `tests/refresh-*.test.sh` harnesses run the generators over the real
 tree and are the job's whole purpose, so the generator-owned rules
@@ -178,7 +180,7 @@ scope for this index either way.
 - **Scripts-reference round trip** — every piece of script-header text the generator is meant to publish is visible, as written, in its own part of its entry in `docs/reference/scripts.md` as the site renders it, with no word dropped or altered and an indented block after a colon line kept as exactly one preformatted block, indentation included, under the per-unit comparison rules the section states; header text in the shapes the generator never reads fails too. → [development/linting.md](development/linting.md) <!-- enforcer: scripts/check-scripts-reference-roundtrip.sh; ci: lint-doc-invariants; hook: check-scripts-reference-roundtrip -->
 - **Round-trip renderer Python leads the doc-lint shell** — `devShells.default` lists the Python bound in `nix/renderer-python.nix` as its first `buildInputs` entry, so the `python3` the `lint-doc-invariants` group's scripts-reference round-trip check runs carries python-markdown, Pygments, pymdown-extensions and PyYAML itself rather than through a propagated `PYTHONPATH`; the check's pre-commit hook uses the same binding. → [development/linting.md](development/linting.md) <!-- enforcer: -; ci: flake-check; hook: - -->
 - **Python type checking** — every `.py` file under `scripts/` and `docs/_data/` passes `mypy --strict` with the options in `mypy.ini`, checked against the python-markdown and PyYAML versions the round-trip check runs with. → [development/linting.md](development/linting.md) <!-- enforcer: -; ci: flake-check; hook: mypy-strict -->
-- **Markdown anchor resolution** — every `#anchor` link in `README.md` or `docs/**/*.md` into an in-tree `.md` file resolves to a heading slug in its target; a zero-link scan fails unless `LINT_ALLOW_EMPTY_SCAN=1`. → [development/linting.md](development/linting.md) <!-- enforcer: scripts/check-doc-anchors.sh; ci: lint-doc-invariants; hook: check-doc-anchors -->
+- **Markdown anchor resolution** — every `#anchor` link in `README.md` or `docs/**/*.md` into an in-tree `.md` file resolves to a heading slug or an explicit `<a name>` anchor in its target; a zero-link scan fails unless `LINT_ALLOW_EMPTY_SCAN=1`. → [development/linting.md](development/linting.md) <!-- enforcer: scripts/check-doc-anchors.sh; ci: lint-doc-invariants; hook: check-doc-anchors -->
 - **Config schema validation** — `renovate.json`, workflow YAML, composite-action YAML and `.markdownlint.json` validate against pinned JSON Schemas. → [development/linting.md](development/linting.md) <!-- enforcer: scripts/check-jsonschema.sh; ci: lint-doc-invariants; hook: check-jsonschema -->
 - **Docs-audit point is recorded** — `.github/docs-audit-state` names the commit the semantic docs audit last ran against, written by `scripts/mark-docs-audit.sh`; the `docs-audit-reminder.yml` workflow measures drift pressure from it, and a marker that is absent, carries no `LAST_AUDIT_SHA` line, or names a commit outside this history is a could-not-run rather than a fallback to a fixed window. → [development/docs-audit.md](development/docs-audit.md) <!-- enforcer: scripts/docs-audit-pressure.sh; ci: -; hook: - -->
 - **Flake outputs reference** — auto-regenerated `nix flake show --all-systems` tree; do not hand-edit. → [reference/flake-outputs.md](reference/flake-outputs.md) <!-- enforcer: scripts/refresh-flake-show.sh; ci: doc-freshness; hook: flake-show-fresh -->

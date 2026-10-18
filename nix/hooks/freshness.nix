@@ -282,12 +282,12 @@ in
     language = "system";
   };
   # Asserts every #anchor fragment in markdown links across
-  # README.md and docs/**/*.md matches a heading slug in the
-  # target file (ASCII GFM/mkdocs rule).
+  # README.md and docs/**/*.md matches a heading slug (ASCII
+  # GFM/mkdocs rule) or an explicit <a name> anchor in the target file.
   check-doc-anchors = {
     enable = true;
     name = "check-doc-anchors";
-    description = "Every markdown #anchor link resolves to a heading slug in its target file.";
+    description = "Every markdown #anchor link resolves to a heading slug or an explicit `<a name>` anchor in its target file.";
     entry = "${pkgs-unstable.writeShellScript "check-doc-anchors-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'

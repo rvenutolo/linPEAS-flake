@@ -13,9 +13,10 @@
 #            has an index entry.
 #
 # Entries inside the index use paths RELATIVE TO docs/ (e.g.
-# `[security/foo.md](security/foo.md)`). Entry paths are lowercase ASCII: a path
-# with a non-ASCII letter is never an entry, so its doc reports
-# [unreferenced-doc] in every locale.
+# `[security/foo.md](security/foo.md)`). Entry paths are lowercase ASCII,
+# matched by the link-path class in the extraction below: a path outside it
+# (an uppercase or non-ASCII letter, say) is never an entry, so its doc
+# reports [unreferenced-doc] in every locale.
 #
 # Env overrides (test-only):
 #   INVARIANT_INDEX_OVERRIDE — alternate index path
@@ -77,9 +78,9 @@ trap 'rm -f "${referenced_file}" "${all_docs}"' EXIT
 # Extract paths from markdown links of the form [text](path) where
 # path looks like a docs-relative .md (no protocol, no leading slash).
 # Skip placeholder paths containing `<` or `>`.
-# The link path class is ASCII and both commands read it under C, so a path
-# holding a non-ASCII letter is never an entry and its doc reports
-# [unreferenced-doc] in every locale.
+# The link path class is lowercase ASCII and both commands read it under C,
+# so a path outside it (an uppercase or non-ASCII letter, say) is never an
+# entry and its doc reports [unreferenced-doc] in every locale.
 {
   LC_ALL=C grep --line-number --extended-regexp \
     '\[[^]]+\]\([a-z][a-z0-9_/.-]*\.md([#][^)]*)?\)' \

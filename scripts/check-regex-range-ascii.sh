@@ -27,11 +27,14 @@
 # `declare`, `local` or `export` (also behind `builtin` or `command`, and
 # with the whole assignment quoted) that sets anything but one lone `C` or
 # `C.UTF-8` word, or a later `unset LC_ALL`, `wait -p LC_ALL`, `read`,
-# `mapfile`, `getopts`, `printf -v`, arithmetic assignment (also in a
-# C-style `for`), `exec {LC_ALL}>` or `for LC_ALL in`, in the same
-# function or outside any function, ends that; an element name
-# (`LC_ALL[0]`) counts as `LC_ALL`. A write through `eval` or a nameref is
-# not read, nor is the order in which functions are called. A declaration
+# `mapfile`, `getopts`, `printf -v`, a `let`, `(( ))` or `$(( ))` that
+# holds a literal `LC_ALL`, read or written, a C-style `for` whose header
+# or body holds one (`echo LC_ALL` counts; `$LC_ALL` is not a literal),
+# `exec {LC_ALL}>` or `for LC_ALL in`, in the same function or outside
+# any function, ends that; an element name (`LC_ALL[0]`) counts as
+# `LC_ALL`, except inside a `let`, `(( ))`, `$(( ))` or C-style `for`
+# header. A write through `eval` or a nameref is not read, nor is the
+# order in which functions are called. A declaration
 # inside a subshell, a command substitution, a conditional or a
 # background statement does not start a C locale; an `unset` or write in
 # one still ends it, as do `unset -f`, `unset -n` and
@@ -59,27 +62,33 @@
 # A grep call is a command whose word, after leading `command` or
 # `builtin` words and their options and `env` with its options and
 # NAME=value words, is `grep`, `egrep` or `fgrep`; `command -v grep` is
-# a lookup, not a call. `env` options are skipped, and `-u`/`--unset` and
-# `-C`/`--chdir` consume their argument; `env -S` is not read. A call's
-# patterns are its `-e`/`--regexp` operands, or, when there are none and
-# no `-f`/`--file`, its first operand; options are read wherever they
-# stand, up to `--`, and an option's own argument (`-m 1`) is never a
-# pattern. A first operand before any `--` that is a plain variable
-# (`"$opt"`, `${opt}`) with a same-file value starting with `-` is an
-# option, so the call is unresolved. A call with `-F`/`--fixed-strings`
-# holds no regex and one with `-P`/`--perl-regexp` matches by code point;
-# neither is read. A call runs under a C locale when an `LC_ALL=C` or
-# `LC_ALL=C.UTF-8` assignment prefixes it (also through `env`), or when it
-# stands in a scope that sets a C locale as described above; a prefix with
-# any other `LC_ALL` value overrides that scope, and so does
-# `env -u LC_ALL` (or `--unset`) unless a later `env` word sets
-# `LC_ALL=C` again. Only `LC_ALL` is read. A pattern held in a variable is
-# followed as a `=~` regex is. Inside a pattern, a `$name` or a backtick
-# in single quotes is still read as an expansion, as for `=~`: a
-# single-quoted `$name` is followed, and a backtick counts the call as
-# unresolved. That also reads a sed `$` address followed by a command
-# letter (`'$d'`) as the variable `d`, so such a call can be reported
-# through a same-file `d` value.
+# a lookup, not a call. `env` options are skipped, and `-u`/`--unset`
+# and `-C`/`--chdir` consume their argument; `env -S` is not read. A
+# call's patterns are its `-e`/`--regexp` operands, or, when there are
+# none and no `-f`/`--file`, its first operand; options are read
+# wherever they stand, up to `--`, and an option's own argument (`-m 1`)
+# is never a pattern. The grep options read as taking an argument are
+# `-e`, `-f`, `-m`, `-A`, `-B`, `-C`, `-d` and `-D`, and the long
+# options `--regexp`, `--file`, `--max-count`, `--after-context`,
+# `--before-context`, `--context`, `--label`, `--include`, `--exclude`,
+# `--exclude-from`, `--exclude-dir`, `--binary-files`, `--devices` and
+# `--directories`. A first operand before any `--` that is a plain
+# variable (`"$opt"`, `${opt}`) with a same-file value starting with `-`
+# is an option, so the call is unresolved. A call with
+# `-F`/`--fixed-strings` holds no regex and one with
+# `-P`/`--perl-regexp` matches by code point; neither is read. A call
+# runs under a C locale when an `LC_ALL=C` or `LC_ALL=C.UTF-8`
+# assignment prefixes it (also through `env`), or when it stands in a
+# scope that sets a C locale as described above; a prefix with any other
+# `LC_ALL` value overrides that scope, and so does `env -u LC_ALL` (or
+# `--unset`) unless a later `env` word sets `LC_ALL=C` again. Only
+# `LC_ALL` is read. A pattern held in a variable is followed as a `=~`
+# regex is. Inside a pattern, a `$name` or a backtick in single quotes
+# is still read as an expansion, as for `=~`: a single-quoted `$name` is
+# followed, and a backtick counts the call as unresolved. That also
+# reads a sed `$` address followed by a command letter (`'$d'`) as the
+# variable `d`, so such a call can be reported through a same-file `d`
+# value.
 #
 # A sed call is found as a grep call is: the same leading `command`,
 # `builtin` and `env` handling, and the same prefix and scope C-locale
@@ -111,13 +120,14 @@
 # from an array assigned as a list (`re=(…)`), from a sourced file, or
 # from a `-f` file or a sed `-f` script file; a call whose options come
 # from an array or `$@` expansion; an abbreviated long option
-# (`--regex=`) or a separate-argument long option outside the listed set
-# (`--group-separator SEP`); a regex inside `eval` or `bash -c` text;
-# grep or sed in workflow and composite-action `run:` blocks, which run
-# only on the runner, whose locale is `C.UTF-8`; grep run through a
-# wrapper command (`xargs`, `find -exec`, `timeout`, `nice`, `sudo` and
-# the like), which is neither read nor counted, and so is sed run
-# through one; and `awk`, `jq` and `yq` patterns.
+# (`--regex=`) or a separate-argument long option outside the set the
+# grep-call paragraph lists (`--group-separator SEP`); a regex inside
+# `eval` or `bash -c` text; grep or sed in workflow and composite-action
+# `run:` blocks, which run only on the runner, whose locale is
+# `C.UTF-8`; grep run through a wrapper command (`xargs`, `find -exec`,
+# `timeout`, `nice`, `sudo` and the like), which is neither read nor
+# counted, and so is sed run through one; and `awk`, `jq` and `yq`
+# patterns.
 #
 # The summary counts each grep or sed call once, in the first bucket it
 # fits: not regex (`-F`/`-P`, grep only), then under a C locale, then

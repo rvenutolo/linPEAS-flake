@@ -67,7 +67,8 @@ examples are not crawled.
 
 Every `#anchor` link in `README.md` or `docs/**/*.md` (plus `.claude/CLAUDE.md`
 locally, when present) that points at an in-tree
-`.md` file (or at its own file) must match a heading slug in the target.
+`.md` file (or at its own file) must match a heading slug or an explicit
+`<a name="...">` anchor in the target.
 Lychee resolves file paths, but neither `just lint-links` nor `links.yml`
 passes `--include-fragments`, so it never checks anchors at all — without this
 lint a renamed heading would reach `main` unreported. Enforced by
@@ -76,8 +77,8 @@ hook and as a member check of the `lint-doc-invariants` CI job; a run that
 finds zero anchor links fails unless `LINT_ALLOW_EMPTY_SCAN=1` states that
 the empty scan is deliberate.
 
-Slugs are computed under a C locale, so a non-ASCII byte in a heading is
-deleted whatever locale the caller runs in. A heading whose text holds a
+The slug's delete step runs under a C locale, so a non-ASCII byte in a
+heading is deleted whatever locale the caller runs in. A heading whose text holds a
 non-ASCII letter, mark or digit must carry an explicit `<a name="...">`
 anchor on the heading line, because GitHub keeps the character in its slug
 while mkdocs folds it to ASCII and no generated slug resolves on both; a
@@ -86,7 +87,8 @@ with an anchor answers to that anchor alone, not to a generated slug.
 Non-ASCII punctuation such as `—` or `→` is deleted by both renderers and
 stays allowed. Finding such a heading needs `grep --perl-regexp` to read UTF-8
 under `C.UTF-8`; when it cannot, the lint exits 2 instead of passing, and
-it exits 2 as well when it cannot read a source file's headings.
+it exits 2 as well when a source or link target cannot be read, holds a
+NUL byte, is not valid UTF-8, or its headings cannot be read.
 
 ## Config schema validation
 
@@ -715,7 +717,7 @@ locale, such as a probe of it, carries the marker
 `# regex-range-ascii: locale-bound: <reason>` on the line directly above
 it.
 
-The lint reads the whole `sed` script, so a
+`check-regex-range-ascii.sh` reads the whole `sed` script, so a
 bracket in replacement text or in a `y` command is reported too; mark
 such a call. `gawk` matches a range by code point in every locale (also
 under `--posix`, with `IGNORECASE`, and in a dynamic regex), so an `awk`
@@ -736,7 +738,9 @@ show the difference. A scenario under a locale that is not installed
 would run under C and pass whatever the script does. That probe asks
 bash; a scenario whose subject is a `grep` range calls
 `require_grep_locale_gap` instead, which asks the `grep` on PATH whether
-`[a-z]` admits `é`. GNU grep does not use the regex engine bash uses,
+`[a-z]` admits `é`, and one whose subject is a `sed` range calls
+`require_sed_locale_gap`, which asks the `sed` on PATH the same question.
+GNU grep does not use the regex engine bash uses,
 and keeps a lone positive `[0-9]` ASCII in every locale while it follows the
 locale for `[a-z]` and for a mixed range such as `[0-9a-f]`.
 
