@@ -128,9 +128,9 @@
 # (default: tests), and LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
 #
 # Exits 0 when no such range is found, 1 when one is. Exits 2 when the
-# check cannot run: `shfmt` or `jq` absent from PATH, a file in the parse
-# set (described above) that `shfmt` cannot parse, or a scan set matching
-# no file.
+# check cannot run: `shfmt` or `jq` absent from PATH, a file in the scan
+# set it cannot read, a file in the parse set (described above) that
+# `shfmt` cannot parse, or a scan set matching no file.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -559,6 +559,26 @@ function option_variable() {
   return 1
 }
 
+# @description Report whether a file holds a match for the given grep
+# options and pattern. grep's status 2 is a file it could not read, and
+# ends the run: read as "no match", it would skip the file as holding no
+# sign of a finding while still counting it as scanned.
+# @arg $1 file path
+# @arg $@ grep options and pattern, ending with `--` and the pattern
+# @exitcode 0 the file holds a match
+# @exitcode 1 it does not
+function file_holds() {
+  local -r file="$1"
+  shift
+  local rc=0
+  grep --quiet "$@" "${file}" 2>/dev/null || rc=$?
+  if ((rc > 1)); then
+    log_err "cannot read ${file}"
+    exit 2
+  fi
+  return "${rc}"
+}
+
 function main() {
   local -a files=()
   glob_into files 'scripts, script libraries and harnesses' \
@@ -579,11 +599,11 @@ function main() {
     # is line by line, so a range split by a backslash-newline inside
     # its bracket is not seen here, and a file holding no other sign is
     # not parsed.
-    if ! grep --quiet --fixed-strings -- '~' "${file}" &&
-      ! grep --quiet --fixed-strings -- "${MARKER}" "${file}" &&
-      ! { grep --quiet --word-regexp --regexp=grep --regexp=egrep --regexp=fgrep --regexp=sed -- "${file}" &&
-        grep --quiet --extended-regexp -- \
-          '\[\^?\]?([^]]|\[[:=.][^]]*[:=.]\])*[[:alnum:]]-[[:alnum:]]' "${file}"; }; then
+    if ! file_holds "${file}" --fixed-strings -- '~' &&
+      ! file_holds "${file}" --fixed-strings -- "${MARKER}" &&
+      ! { file_holds "${file}" --word-regexp --regexp=grep --regexp=egrep --regexp=fgrep --regexp=sed -- &&
+        file_holds "${file}" --extended-regexp -- \
+          '\[\^?\]?([^]]|\[[:=.][^]]*[:=.]\])*[[:alnum:]]-[[:alnum:]]'; }; then
       continue
     fi
     text="$(<"${file}")"
