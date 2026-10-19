@@ -110,7 +110,7 @@ function main() {
   # entry shape and must not be reported.
   run_scenario 'good tree passes' 'good' 0 ''
   run_scenario 'orphan index link fails' \
-    'bad-orphan-link' 1 '[orphan-link]'
+    'bad-orphan-link' 1 'docs/security/missing.md referenced but file missing'
   run_scenario 'unreferenced doc fails' \
     'bad-unreferenced-doc' 1 '[unreferenced-doc] docs/security/bar.md exists'
   # An absent index is a missing input, not a docs/index divergence: the
