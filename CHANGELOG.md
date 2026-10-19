@@ -6,6 +6,22 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261019-197d18d4] - 2026-10-19
+
+### Chores
+- Bump linpeas to 20261019-197d18d4 ([#1342](https://github.com/rvenutolo/linPEAS-flake/pull/1342))
+
+### Documentation
+- Replace the namespace-join container audit with working forms ([#1341](https://github.com/rvenutolo/linPEAS-flake/pull/1341))
+- Correct audited lint-scope, root-override and audit-scope claims ([#1339](https://github.com/rvenutolo/linPEAS-flake/pull/1339))
+- Correct locale, anchor and exit-code claims in lint docs ([#1334](https://github.com/rvenutolo/linPEAS-flake/pull/1334))
+
+### Fixes
+- Run linpeas under dash; give the image /tmp and /etc/passwd ([#1340](https://github.com/rvenutolo/linPEAS-flake/pull/1340))
+- Check every index pointer and reject dot segments in orphan-invariants ([#1338](https://github.com/rvenutolo/linPEAS-flake/pull/1338))
+- Report index pointers outside the orphan-invariants path class ([#1336](https://github.com/rvenutolo/linPEAS-flake/pull/1336))
+- Refuse files the regex-range-ascii and renovate-markers lints cannot read ([#1333](https://github.com/rvenutolo/linPEAS-flake/pull/1333))
+
 ## [20261017-c2b70018] - 2026-10-17
 
 ### Chores
