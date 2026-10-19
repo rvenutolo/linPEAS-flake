@@ -264,13 +264,13 @@ jobs:
             fi
           done
       - name: smoke a real linpeas check against a separate target container
-        # Behavioral test: documented "container audit" use case. Linpeas
-        # runs in its own container, joins a separate ubuntu target's PID
-        # namespace + volumes, and runs an actual check. Fails on any
-        # "command not found" line in the output, which would indicate the
-        # image is missing a helper linpeas needs at runtime.
-        # The host is never the audit target — the linpeas container only
-        # sees the target container's namespaces, not the runner's.
+        # Behavioral test: linpeas runs in its own container, joins a
+        # separate ubuntu target's PID namespace + volumes, and runs an
+        # actual check. Fails on any "command not found" line in the
+        # output, which would indicate the image is missing a helper
+        # linpeas needs at runtime. Joining namespaces does not share the
+        # target's root filesystem; the folder-sweep step below covers the
+        # filesystem path. The host is never the audit target.
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -289,6 +289,39 @@ jobs:
           if echo "${out}" | grep --quiet --extended-regexp ': command not found'; then
             echo "FAIL: linpeas reported missing commands:"
             echo "${out}" | grep ': command not found'
+            exit 1
+          fi
+      - name: sweep a bind-mounted tree with -f
+        # Behavioral test: the documented host sweep. `-f` caches its
+        # find results under /tmp and enables the regex searches, so this
+        # fails if the image lacks a writable /tmp or the script hits a
+        # shell incompatibility. A missing /etc/passwd shows up as
+        # "cannot find name for user ID" noise in the report.
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          fixture="$(mktemp --directory)"
+          trap 'rm --recursive --force -- "${fixture}"' EXIT
+          mkdir --parents "${fixture}/etc"
+          echo '* * * * * root echo FIXTURE_CRON' >"${fixture}/etc/crontab"
+          status=0
+          out="$(docker run --rm \
+            --volume "${fixture}:/host:ro" \
+            "rvenutolo/linpeas:${IMAGE_TAG}" \
+            -n -N -q -f /host 2>&1)" || status=$?
+          echo "${out}" | tail --lines=20
+          if [ "${status}" -ne 0 ]; then
+            echo "FAIL: linpeas -f exited ${status}"
+            exit 1
+          fi
+          for bad in 'mktemp: failed' 'value too great for base' 'cannot find name for user ID'; do
+            if echo "${out}" | grep --quiet --fixed-strings "${bad}"; then
+              echo "FAIL: report contains '${bad}'"
+              exit 1
+            fi
+          done
+          if ! echo "${out}" | grep --quiet --fixed-strings '/host/etc/crontab'; then
+            echo "FAIL: report does not mention the fixture crontab"
             exit 1
           fi
 
@@ -352,13 +385,13 @@ jobs:
             fi
           done
       - name: smoke a real linpeas check against a separate target container (aarch64)
-        # Behavioral test: documented "container audit" use case. Linpeas
-        # runs in its own container, joins a separate ubuntu target's PID
-        # namespace + volumes, and runs an actual check. Fails on any
-        # "command not found" line in the output, which would indicate the
-        # image is missing a helper linpeas needs at runtime.
-        # The host is never the audit target — the linpeas container only
-        # sees the target container's namespaces, not the runner's.
+        # Behavioral test: linpeas runs in its own container, joins a
+        # separate ubuntu target's PID namespace + volumes, and runs an
+        # actual check. Fails on any "command not found" line in the
+        # output, which would indicate the image is missing a helper
+        # linpeas needs at runtime. Joining namespaces does not share the
+        # target's root filesystem; the folder-sweep step below covers the
+        # filesystem path. The host is never the audit target.
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -377,6 +410,39 @@ jobs:
           if echo "${out}" | grep --quiet --extended-regexp ': command not found'; then
             echo "FAIL: linpeas reported missing commands:"
             echo "${out}" | grep ': command not found'
+            exit 1
+          fi
+      - name: sweep a bind-mounted tree with -f (aarch64)
+        # Behavioral test: the documented host sweep. `-f` caches its
+        # find results under /tmp and enables the regex searches, so this
+        # fails if the image lacks a writable /tmp or the script hits a
+        # shell incompatibility. A missing /etc/passwd shows up as
+        # "cannot find name for user ID" noise in the report.
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          fixture="$(mktemp --directory)"
+          trap 'rm --recursive --force -- "${fixture}"' EXIT
+          mkdir --parents "${fixture}/etc"
+          echo '* * * * * root echo FIXTURE_CRON' >"${fixture}/etc/crontab"
+          status=0
+          out="$(docker run --rm \
+            --volume "${fixture}:/host:ro" \
+            "rvenutolo/linpeas:${IMAGE_TAG}" \
+            -n -N -q -f /host 2>&1)" || status=$?
+          echo "${out}" | tail --lines=20
+          if [ "${status}" -ne 0 ]; then
+            echo "FAIL: linpeas -f exited ${status}"
+            exit 1
+          fi
+          for bad in 'mktemp: failed' 'value too great for base' 'cannot find name for user ID'; do
+            if echo "${out}" | grep --quiet --fixed-strings "${bad}"; then
+              echo "FAIL: report contains '${bad}'"
+              exit 1
+            fi
+          done
+          if ! echo "${out}" | grep --quiet --fixed-strings '/host/etc/crontab'; then
+            echo "FAIL: report does not mention the fixture crontab"
             exit 1
           fi
 
