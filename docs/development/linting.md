@@ -81,8 +81,9 @@ The slug's delete step runs under a C locale, so a non-ASCII byte in a
 heading is deleted whatever locale the caller runs in. A heading whose text holds a
 non-ASCII letter, mark or digit must carry an explicit `<a name="...">`
 anchor on the heading line, because GitHub keeps the character in its slug
-while mkdocs folds it to ASCII and no generated slug resolves on both; a
-heading without one is a blocking `[non-ascii-heading]` finding, and one
+while mkdocs folds it to ASCII and no generated slug resolves on both; in a
+file the lint scans for links (named above) a heading without one is a
+blocking `[non-ascii-heading]` finding, and one
 with an anchor answers to that anchor alone, not to a generated slug.
 Non-ASCII punctuation such as `—` or `→` is deleted by both renderers and
 stays allowed. Finding such a heading needs `grep --perl-regexp` to read UTF-8
@@ -628,7 +629,7 @@ GitHub Actions reads a root key written as an alias (`name: &k jobs`,
 then `*k :`) as the key it stands for. Every read of a root `jobs:`,
 `env:`, `permissions:` or `concurrency:` key takes the node from
 `ROOT_KEY_NODE` in `scripts/lib/job-keys.sh`, as the `on:` reads take
-theirs from `ON_NODE`: the node is the value of the one root key that is
+theirs from the `ON_NODE` constant each such script defines: the node is the value of the one root key that is
 the name or an alias of it, and a root holding two, one plain and one an
 alias, makes `yq` fail ("jobs: is given more than once"), which each
 script handles as a read that failed. `check-workflow-concurrency.sh`,
@@ -711,8 +712,10 @@ the long s as `s` under it.
 In a GNU `grep` pattern or a GNU `sed` script, a bracket with a letter
 endpoint (`[a-z]`, `[0-9a-f]`) or a negated one (`[^0-9]`) follows the
 locale the same way; a positive bracket of digit ranges (`[0-9]`) does
-not. Run such a call under `LC_ALL=C`, as a prefix assignment or in a
-function or script that sets a C locale. A call that must follow the
+not. Run such a call under `LC_ALL=C`: as a prefix assignment, after a
+`local LC_ALL=C` in its own function, or after a top-level
+`export LC_ALL=C`; the header of `scripts/check-regex-range-ascii.sh` says
+which values it reads as C and what ends that scope. A call that must follow the
 locale, such as a probe of it, carries the marker
 `# regex-range-ascii: locale-bound: <reason>` on the line directly above
 it.

@@ -27,11 +27,13 @@ moment they act on it, restate mechanisms the runbooks document, and drift the
 same way a runbook does. They are in scope for the factual-drift dimension, and
 a mismatch between such a body and the runbook it mirrors is one finding with
 two sites, not one per file. `references/repo-map.md` §2 says how to enumerate
-them and which reader owns them. Workflow logic and the `@description` blocks
-that generate `docs/reference/scripts.md` stay out — for a `scripts/lib/*.sh`
-library that includes every `@description` block preceding a function, not the
-header alone (`references/repo-map.md` §3 says which blocks each scope
-renders). A rationale comment block that restates a mechanism a runbook
+them and which reader owns them. Workflow logic stays out, and so do the
+`@description` blocks that generate `docs/reference/scripts.md` as prose to
+polish — for a `scripts/lib/*.sh` library that includes every `@description`
+block preceding a function, not the header alone (`references/repo-map.md` §3
+says which blocks each scope renders); a `@description` claim its own script
+contradicts is the generator-vs-reality gap below, reported against the
+comment. A rationale comment block that restates a mechanism a runbook
 documents — a workflow's header comment, an entry-point script's second comment
 block — is in scope when a pass inside the window touched it: it is prose a
 maintainer reads at the moment they act, the twin sweep already reaches

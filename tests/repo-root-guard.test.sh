@@ -21,7 +21,8 @@
 #
 # Two rows prove the other half: `check-doc-anchors.sh` and
 # `check-ephemeral-refs.sh` call the helper only when their root override
-# is unset, so with it set they still run outside a work tree.
+# is unset or empty, so with it set, and for `check-ephemeral-refs.sh` its
+# sources override too, they still run outside a work tree.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
