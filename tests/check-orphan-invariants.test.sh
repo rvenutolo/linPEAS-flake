@@ -83,12 +83,34 @@ function run_off_class_scenario() {
   rm --recursive --force -- "${root}"
 }
 
+# Build an index holding one in-class pointer to an existing doc and the
+# given entry line, then run the lint against it. The tree also holds a
+# docs/sub/ directory with no doc in it and an outside.md beside docs/, so
+# a path through sub/ or out of docs/ resolves.
+function run_line_scenario() {
+  local -r name="$1"
+  local -r line="$2"
+  local -r expected_exit="$3"
+  local -r expected_stderr="$4"
+
+  local root
+  root="$(mktemp --directory)"
+  mkdir --parents "${root}/docs/sub"
+  printf '# Invariant index\n\n- **Ok** — x → [ok.md](ok.md).\n- **Line** — x → %s.\n' \
+    "${line}" >"${root}/index.md"
+  printf '# Ok\n' >"${root}/docs/ok.md"
+  printf 'not a doc\n' >"${root}/docs/sub/keep.txt"
+  printf '# Outside\n' >"${root}/outside.md"
+  run_scenario "${name}" "${root}" "${expected_exit}" "${expected_stderr}"
+  rm --recursive --force -- "${root}"
+}
+
 function main() {
   # The good index also holds a placeholder pointer, which documents the
   # entry shape and must not be reported.
   run_scenario 'good tree passes' 'good' 0 ''
   run_scenario 'orphan index link fails' \
-    'bad-orphan-link' 1 '[orphan-link]'
+    'bad-orphan-link' 1 'docs/security/missing.md referenced but file missing'
   run_scenario 'unreferenced doc fails' \
     'bad-unreferenced-doc' 1 '[unreferenced-doc] docs/security/bar.md exists'
   # An absent index is a missing input, not a docs/index divergence: the
@@ -111,9 +133,9 @@ function main() {
     "${root}" 1 '[unreferenced-doc] docs/security/café.md exists' en_US.UTF-8
   rm --recursive --force -- "${root}"
 
-  # The path sed is greedy, so it reads the last link on a line. Under a
-  # C locale that is the last ASCII-only link; unpinned, en_US.UTF-8 lets it
-  # take the non-ASCII one, which flips which doc counts as referenced.
+  # Every link on a line is read. Under a C locale only the ASCII-only one
+  # is in the class; unpinned, en_US.UTF-8 lets the non-ASCII one in too,
+  # which flips whether its doc counts as referenced.
   root="$(mktemp --directory)"
   mkdir --parents "${root}/docs/security"
   printf '# Invariant index\n\n## Security\n\n- **Foo** — x → [security/foo.md](security/foo.md) and [security/café.md](security/café.md).\n' \
@@ -145,6 +167,25 @@ function main() {
     '[Present.md](Present.md)' 'Present.md' 'Present.md is outside'
   run_off_class_scenario 'off-class pointer to an existing doc leaves the doc unreferenced' \
     '[Here.md](Here.md)' 'Here.md' '[unreferenced-doc] docs/Here.md exists'
+
+  # Each in-class pointer on a line is checked, the first as well as the
+  # last.
+  run_line_scenario 'first of two pointers on a line is checked' \
+    '[missing-a.md](missing-a.md) and [ok.md](ok.md)' 1 \
+    'docs/missing-a.md referenced but file missing'
+  run_line_scenario 'second of two pointers on a line is checked' \
+    '[ok.md](ok.md) and [missing-b.md](missing-b.md)' 1 \
+    'docs/missing-b.md referenced but file missing'
+
+  # A dot or empty path segment is outside the class: the target resolves
+  # in each case, out of docs/ for the `..` one, so only the class check
+  # can fail it.
+  run_line_scenario 'dot-dot segment pointer is reported' \
+    '[outside.md](sub/../../outside.md)' 1 'sub/../../outside.md is outside'
+  run_line_scenario 'single-dot segment pointer is reported' \
+    '[ok.md](sub/./../ok.md)' 1 'sub/./../ok.md is outside'
+  run_line_scenario 'empty segment pointer is reported' \
+    '[ok.md](sub//../ok.md)' 1 'sub//../ok.md is outside'
 
   harness_assert_verify || failures=$((failures + 1))
 
