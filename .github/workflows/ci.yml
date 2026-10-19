@@ -266,7 +266,7 @@ jobs:
       - name: smoke a real linpeas check against a separate target container
         # Behavioral test: linpeas runs in its own container, joins a
         # separate ubuntu target's PID namespace + volumes, and runs an
-        # actual check. Fails on any "command not found" line in the
+        # actual check. Fails on any shell "not found" line in the
         # output, which would indicate the image is missing a helper
         # linpeas needs at runtime. Joining namespaces does not share the
         # target's root filesystem; the folder-sweep step below covers the
@@ -283,12 +283,15 @@ jobs:
             "rvenutolo/linpeas:${IMAGE_TAG}" \
             -o system_information 2>&1)"
           echo "${out}" | sed -n '1,40p'
-          # Bash emits "<cmd>: command not found" when an external helper is
-          # missing. Anchor on the ": command not found" suffix to avoid
-          # matching benign output that happens to contain the phrase.
-          if echo "${out}" | grep --quiet --extended-regexp ': command not found'; then
+          # The shell names a missing external helper as
+          # "<script>: <line>: <cmd>: not found" (dash, which runs linpeas)
+          # or "<script>: line <line>: <cmd>: command not found" (bash).
+          # Anchor on the script path and line number so linpeas's own
+          # "... not found" report lines do not match.
+          missing_re='/bin/linpeas: (line )?[0-9]+: [^:]+: (command )?not found$'
+          if echo "${out}" | grep --quiet --extended-regexp "${missing_re}"; then
             echo "FAIL: linpeas reported missing commands:"
-            echo "${out}" | grep ': command not found'
+            echo "${out}" | grep --extended-regexp "${missing_re}"
             exit 1
           fi
       - name: sweep a bind-mounted tree with -f
@@ -387,7 +390,7 @@ jobs:
       - name: smoke a real linpeas check against a separate target container (aarch64)
         # Behavioral test: linpeas runs in its own container, joins a
         # separate ubuntu target's PID namespace + volumes, and runs an
-        # actual check. Fails on any "command not found" line in the
+        # actual check. Fails on any shell "not found" line in the
         # output, which would indicate the image is missing a helper
         # linpeas needs at runtime. Joining namespaces does not share the
         # target's root filesystem; the folder-sweep step below covers the
@@ -404,12 +407,15 @@ jobs:
             "rvenutolo/linpeas:${IMAGE_TAG}" \
             -o system_information 2>&1)"
           echo "${out}" | sed -n '1,40p'
-          # Bash emits "<cmd>: command not found" when an external helper is
-          # missing. Anchor on the ": command not found" suffix to avoid
-          # matching benign output that happens to contain the phrase.
-          if echo "${out}" | grep --quiet --extended-regexp ': command not found'; then
+          # The shell names a missing external helper as
+          # "<script>: <line>: <cmd>: not found" (dash, which runs linpeas)
+          # or "<script>: line <line>: <cmd>: command not found" (bash).
+          # Anchor on the script path and line number so linpeas's own
+          # "... not found" report lines do not match.
+          missing_re='/bin/linpeas: (line )?[0-9]+: [^:]+: (command )?not found$'
+          if echo "${out}" | grep --quiet --extended-regexp "${missing_re}"; then
             echo "FAIL: linpeas reported missing commands:"
-            echo "${out}" | grep ': command not found'
+            echo "${out}" | grep --extended-regexp "${missing_re}"
             exit 1
           fi
       - name: sweep a bind-mounted tree with -f (aarch64)
