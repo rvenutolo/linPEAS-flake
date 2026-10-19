@@ -314,7 +314,7 @@ Lint: every markdown #anchor link pointing at an
 in-tree .md (or same-file fragment) must match a heading slug or an
 explicit `<a name>` anchor in the target file; an anchor link whose
 target `.md` is missing, and a non-ASCII heading with no explicit
-anchor, are reported too.
+anchor in a scanned source, are reported too.
 
 ### scripts/check-doc-cron-restatement.sh
 
@@ -1484,8 +1484,9 @@ quotes, the last `LC_ALL` word on its line. A later assignment,
 with the whole assignment quoted) that sets anything but one lone `C` or
 `C.UTF-8` word, or a later `unset LC_ALL`, `wait -p LC_ALL`, `read`,
 `mapfile`, `getopts`, `printf -v`, a `let`, `(( ))` or `$(( ))` that
-holds an unquoted literal `LC_ALL`, read or written (a quoted `let`
-argument such as `let "LC_ALL=1"` is not read), a C-style `for` whose header
+holds `LC_ALL` as a name of its own, quoted or not, read or written (a
+quoted word holding more than the name, such as `let "LC_ALL=1"`, is
+not read), a C-style `for` whose header
 or body holds one (`echo LC_ALL` counts; `$LC_ALL` is not a literal),
 `exec {LC_ALL}>` or `for LC_ALL in`, in the same function or outside
 any function, ends that; an element name (`LC_ALL[0]`) counts as

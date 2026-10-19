@@ -5,7 +5,7 @@
 # in-tree .md (or same-file fragment) must match a heading slug or an
 # explicit `<a name>` anchor in the target file; an anchor link whose
 # target `.md` is missing, and a non-ASCII heading with no explicit
-# anchor, are reported too.
+# anchor in a scanned source, are reported too.
 
 # Sources scanned: docs/invariant-index.md, README.md, docs/**/*.md.
 # (`.claude/CLAUDE.md` is intentionally untracked, so CI cannot scan it.
