@@ -60,7 +60,7 @@ Personal Nix-flake wrapper around [peass-ng/PEASS-ng](https://github.com/peass-n
     docker run --rm -v /:/host:ro ghcr.io/rvenutolo/linpeas:latest -f /host
     ```
 
-    That audits the host filesystem. Sidecar (container) audits, the image-only smoke test, and tag-pinned alternatives are on the [Docker install page](install/docker.md).
+    That audits the host filesystem. Container audits, base-image review, the image-only smoke test, and tag-pinned alternatives are on the [Docker install page](install/docker.md).
 
 === "Flake input"
 
