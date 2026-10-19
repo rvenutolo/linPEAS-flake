@@ -4,12 +4,47 @@ Each release publishes an OCI image to both Docker Hub (`docker.io/rvenutolo/lin
 
 ## What this image is for
 
-linpeas enumerates Linux privilege-escalation vectors against whatever filesystem, process table, and namespaces it sees. A vanilla `docker run` only exposes the container's own namespaces, so the report describes the **container**, not the host. That is intentional and useful for several workflows:
+linpeas enumerates Linux privilege-escalation vectors against whatever filesystem, process table, and namespaces it sees. A vanilla `docker run` only exposes the container's own namespaces, so the report describes the **linpeas container**, not the host or any other container. Each workflow below gets linpeas in front of the thing it audits a different way.
 
-- **Container audit.** Join a running container's namespaces (`--pid=container:<target> --net=container:<target>`) or run it as a sidecar to audit that container's privesc surface — SUID binaries baked into a base image, secrets in `/etc`, sudoers misconfigurations, etc.
-- **CI pipeline scanning.** Run linpeas inside an ephemeral build container in CI as a pre-deploy hardening gate.
-- **Base-image hardening review.** Bring up a candidate base image, exec linpeas inside it, fail the review on findings above a threshold.
-- **Forensics on a captured container filesystem.** Mount the suspect filesystem into the linpeas image and run with `-f <path>`.
+### Live audit of a running container
+
+Copy the script into the target and run it there, so every check — processes, network, users, filesystem — sees the target itself. This is the form for CI hardening gates and for forensics on a running workload. The image carries upstream's script as `/bin/linpeas`, identical to upstream from line 2 on; run it with `sh`, which ignores the Nix-store interpreter line on line 1.
+
+```bash
+docker run --rm --entrypoint cat rvenutolo/linpeas:latest /bin/linpeas >linpeas.sh
+docker cp linpeas.sh <target>:/tmp/linpeas.sh
+docker exec <target> sh /tmp/linpeas.sh -a
+```
+
+The target needs a POSIX `sh` and a writable `/tmp`. `docker exec` runs as the image's default user, usually root; pass `--user <uid>` to audit what an unprivileged account in the container can reach. On a Nix-enabled machine, `nix build github:rvenutolo/linPEAS-flake#linpeas.src` produces the same script byte for byte as upstream, hash-checked against the pin.
+
+### Base-image review
+
+Run the script inside a candidate image without building on top of it, and review the report before the image is adopted:
+
+```bash
+docker run --rm -v "$PWD/linpeas.sh:/linpeas.sh:ro" \
+  --entrypoint sh <image> /linpeas.sh -a
+```
+
+### Filesystem sweep of a container or captured filesystem
+
+`-f <path>` sweeps a directory tree. To sweep a container's filesystem, export a snapshot of it into a volume and mount that into the linpeas image. Extract as root, inside a container as below or with `sudo tar`: an unprivileged `tar` rewrites ownership to the invoking user and drops setuid bits, so the SUID and ownership checks would report nothing.
+
+```bash
+docker volume create target-fs
+docker export <target> | docker run --rm -i -v target-fs:/out alpine tar -x -p -C /out
+docker run --rm -v target-fs:/target:ro rvenutolo/linpeas:latest -f /target
+docker volume rm target-fs
+```
+
+A captured filesystem from an incident takes the same last step: mount it read-only at any path and pass that path to `-f`. A sweep reads every file in the tree, so expect a full root filesystem to take several minutes.
+
+### What does not work: joining namespaces
+
+`--pid=container:<target>` and `--net=container:<target>` do not audit the target. The process table and network are the target's, but Docker does not share the root filesystem, so every filesystem check — SUID binaries, `/etc` secrets, sudoers, crons — reads the linpeas image's own near-empty root. Pointing `-f` at the target's root through `/proc/1/root` reaches the right files, but linpeas then also walks the target's live `/proc` and `/sys` and does not finish in reasonable time.
+
+### Host filesystem sweep
 
 For a **host** audit, linpeas needs to see the host. A live audit — running processes, network, users — needs linpeas on the host itself: run it there via Nix (`nix run github:rvenutolo/linPEAS-flake`); see [Install with Nix](nix.md) for a persistent install. From the image, the reachable form is a filesystem sweep of the host tree, bind-mounted read-only:
 
@@ -55,7 +90,7 @@ digests — see [Manifest digest-pinning](#manifest-digest-pinning)).
 
 ## Image contents
 
-The image ships `bashInteractive`, `coreutils`, `gnugrep`, `gnused`, `gawk`, `findutils`, `procps`, and the `linpeas` binary, plus a world-writable `/tmp` (where `-f` caches its find results) and a minimal `/etc/passwd` and `/etc/group` naming `root` and `nobody` (so linpeas can name the user it runs as). The binary runs under `dash`: upstream targets a POSIX `/bin/sh`, and bash aborts its regex searches. These cover the external tools linpeas invokes for most of its checks. Anything else linpeas tries to call (e.g. `lsof`, `netstat`, distro-specific helpers) will be missing — that is consistent with how linpeas behaves on a minimal host, and the script logs each missing tool rather than aborting.
+The image ships `bashInteractive`, `coreutils`, `gnugrep`, `gnused`, `gawk`, `findutils`, `procps`, and the `linpeas` binary, plus a world-writable `/tmp` (where `-f` caches its find results) and a minimal `/etc/passwd` and `/etc/group` naming `root` and `nobody` (so linpeas can name the user it runs as). These cover the external tools linpeas invokes for most of its checks. Anything else linpeas tries to call (e.g. `lsof`, `netstat`, distro-specific helpers) will be missing — that is consistent with how linpeas behaves on a minimal host, and the script logs each missing tool rather than aborting. The binary runs under `dash`: upstream targets a POSIX `/bin/sh`, and bash aborts its regex searches.
 
 ## Architecture support
 

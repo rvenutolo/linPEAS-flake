@@ -35,6 +35,14 @@ install, no state.
 nix run github:rvenutolo/linPEAS-flake -- -a
 ```
 
+`-a` includes upstream's `su` password brute-force against other local
+accounts, which can lock accounts or trip alerting on a shared or
+monitored host. Omit `-a` for the default checks, or add `-s` for a
+faster, quieter run.
+
+Append a release tag to run that exact linpeas release:
+`nix run github:rvenutolo/linPEAS-flake/<tag> -- -a`.
+
 **`nix profile add`** — persistent install on a Nix-enabled machine.
 `linpeas` ends up on `$PATH`.
 
@@ -42,11 +50,24 @@ nix run github:rvenutolo/linPEAS-flake -- -a
 nix profile add github:rvenutolo/linPEAS-flake
 ```
 
+**Hash-checked script for a host without Nix** — `linpeas.src` is
+upstream's `linpeas.sh`, byte for byte, fetched and checked against
+the pinned SRI hash. Copy it to the target and run it with `sh`. The
+installed `bin/linpeas` does not work off-Nix, because its first line
+names a Nix-store `dash`.
+
+```sh
+cp "$(nix build github:rvenutolo/linPEAS-flake#linpeas.src --no-link --print-out-paths)" linpeas.sh
+scp linpeas.sh <host>:
+ssh <host> sh linpeas.sh
+```
+
 ### With Docker
 
-**Host audit** — use when Docker is the only install vehicle on the
-host. Bind-mounts the host rootfs read-only and sweeps it with `-f`, so
-linpeas scans the host filesystem instead of the container's.
+**Host filesystem sweep** — use when Docker is the only install
+vehicle on the host. Bind-mounts the host rootfs read-only and sweeps
+it with `-f`, so linpeas scans the host filesystem instead of the
+container's.
 
 ```sh
 docker run --rm \
@@ -60,16 +81,36 @@ permissions, interesting files, API keys — with the live process,
 network, and user checks disabled, so host namespace flags change
 nothing under it.
 
-**Container / sidecar audit** — audit a *different* running
-container. Real use cases: CI hardening, base-image review, forensics
-on a running workload. Joins the target container's PID and network
-namespaces.
+**Live audit of a running container** — copy the script in and run
+it there, so every check sees the target's own processes, users and
+filesystem. Real use cases: CI hardening, forensics on a running
+workload. The image carries the same script as `/bin/linpeas`; run it
+with `sh`, which ignores the Nix-store interpreter line.
 
 ```sh
-docker run --rm \
-  --pid=container:<target> --net=container:<target> \
-  rvenutolo/linpeas:latest -a
+docker run --rm --entrypoint cat rvenutolo/linpeas:latest /bin/linpeas >linpeas.sh
+docker cp linpeas.sh <target>:/tmp/linpeas.sh
+docker exec <target> sh /tmp/linpeas.sh -a
 ```
+
+**Base-image review** — run the script inside a candidate image
+without building on it:
+
+```sh
+docker run --rm -v "$PWD/linpeas.sh:/linpeas.sh:ro" \
+  --entrypoint sh <image> /linpeas.sh -a
+```
+
+**Filesystem sweep of a container snapshot or a captured
+filesystem** — `docker export` the container into a volume (or mount
+a captured image read-only) and sweep it with `-f`. Extract as root,
+or ownership and setuid bits are lost; see
+[`docs/install/docker.md`](docs/install/docker.md#filesystem-sweep-of-a-container-or-captured-filesystem).
+
+Joining a container's namespaces (`--pid=container:<target>`) from
+the linpeas image does not audit it: the process table is the
+target's, but every filesystem check reads the linpeas image's own
+near-empty root.
 
 Both registries (`docker.io/rvenutolo/linpeas` and
 `ghcr.io/rvenutolo/linpeas`) serve the **same** image bytes: whenever
@@ -94,8 +135,22 @@ or dev shell).
 }
 ```
 
-For a full guide (plain flake + flake-parts, pinning, no binary
-cache), see [`docs/install/consume-from-flake.md`](docs/install/consume-from-flake.md).
+To install it system-wide from a NixOS module, or per-user from Home
+Manager:
+
+```nix
+{ inputs, pkgs, ... }:
+{
+  # NixOS
+  environment.systemPackages = [
+    inputs.linpeas-flake.packages.${pkgs.stdenv.hostPlatform.system}.default
+  ];
+  # Home Manager: home.packages = [ ... ] takes the same element.
+}
+```
+
+For a full guide (plain flake + flake-parts, NixOS + Home Manager,
+pinning, no binary cache), see [`docs/install/consume-from-flake.md`](docs/install/consume-from-flake.md).
 
 ### As an overlay
 

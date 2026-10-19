@@ -32,6 +32,21 @@ tooling packages (`cosign`, `diffoscopeMinimal`, `git-cliff`, `nix`),
 the `formatter`, and the lint tooling, so it stays in your lock file
 but never enters the linpeas package closure.
 
+## NixOS and Home Manager
+
+Add the package to a NixOS host's `environment.systemPackages`, or to a Home Manager user's `home.packages`. Both take the same element; the module below reaches the flake through `inputs`, so pass `specialArgs = { inherit inputs; };` to `nixpkgs.lib.nixosSystem` (or `extraSpecialArgs` to `home-manager.lib.homeManagerConfiguration`):
+
+```nix
+{ inputs, pkgs, ... }:
+{
+  environment.systemPackages = [
+    inputs.linpeas-flake.packages.${pkgs.stdenv.hostPlatform.system}.default
+  ];
+}
+```
+
+The [overlay](nix.md#as-an-overlay) gives the same package as `pkgs.linpeas`.
+
 ## flake-parts consumer
 
 ```nix
