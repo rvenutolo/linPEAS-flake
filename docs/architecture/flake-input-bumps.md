@@ -368,7 +368,7 @@ the regression. The lint scripts encode binding security invariants.
 
 ### 8. Image smoke
 
-Reproduce the two behavioral checks `image-smoke` runs after `-h`. `-h` alone is not
+Reproduce the three behavioral checks `image-smoke` runs after `-h`. `-h` alone is not
 a smoke test: it exits 0 and stays silent when `sed`, `awk`, `find`, or
 `ps` is missing from the image.
 
@@ -391,7 +391,15 @@ docker run --rm --pid=container:linpeas-target --volumes-from linpeas-target \
   "rvenutolo/linpeas:${VERSION}" -o system_information 2>&1 \
   | grep --count --extended-regexp ': command not found'
 docker rm --force linpeas-target
-# Expect no FAIL line from 1 and a count of 0 from 2
+
+# 3. A folder sweep of a bind-mounted tree exits 0.
+mkdir --parents sweep-fixture/etc
+echo '* * * * * root echo FIXTURE_CRON' >sweep-fixture/etc/crontab
+docker run --rm --volume "${PWD}/sweep-fixture:/host:ro" \
+  "rvenutolo/linpeas:${VERSION}" -n -N -q -f /host >/dev/null 2>&1 \
+  || echo "FAIL: -f sweep exited non-zero"
+rm --recursive --force sweep-fixture
+# Expect no FAIL line from 1 or 3 and a count of 0 from 2
 ```
 
 A `FAIL` line or a non-zero count means a tool the image expects is
