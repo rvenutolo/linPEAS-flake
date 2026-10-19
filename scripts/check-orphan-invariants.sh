@@ -7,18 +7,22 @@
 
 # Lint: assert docs/invariant-index.md and docs/**/*.md stay in
 # lockstep.
-#   Forward: every `→ [<path>](<path>)` pointer in the index resolves
-#            to an existing file under docs/.
+#   Forward: every `.md` link in the index is a docs-relative path in
+#            the link-path class and resolves to an existing file under
+#            docs/.
 #   Reverse: every docs/**/*.md (minus EXEMPT and the index itself)
 #            has an index entry.
 #
 # Entries inside the index use paths RELATIVE TO docs/ (e.g.
 # `[security/foo.md](security/foo.md)`). Entry paths are lowercase ASCII,
-# matched by the link-path class in the extraction below. A `.md` link
-# target outside it (an uppercase or non-ASCII letter, a leading digit, a
-# URL or a `../` path, say) is reported as [off-class-link] rather than
-# checked, and is never an entry, so its doc reports [unreferenced-doc]
-# in every locale.
+# matched by the link-path class in the extraction below: each `/`-separated
+# segment starts with a lowercase letter, so no path holds a `.`, `..` or
+# empty segment and none climbs out of docs/. A `.md` link target outside
+# it (an uppercase or non-ASCII letter, a leading digit, a URL or a dot
+# segment, say) is reported as [off-class-link] whether or not the file
+# exists, and is never an entry, so a docs/ file it was meant to name
+# reports [unreferenced-doc] in every locale. A placeholder target holding
+# `<` or `>` is skipped.
 #
 # Env overrides (test-only):
 #   INVARIANT_INDEX_OVERRIDE — alternate index path
@@ -80,23 +84,25 @@ trap 'rm -f "${referenced_file}" "${all_docs}" "${off_class_file}"' EXIT
 
 # Extract paths from markdown links of the form [text](path) where
 # path looks like a docs-relative .md (no protocol, no leading slash).
+# Every link on a line is read, not only the last.
 # Skip placeholder paths containing `<` or `>`.
 # The link path class is lowercase ASCII and both commands read it under C,
 # so a path outside it (an uppercase or non-ASCII letter, say) is never an
 # entry and its doc reports [unreferenced-doc] in every locale; the
 # off-class half of the forward check reports the pointer itself.
 {
-  LC_ALL=C grep --line-number --extended-regexp \
-    '\[[^]]+\]\([a-z][a-z0-9_/.-]*\.md([#][^)]*)?\)' \
+  LC_ALL=C grep --only-matching --extended-regexp \
+    '\[[^]]+\]\([a-z][a-z0-9_.-]*(/[a-z][a-z0-9_.-]*)*\.md([#][^)]*)?\)' \
     "${INDEX}" || true
 } |
-  LC_ALL=C sed --regexp-extended 's|.*\]\(([a-z][a-z0-9_/.-]*\.md)([#][^)]*)?\).*|\1|' |
+  LC_ALL=C sed --regexp-extended 's|^\[[^]]+\]\(([a-z][a-z0-9_.-]*(/[a-z][a-z0-9_.-]*)*\.md)([#][^)]*)?\).*|\1|' |
   (grep --invert-match --extended-regexp '[<>]' || true) |
   sort --unique >"${referenced_file}"
 
 # Forward check, off-class half. A `.md` link target the class above does
 # not match is never extracted, so the resolve loop below cannot see it;
-# report it here instead, or a broken pointer of that shape would pass.
+# report it here instead, whether or not its file exists, or a broken
+# pointer of that shape would pass.
 # Targets holding `<` or `>` are placeholders, skipped as above.
 {
   LC_ALL=C grep --line-number --only-matching --extended-regexp \
@@ -106,7 +112,7 @@ trap 'rm -f "${referenced_file}" "${all_docs}" "${off_class_file}"' EXIT
   LC_ALL=C sed --regexp-extended 's|^([0-9]+):\[[^]]+\]\(([^)#]*\.md)([#][^)]*)?\)$|\1:\2|' |
   {
     LC_ALL=C grep --invert-match --extended-regexp \
-      '^[0-9]+:([a-z][a-z0-9_/.-]*\.md|.*[<>].*)$' || true
+      '^[0-9]+:([a-z][a-z0-9_.-]*(/[a-z][a-z0-9_.-]*)*\.md|.*[<>].*)$' || true
   } >"${off_class_file}"
 
 while IFS=: read -r line target; do

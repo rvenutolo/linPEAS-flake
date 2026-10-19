@@ -445,9 +445,10 @@ page, the collector sweep, and the real lint still diverge:
 ## 5. Invariant-index consistency
 
 `docs/invariant-index.md` is the binding-rules index;
-`check-orphan-invariants.sh` enforces that each index pointer resolves to an
-existing file under `docs/`, and that every non-`EXEMPT` docs file has an
-entry. The script's `EXEMPT` array is the authority on what is exempt; per the
+`check-orphan-invariants.sh` enforces that each index pointer is a
+docs-relative path in its link-path class that resolves to an existing file
+under `docs/` (its header names what it reports as off-class), and that
+every non-`EXEMPT` docs file has an entry. The script's `EXEMPT` array is the authority on what is exempt; per the
 index preamble's own taxonomy it holds generator-owned pages, the live-status
 template pages (`dashboard.md`, `releases.md`) whose content is a rendering
 rather than a rule, overview pages that route to rules held elsewhere, the
