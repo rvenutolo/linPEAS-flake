@@ -19,7 +19,7 @@ docker run --rm \
   rvenutolo/linpeas:latest -f /host
 ```
 
-Upstream documents `-f` as scoping linpeas to a filesystem scan of the mounted tree — crons, timers, services, sockets, software, permissions, interesting files, API keys — with the live process, network, and user checks disabled (an upstream contract of the pinned release; this repo's CI smoke-tests `-h` and a namespace-joined `-o system_information` run, but never `-f` itself). Host namespace flags (`--pid=host`, `--net=host`, `--ipc=host`) therefore change nothing under `-f` and are not needed. Omitting `-f` and the bind mount instead scans the container's own near-empty filesystem.
+Upstream documents `-f` as scoping linpeas to a filesystem scan of the mounted tree — crons, timers, services, sockets, software, permissions, interesting files, API keys — with the live process, network, and user checks disabled (an upstream contract of the pinned release; this repo's CI runs an `-f` sweep of a bind-mounted fixture tree and fails on a non-zero exit or a report that never reaches the fixture, so the sweep's completion is tested but not the exact set of checks it skips). Host namespace flags (`--pid=host`, `--net=host`, `--ipc=host`) therefore change nothing under `-f` and are not needed. Omitting `-f` and the bind mount instead scans the container's own near-empty filesystem.
 
 **Do not reach for `-d`.** Upstream documents it as the network host-discovery flag (`-d <IP/NETMASK>`), which exits before any privesc check runs.
 
@@ -55,7 +55,7 @@ digests — see [Manifest digest-pinning](#manifest-digest-pinning)).
 
 ## Image contents
 
-The image ships `bashInteractive`, `coreutils`, `gnugrep`, `gnused`, `gawk`, `findutils`, `procps`, and the `linpeas` binary. These cover the external tools linpeas invokes for most of its checks. Anything else linpeas tries to call (e.g. `lsof`, `netstat`, distro-specific helpers) will be missing — that is consistent with how linpeas behaves on a minimal host, and the script logs each missing tool rather than aborting.
+The image ships `bashInteractive`, `coreutils`, `gnugrep`, `gnused`, `gawk`, `findutils`, `procps`, and the `linpeas` binary, plus a world-writable `/tmp` (where `-f` caches its find results) and a minimal `/etc/passwd` and `/etc/group` naming `root` and `nobody` (so linpeas can name the user it runs as). The binary runs under `dash`: upstream targets a POSIX `/bin/sh`, and bash aborts its regex searches. These cover the external tools linpeas invokes for most of its checks. Anything else linpeas tries to call (e.g. `lsof`, `netstat`, distro-specific helpers) will be missing — that is consistent with how linpeas behaves on a minimal host, and the script logs each missing tool rather than aborting.
 
 ## Architecture support
 

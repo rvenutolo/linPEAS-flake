@@ -40,11 +40,25 @@ let
     dontUnpack = true;
     dontBuild = true;
 
+    # Upstream targets a POSIX /bin/sh such as dash. patchShebangs would
+    # resolve `sh` to bash, and bash parses strings like "\\$[a-zA-Z0-9_]"
+    # in the regex searches as `$[...]` arithmetic and aborts the script,
+    # so line 1 is rewritten to dash explicitly. The guard makes an
+    # upstream interpreter change fail the build instead of being
+    # silently overwritten.
     installPhase = ''
       runHook preInstall
+      first_line="$(head --lines=1 $src)"
+      if [ "$first_line" != "#!/bin/sh" ]; then
+        echo "upstream linpeas.sh line 1 is '$first_line', expected '#!/bin/sh'" >&2
+        exit 1
+      fi
       mkdir -p $out/bin
-      install -m 0755 $src $out/bin/linpeas
-      patchShebangs --host $out/bin/linpeas
+      {
+        echo "#!${pkgs.dash}/bin/dash"
+        tail --lines=+2 $src
+      } >$out/bin/linpeas
+      chmod 0755 $out/bin/linpeas
       runHook postInstall
     '';
 

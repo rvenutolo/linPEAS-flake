@@ -26,12 +26,16 @@ the markers by hand.
 │   │   ├───devshell-renderer-python: derivation 'check-devshell-renderer-python'
 │   │   ├───formatting: derivation 'treefmt-check'
 │   │   ├───linpeas-build: derivation 'linpeas-20261017-c2b70018'
+│   │   ├───linpeas-folder-scan: derivation 'linpeas-folder-scan'
+│   │   ├───linpeas-runs-under-dash: derivation 'linpeas-runs-under-dash'
 │   │   ├───lint-shell-tools: derivation 'check-lint-shell-tools'
 │   │   └───pre-commit: derivation 'pre-commit-run'
 │   └───x86_64-linux
 │       ├───devshell-renderer-python: derivation 'check-devshell-renderer-python'
 │       ├───formatting: derivation 'treefmt-check'
 │       ├───linpeas-build: derivation 'linpeas-20261017-c2b70018'
+│       ├───linpeas-folder-scan: derivation 'linpeas-folder-scan'
+│       ├───linpeas-runs-under-dash: derivation 'linpeas-runs-under-dash'
 │       ├───lint-shell-tools: derivation 'check-lint-shell-tools'
 │       └───pre-commit: derivation 'pre-commit-run'
 ├───devShells

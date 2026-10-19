@@ -17,34 +17,46 @@
         # inputs in a `buildEnv` so `pathsToLink` controls the /bin layering
         # explicitly. `Entrypoint` (set below) uses the absolute store path
         # of linpeas, unambiguous regardless of /bin layering.
-        contents = pkgs.buildEnv {
-          name = "image-root";
-          # linpeas invokes grep/sed/awk/find/ps internally for most of its
-          # checks. Ship them so the image is actually useful for its
-          # intended use cases (container audit, CI image scanning,
-          # forensics on mounted captured filesystems, base-image
-          # hardening review, and a read-only sweep of a bind-mounted host
-          # tree). See
-          # docs/install/docker.md for the use-case framing.
-          paths = [
-            pkgs.bashInteractive
-            pkgs.coreutils
-            pkgs.gnugrep
-            pkgs.gnused
-            pkgs.gawk
-            pkgs.findutils
-            # Override drops libsystemd from procps, which in turn
-            # drops systemd-minimal-libs and libcap from the image
-            # closure. linpeas enumerates processes via plain
-            # `ps -e` / `ps auxf` and does not read systemd
-            # unit-name columns, so the lost functionality is
-            # irrelevant here; the win is a smaller OCI attack
-            # surface (no libsystemd/libcap CVE exposure).
-            (pkgs.procps.override { withSystemd = false; })
-            linpeas
-          ];
-          pathsToLink = [ "/bin" ];
-        };
+        contents = [
+          # /etc/passwd and /etc/group with root and nobody. Without them
+          # `whoami` and `groups` fail for UID 0 and linpeas cannot name
+          # the user it runs as.
+          pkgs.dockerTools.fakeNss
+          (pkgs.buildEnv {
+            name = "image-root";
+            # linpeas invokes grep/sed/awk/find/ps internally for most of its
+            # checks. Ship them so the image is actually useful for its
+            # intended use cases (container audit, CI image scanning,
+            # forensics on mounted captured filesystems, base-image
+            # hardening review, and a read-only sweep of a bind-mounted host
+            # tree). See
+            # docs/install/docker.md for the use-case framing.
+            paths = [
+              pkgs.bashInteractive
+              pkgs.coreutils
+              pkgs.gnugrep
+              pkgs.gnused
+              pkgs.gawk
+              pkgs.findutils
+              # Override drops libsystemd from procps, which in turn
+              # drops systemd-minimal-libs and libcap from the image
+              # closure. linpeas enumerates processes via plain
+              # `ps -e` / `ps auxf` and does not read systemd
+              # unit-name columns, so the lost functionality is
+              # irrelevant here; the win is a smaller OCI attack
+              # surface (no libsystemd/libcap CVE exposure).
+              (pkgs.procps.override { withSystemd = false; })
+              linpeas
+            ];
+            pathsToLink = [ "/bin" ];
+          })
+        ];
+
+        # linpeas `-f` caches its find results under a hardcoded /tmp, and
+        # the image otherwise has none.
+        extraCommands = ''
+          mkdir --mode=1777 tmp
+        '';
 
         config = {
           # Entrypoint (not Cmd) so `docker run <img> <args>` appends to

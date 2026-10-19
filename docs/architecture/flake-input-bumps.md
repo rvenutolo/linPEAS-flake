@@ -128,7 +128,7 @@ rather than on the bump's own checks. Walk the list when one does.
     refactor-to-a-module), `image-smoke`'s "verify external tools
     present in image" step (`command -v` for `grep sed awk find ps`)
     or its real-target `-o system_information` scan will surface
-    `command not found`. The `-h` run does not: a missing `sed`,
+    a shell `not found` line. The `-h` run does not: a missing `sed`,
     `awk`, `find`, or `ps` leaves `-h` silent. Walk
     `pkgs.buildEnv.paths` in `nix/image.nix` against the smoke output.
 - **`gh attestation verify` trust-root change lag.** When Sigstore
@@ -304,14 +304,14 @@ Use the table as a checklist for any nixpkgs bump. The first four rows
 belong to `nixpkgs-unstable`, which owns the tooling layer; the last two
 can fire on a stable bump:
 
-| Class                      | Symptom                                                                                                                                                                                             | Fix                                                                                                                                                  |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prettier`                 | YAML / Markdown / JSON whitespace diffs                                                                                                                                                             | accept the rewrite via `nix fmt`                                                                                                                     |
-| `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block                                                                                              | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the convention in `docs/architecture/ci.md`)                     |
-| `zizmor` major version     | `nix flake check` fails on a workflow finding the older version did not surface                                                                                                                     | fix the workflow or, as a last resort, adjust `--min-severity` in `nix/hooks/linters.nix` (do not raise above `low` without a security-review entry) |
-| `mkdocs --strict`          | Build fails on a new plugin warning                                                                                                                                                                 | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                             |
-| `nixpkgs-hammering`        | `nix flake check` fails on a nixpkgs idiom the older stable branch did not flag, against the linpeas derivation                                                                                     | fix `nix/linpeas.nix` forward; suppress in `nix/hammer-shim.nix` only with a reason in the same PR                                                   |
-| linpeas-image base layers  | `image-cve-scan-trivy` / `image-cve-scan-grype` SARIF changes (the merge itself triggers a scan, since `flake.lock` is a trigger path); `image-smoke` could surface `command not found` regressions | smoke test locally (step 8) — adjust `buildEnv.paths` in `nix/image.nix` only if a required tool genuinely disappeared from nixpkgs                  |
+| Class                      | Symptom                                                                                                                                                                                         | Fix                                                                                                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prettier`                 | YAML / Markdown / JSON whitespace diffs                                                                                                                                                         | accept the rewrite via `nix fmt`                                                                                                                     |
+| `mkdocs-macros` strictness | `nix build "path:$(pwd)#site"` aborts on a `&#123;&#123; ... &#125;&#125;` literal inside a code block                                                                                          | wrap the offending block in `&#123;% raw %&#125;...&#123;% endraw %&#125;` (mirrors the convention in `docs/architecture/ci.md`)                     |
+| `zizmor` major version     | `nix flake check` fails on a workflow finding the older version did not surface                                                                                                                 | fix the workflow or, as a last resort, adjust `--min-severity` in `nix/hooks/linters.nix` (do not raise above `low` without a security-review entry) |
+| `mkdocs --strict`          | Build fails on a new plugin warning                                                                                                                                                             | fix forward; pin the misbehaving plugin only as a last resort and document the pin reason in the same PR                                             |
+| `nixpkgs-hammering`        | `nix flake check` fails on a nixpkgs idiom the older stable branch did not flag, against the linpeas derivation                                                                                 | fix `nix/linpeas.nix` forward; suppress in `nix/hammer-shim.nix` only with a reason in the same PR                                                   |
+| linpeas-image base layers  | `image-cve-scan-trivy` / `image-cve-scan-grype` SARIF changes (the merge itself triggers a scan, since `flake.lock` is a trigger path); `image-smoke` could surface missing-command regressions | smoke test locally (step 8) — adjust `buildEnv.paths` in `nix/image.nix` only if a required tool genuinely disappeared from nixpkgs                  |
 
 `cachix/git-hooks.nix` bumps in isolation usually only hit the `zizmor`
 row and only when the pre-commit-hooks repo changes hook versions in
@@ -368,7 +368,7 @@ the regression. The lint scripts encode binding security invariants.
 
 ### 8. Image smoke
 
-Reproduce the two behavioral checks `image-smoke` runs after `-h`. `-h` alone is not
+Reproduce the three behavioral checks `image-smoke` runs after `-h`. `-h` alone is not
 a smoke test: it exits 0 and stays silent when `sed`, `awk`, `find`, or
 `ps` is missing from the image.
 
@@ -385,13 +385,21 @@ for tool in grep sed awk find ps; do
 done
 
 # 2. A real check against a separate target container emits no
-#    "<cmd>: command not found" line.
+#    missing-command line from the shell.
 docker run --detach --name linpeas-target --rm ubuntu:24.04 sleep 300
 docker run --rm --pid=container:linpeas-target --volumes-from linpeas-target \
   "rvenutolo/linpeas:${VERSION}" -o system_information 2>&1 \
-  | grep --count --extended-regexp ': command not found'
+  | grep --count --extended-regexp '/bin/linpeas: (line )?[0-9]+: [^:]+: (command )?not found$'
 docker rm --force linpeas-target
-# Expect no FAIL line from 1 and a count of 0 from 2
+
+# 3. A folder sweep of a bind-mounted tree exits 0.
+mkdir --parents sweep-fixture/etc
+echo '* * * * * root echo FIXTURE_CRON' >sweep-fixture/etc/crontab
+docker run --rm --volume "${PWD}/sweep-fixture:/host:ro" \
+  "rvenutolo/linpeas:${VERSION}" -n -N -q -f /host >/dev/null 2>&1 \
+  || echo "FAIL: -f sweep exited non-zero"
+rm --recursive --force sweep-fixture
+# Expect no FAIL line from 1 or 3 and a count of 0 from 2
 ```
 
 A `FAIL` line or a non-zero count means a tool the image expects is
