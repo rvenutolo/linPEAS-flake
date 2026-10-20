@@ -159,7 +159,8 @@ jobs:
             exit 1
           fi
 
-      - uses: ./.github/actions/setup-nix
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -477,7 +478,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-nix
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -808,7 +810,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-nix
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -1087,7 +1090,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup-nix
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: login to ghcr
@@ -1253,7 +1257,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-nix
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -1507,7 +1512,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-nix
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: verify per-arch attestations
@@ -1707,7 +1713,8 @@ jobs:
       # Common Docker Hub causes — the same three causes as dockerhub-sync.yml
       # and docs/runbooks/dockerhub-recovery.md; each body names the token its
       # own job consumes.
-      - uses: ./.github/actions/notify-workflow-result
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
         with:
           # image/verify are gated on `tag-exists == 'false'` so
           # `skipped` is the normal value when the tag already exists.

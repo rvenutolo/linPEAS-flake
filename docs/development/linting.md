@@ -114,9 +114,17 @@ by the `.intoto.jsonl` release-asset suffix.
 ## Zizmor
 
 Workflow-security linter; `--min-severity=low` to catch everything.
-Suppressions live in `zizmor.yml` with documented rationale per
-suppressed rule + workflow. Do not raise `--min-severity` above
-`low` without a corresponding security-review entry.
+Every suppression carries a documented rationale. A rule suppressed for
+a whole workflow is listed in `zizmor.yml`, with its rationale in a
+comment above the entry. The `self-repository` audit is suppressed
+inline instead: each path-relative `uses: ./...` step ends with
+`# zizmor: ignore[self-repository]`, and the comment above it states why
+that site is safe. `$/` is the form the audit asks for, but no released
+`actionlint` parses it yet. At a site whose job checks out its own
+commit, `./` and `$/` resolve to the same tree. A site whose job checks
+out another ref carries a fuller comment naming what bounds it. Do not
+raise `--min-severity` above `low` without a corresponding
+security-review entry.
 
 ## Octoscan
 

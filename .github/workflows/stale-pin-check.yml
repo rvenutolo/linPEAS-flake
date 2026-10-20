@@ -161,7 +161,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/notify-workflow-result
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
         with:
           # If `check` itself errored (e.g. malformed pin, API rate-limit) we
           # treat that as a stall-equivalent: surface to the same channel.

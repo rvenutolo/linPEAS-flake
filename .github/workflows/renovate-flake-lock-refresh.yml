@@ -262,7 +262,17 @@ jobs:
         with:
           ref: ${{ needs.identify.outputs.head_branch }}
           persist-credentials: false
-      - uses: ./.github/actions/setup-nix
+      # This job checks out the Renovate branch head, not this workflow's
+      # commit, so `./` reads the setup-nix composite from that branch's tree
+      # rather than from the running commit. `$/` would resolve it at the
+      # running commit, but it is not adoptable while no released actionlint
+      # parses it. What a modified composite can reach here is bounded: the job
+      # holds `permissions: contents: read` and passes only that GITHUB_TOKEN,
+      # carries no App key, checks out with `persist-credentials: false`, and
+      # runs under a harden-runner `egress-policy: block` allowlist. A
+      # SHA-pinned self-reference, as pages.yml uses for its notify step,
+      # closes the gap without waiting on actionlint.
+      - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: refresh flake.lock for the bumped input
@@ -497,7 +507,8 @@ jobs:
             "${UNMAPPED}")"
           printf 'reporting %s\n' "${verdict}"
           printf 'result=%s\n' "${verdict}" >> "${GITHUB_OUTPUT}"
-      - uses: ./.github/actions/notify-workflow-result
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
         with:
           # `skipped` is inert in the composite, so the steady-state
           # verdict files and closes nothing.
