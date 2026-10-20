@@ -155,8 +155,9 @@ tree.)
     which matching selects no files is reported by pre-commit as a skip
     rather than a failure. Either way the scheduled run still reaches the
     file, since it is handed the directory rather than a matched file
-    list. Both paths read the same `zizmor.yml`, so neither is a check on
-    the other's suppressions. The watchdog pages a finding, a scan that
+    list. Both paths read the same `zizmor.yml` and the same inline
+    `# zizmor: ignore[...]` comments, so neither is a check on the
+    other's suppressions. The watchdog pages a finding, a scan that
     could not start because a step before it or `nix develop` itself
     failed, or a cancelled job, as a deduped
     `zizmor-drift` issue <!-- notify-arms: zizmor-drift-check.yml/notify = failure cancelled -->,

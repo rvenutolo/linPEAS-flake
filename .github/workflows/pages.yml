@@ -50,7 +50,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-nix
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 

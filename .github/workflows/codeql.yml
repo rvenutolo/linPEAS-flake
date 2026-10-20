@@ -118,7 +118,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/notify-workflow-result
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
         with:
           result: failure
           label: codeql-critical
@@ -161,7 +162,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/notify-workflow-result
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
         with:
           # Raw result: 'failure' or 'cancelled' (the job's `if:` gate
           # admits nothing else); the composite annotates cancelled
