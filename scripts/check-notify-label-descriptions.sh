@@ -64,7 +64,7 @@ readonly COMPOSITE_SUFFIX='.github/actions/notify-workflow-result'
 
 function main() {
   local -a workflows=()
-  glob_into workflows "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yml"
+  glob_into workflows 'workflow YAML' "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
   if ((${#workflows[@]} == 0)); then
     printf 'notify-label-descriptions lint: empty scan set allowed\n'
     exit 0
