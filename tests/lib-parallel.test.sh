@@ -143,7 +143,8 @@ else
 fi
 
 # 4. late-writer — a grandchild that keeps writing after its entry exits
-# can only reach that entry's own .out, never a sibling's.
+# reaches that entry's own .out, never a sibling's and never the parent's
+# streams.
 # shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
 run_scenario 'late-writer' 'done: lw-b pass' '
 function probe() {
@@ -156,11 +157,12 @@ sleep 0.5
 '
 if [[ ${rc} -eq 0 ]] &&
   [[ "$(<"${work}/late-writer.result/001.out")" == 'b-out' ]] &&
+  grep --fixed-strings --quiet -- 'late' "${work}/late-writer.result/000.out" &&
   ! grep --fixed-strings --quiet -- 'late' "${work}/late-writer.out"; then
   pass 'late-writer: a late grandchild write stays in its own slot'
 else
-  fail "late-writer: expected lw-b .out to be exactly b-out, got exit ${rc}"
-  cat -- "${work}/late-writer.out" "${work}/late-writer.err" "${work}/late-writer.result/001.out" >&2
+  fail "late-writer: expected late in lw-a .out only and lw-b .out to be exactly b-out, got exit ${rc}"
+  cat -- "${work}/late-writer.out" "${work}/late-writer.err" "${work}"/late-writer.result/*.out >&2
 fi
 
 # 5. output-captured — both streams of the entry land in its .out and
