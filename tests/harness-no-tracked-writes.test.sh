@@ -137,7 +137,7 @@ function run_probe() {
   : >"${out}"
   local rc=0
   (
-    cd -- "${probe_cwd}"
+    cd -- "${probe_cwd}" || exit 2
     env --unset=SCRATCH_TREE_ACTIVE "TMPDIR=${tmp}" "PROBE_OUT=${out}" "$@" \
       "${probe_cmd[@]}" >/dev/null 2>"${work}/${name}.err"
   ) || rc=$?
@@ -376,7 +376,7 @@ reexec_in_scratch_tree
 CALLER
 outside_rc=0
 (
-  cd -- "${outside}"
+  cd -- "${outside}" || exit 2
   env "GIT_CEILING_DIRECTORIES=${work}" "LIB_DIR=${PROBE_REPO}/scripts/lib" \
     bash caller.sh </dev/null >/dev/null 2>"${work}/outside.err"
 ) || outside_rc=$?
@@ -491,7 +491,7 @@ function no_writes_case() {
   stage_scratch_tree "${REPO_ROOT}" "${tree}"
   snapshot "${tree}" "${work}/${name}.before"
   (
-    cd -- "${tree}"
+    cd -- "${tree}" || exit 2
     env --unset=SCRATCH_TREE_ACTIVE --unset=BASH_ENV \
       "TMPDIR=${work}/${name}.tmp" \
       timeout 20m bash "tests/${harness}" </dev/null \
@@ -519,12 +519,24 @@ no_writes_results="${work}/no-writes-results"
 mkdir -- "${no_writes_results}"
 run_parallel no_writes_case "${no_writes_results}" "${no_writes_names[@]}"
 
-no_writes_index=0
-for harness in "${no_writes_names[@]}"; do
-  name="no-writes-${harness%.test.sh}"
-  slot="$(printf '%s/%03d' "${no_writes_results}" "${no_writes_index}")"
-  no_writes_index=$((no_writes_index + 1))
+# @description Replay one no-writes case's slot output and emit its
+# pass/fail line and discrimination record, from the files the case left
+# under the work dir. A case with no report gets a fail line and no
+# record.
+# @arg $1 harness basename  @arg $2 the case's `run_parallel` slot path
+function report_no_writes_case() {
+  local -r harness="$1" slot="$2"
+  local -r name="no-writes-${harness%.test.sh}"
+  local rc
   cat -- "${slot}.out"
+  # A case that died before writing its report, as when staging or the
+  # snapshot fails, has only its slot status to go on; its replayed
+  # output above already shows the cause.
+  rc="$(<"${slot}.rc")"
+  if [[ ${rc} -ne 0 && ! -e ${work}/${name}.report ]]; then
+    fail "${name} — the case could not run (status ${rc})"
+    return 0
+  fi
   rc="$(sed --quiet 's/^harness-assert-outcome: exit=//p' -- "${work}/${name}.report")"
   if [[ ${rc} -ne 0 ]]; then
     fail "${name} — the harness exited ${rc}"
@@ -537,7 +549,50 @@ for harness in "${no_writes_names[@]}"; do
     pass "${name} — no file in the starting tree changed"
   fi
   harness_assert_record "${name}" 'tracked files changed: none' "${work}/${name}.report"
+}
+
+no_writes_index=0
+for harness in "${no_writes_names[@]}"; do
+  slot="$(printf '%s/%03d' "${no_writes_results}" "${no_writes_index}")"
+  no_writes_index=$((no_writes_index + 1))
+  report_no_writes_case "${harness}" "${slot}"
 done
+
+# no-writes-case-died-before-report: a case that recorded a failing
+# status but left no report, as when staging or the snapshot fails, is
+# a FAIL line naming that status, and the reporting carries on. Run in a
+# subshell with errexit live, as the parent loop is, so the failure it
+# counts stays out of this harness's own tally.
+died_slot="${work}/died-results/000"
+mkdir -- "${work}/died-results"
+printf 'staging failed\n' >"${died_slot}.out"
+printf '1\n' >"${died_slot}.rc"
+set +e
+(
+  set -e
+  failures_before="${failures}"
+  report_no_writes_case died-before-report.test.sh "${died_slot}"
+  printf 'failures counted: %d\n' "$((failures - failures_before))"
+) >"${work}/died.out" 2>"${work}/died.err"
+died_rc=$?
+set -e
+{
+  printf 'no-writes-case-died-before-report: exit status %d\n' "${died_rc}"
+  if grep --quiet --fixed-strings --line-regexp -- \
+    'FAIL: no-writes-died-before-report — the case could not run (status 1)' "${work}/died.err"; then
+    printf 'no-writes-case-died-before-report: names the status: yes\n'
+  else
+    printf 'no-writes-case-died-before-report: names the status: no\n'
+  fi
+  if grep --quiet --fixed-strings --line-regexp -- 'failures counted: 1' "${work}/died.out"; then
+    printf 'no-writes-case-died-before-report: counted as one failure: yes\n'
+  else
+    printf 'no-writes-case-died-before-report: counted as one failure: no\n'
+  fi
+} >"${work}/died.report"
+expect_line no-writes-case-died-before-report "${work}/died.report" 'exit status 0'
+expect_line no-writes-case-died-before-report "${work}/died.report" 'names the status: yes'
+expect_line no-writes-case-died-before-report "${work}/died.report" 'counted as one failure: yes'
 
 harness_assert_verify || failures=$((failures + 1))
 

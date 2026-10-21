@@ -26,11 +26,16 @@ source "${_lib_self_dir}/enumerate.sh"
 
 # @description Run `fn <name> <slot>` for every name, at most
 # `CHECK_WORKERS_OVERRIDE` (default `nproc`) at a time, with
-# `slot="<result_dir>/<index>"` and the index zero-padded in roster order.
+# `slot="<result_dir>/<index>"` and the index zero-padded to three digits
+# in roster order, so a batch holds at most 999 names: a wider index would
+# sort out of roster order.
 # The function's stdout and stderr go to `<slot>.out`; the worker writes
 # `<slot>.name`, `<slot>.rc` and `<slot>.secs` from its EXIT trap and
 # prints `done: <name> pass` or `done: <name> FAIL` as each run finishes.
-# The function may write further files at `<slot>.<ext>`. A failing run
+# The function may write further files at `<slot>.<ext>`. Output that a
+# process the function leaves running writes after the function returns
+# still lands in `<slot>.out`, never in another entry's, but whatever
+# arrives after the caller has replayed the slot is not shown. A failing run
 # never stops the batch, and the batch's return says only that every
 # entry recorded a status: the per-entry verdict is `<slot>.rc`, which
 # the caller reads to build its rows. That split is what keeps errexit
@@ -46,7 +51,8 @@ source "${_lib_self_dir}/enumerate.sh"
 # @arg $@ the names, in roster order
 # @exitcode 0 every entry ran and recorded a status
 # @exitcode 2 (exit, not return) the worker count is not a positive
-#   integer, there are no names, or a worker left no status file
+#   integer, there are no names or more than 999, or a worker left no
+#   status file
 function run_parallel() {
   local -r fn="$1" result_dir="$2"
   shift 2
@@ -60,6 +66,10 @@ function run_parallel() {
   fi
   if (($# == 0)); then
     printf 'run_parallel: no entries to run\n' >&2
+    exit 2
+  fi
+  if (($# > 999)); then
+    printf 'run_parallel: at most 999 entries, got %d\n' "$#" >&2
     exit 2
   fi
 
@@ -79,9 +89,13 @@ function run_parallel() {
       # The function gets a subshell of its own so that an `exit` inside
       # it ends that subshell, not this worker while the redirection is
       # still in force, which would send the progress line into the slot.
+      # When a signal kills that subshell, this worker itself writes a job
+      # message about it to its own stderr; the outer redirection sends
+      # that message into the slot too, after the function's output,
+      # rather than onto the runner's stream while runs are in flight.
       start="$(date +%s)"
       trap '_run_parallel_record "$?" "${name}" "${slot}" "${start}"' EXIT
-      ("${fn}" "${name}" "${slot}") >"${slot}.out" 2>&1
+      { ("${fn}" "${name}" "${slot}") >"${slot}.out" 2>&1; } 2>>"${slot}.out"
     ) &
     running=$((running + 1))
     index=$((index + 1))

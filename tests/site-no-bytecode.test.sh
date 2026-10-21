@@ -77,7 +77,7 @@ function run_scenario() {
 
   local rc=0
   (
-    cd -- "${tree}"
+    cd -- "${tree}" || exit 2
     env --unset=PYTHONDONTWRITEBYTECODE --unset=PYTHONPYCACHEPREFIX --unset=BASH_ENV \
       timeout 10m mkdocs build --strict --site-dir "${work}/${name}/site" \
       </dev/null >"${out}" 2>"${err}"

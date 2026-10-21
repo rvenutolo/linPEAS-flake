@@ -122,6 +122,22 @@ LC_ALL=en_US.UTF-8 expect_in "${work}/locale-dedicated" locale-dedicated 0 ''
 LC_ALL=en_US.UTF-8 expect_in "${work}/locale-list" locale-list 0 ''
 LC_ALL=en_US.UTF-8 expect_in "${work}/locale-block" locale-block 0 ''
 
+# --- a long header is read whole however early its exit-2 item sits ---
+# The block form is matched by a reader that quits at its first hit. With
+# the `2` item near the top of a header far larger than a pipe buffer,
+# the header's writer is still writing when that reader quits, so a
+# writer whose exit status counts reads the contract as missing.
+mkdir --parents -- "${work}/long-block"
+{
+  printf '#!/usr/bin/env bash\n'
+  printf '# Exit codes:\n#   0 clean\n#   2 missing input\n'
+  for ((line = 0; line < 20000; line++)); do
+    printf '# padding line %d of a header longer than any pipe buffer\n' "${line}"
+  done
+  printf '\necho PAYLOAD_RAN\nexit 2\n'
+} >"${work}/long-block/check-long.sh"
+expect_in "${work}/long-block" long-block 0 ''
+
 # --- a scan root with no script is a could-not-run, not a clean tree ---
 expect empty 2 ''
 

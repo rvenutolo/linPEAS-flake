@@ -128,7 +128,7 @@ function run_outside() {
   mkdir --parents -- "${cwd}"
   rc=0
   (
-    cd -- "${cwd}"
+    cd -- "${cwd}" || exit 2
     env "$@" GIT_CEILING_DIRECTORIES="${work}/cwd" \
       PATH="${TRIPWIRE_DIR}:${PATH}" \
       bash "${REPO_ROOT}/scripts/${script}" "${args[@]}" \

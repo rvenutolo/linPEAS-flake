@@ -118,8 +118,14 @@ function documents_exit_two() {
   LC_ALL=C grep -qiE '\bexits?\b[^.]*,[[:space:]]*2([^0-9A-Za-z]|$)' <<<"${unwrapped}" && return 0
 
   # An enumerated block: an "Exit codes:" heading plus a `2` item line.
+  # The header is captured before it is matched: piped straight into
+  # `grep -q`, a header longer than one write is still being written when
+  # grep quits at its hit, and under pipefail the writer's SIGPIPE turns
+  # that hit into a miss.
   if grep -qiE 'exit[[:space:]]+codes?:' <<<"${unwrapped}"; then
-    header_of "${file}" | LC_ALL=C grep -qE '^[[:space:]]*#[[:space:]]+2([^0-9A-Za-z]|$)' && return 0
+    local header
+    header="$(header_of "${file}")"
+    LC_ALL=C grep -qE '^[[:space:]]*#[[:space:]]+2([^0-9A-Za-z]|$)' <<<"${header}" && return 0
   fi
 
   return 1
