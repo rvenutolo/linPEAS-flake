@@ -270,8 +270,7 @@ function filter_covers_hooks_dir() {
   # Nix string literal: "\\." in source is the ERE "\.".
   local ere
   ere="$(printf '%s' "${filter}" | sed 's/\\\\/\\/g')"
-  printf '%s\n' "${DEFAULT_HOOKS_DIR}/example.nix" |
-    grep --quiet --extended-regexp -- "${ere}"
+  grep --quiet --extended-regexp -- "${ere}" <<<"${DEFAULT_HOOKS_DIR}/example.nix"
 }
 
 failed=0

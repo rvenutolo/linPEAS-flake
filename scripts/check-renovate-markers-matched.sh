@@ -119,7 +119,7 @@ function file_pattern_matches() {
     [[ -z ${pat} ]] && continue
     pat="${pat#/}"
     pat="${pat%/}"
-    if printf '%s' "${rel}" | grep --quiet --perl-regexp -- "${pat}"; then
+    if grep --quiet --perl-regexp -- "${pat}" <<<"${rel}"; then
       return 0
     fi
   done <<<"${patterns}"

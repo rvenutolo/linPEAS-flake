@@ -115,11 +115,11 @@ function type_label_of() {
 # @arg $4 the blocking union in force
 function assert_class() {
   local -r name="$1" canary="$2" class_re="$3" union="$4"
-  if ! printf '%s\n' "${canary}" | grep --quiet --extended-regexp -- "${class_re}"; then
+  if ! grep --quiet --extended-regexp -- "${class_re}" <<<"${canary}"; then
     log_err "class regex ${name} no longer matches its canary — the gap verdict would be vacuous"
     exit 2
   fi
-  if ! printf '%s\n' "${canary}" | grep --quiet --extended-regexp -- "${union}"; then
+  if ! grep --quiet --extended-regexp -- "${union}" <<<"${canary}"; then
     log_err "the blocking union no longer matches the ${name} canary — the gap verdict would be vacuous"
     exit 2
   fi

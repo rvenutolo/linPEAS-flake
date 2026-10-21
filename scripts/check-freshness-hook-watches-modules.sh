@@ -423,7 +423,7 @@ function assert_filter_covers() {
     # coverage: `check-path-hygiene.sh` enumerates with `--exclude-standard`,
     # so a gitignored newline-named `*.nix` under the scan root is invisible
     # to it while `nix_modules` (a plain filesystem walk) still picks it up.
-    if ! printf '%s\n' "${p}" | grep --quiet --extended-regexp -- "${ere}"; then
+    if ! grep --quiet --extended-regexp -- "${ere}" <<<"${p}"; then
       printf 'hook %s: files filter does not cover %s (%s)\n' \
         "${name}" "${p}" "${subject}" >&2
       failed=$((failed + 1))

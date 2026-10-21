@@ -449,8 +449,7 @@ function cross_check_harness_group() {
   local -i matched
   while IFS=$'\t' read -r name link enforcer ci hook; do
     ci_items="$(field_items "${ci}")"
-    if ! printf '%s\n' "${ci_items}" |
-      grep --quiet --fixed-strings --line-regexp -- "${HARNESS_GROUP_JOB}"; then
+    if ! grep --quiet --fixed-strings --line-regexp -- "${HARNESS_GROUP_JOB}" <<<"${ci_items}"; then
       continue
     fi
     matched=0

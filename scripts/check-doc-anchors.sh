@@ -138,9 +138,8 @@ function headings_of() {
   while IFS= read -r heading; do
     [[ -z ${heading} ]] && continue
     rc=0
-    printf '%s\n' "${heading}" |
-      LC_ALL=C.UTF-8 grep --quiet --perl-regexp \
-        '[\p{L}\p{M}\p{N}](?<=[^\x00-\x7F])' || rc=$?
+    LC_ALL=C.UTF-8 grep --quiet --perl-regexp \
+      '[\p{L}\p{M}\p{N}](?<=[^\x00-\x7F])' <<<"${heading}" || rc=$?
     ((rc > 1)) && return 2
     ((rc == 0)) && continue
     slug "${heading}"
@@ -395,7 +394,7 @@ for src_rel in "${SOURCES[@]}"; do
     fi
     local_headings="${anchor_cache[${target_abs}]}"
     links_checked=$((links_checked + 1))
-    if ! printf '%s\n' "${local_headings}" | grep --fixed-strings --line-regexp --quiet -- "${anchor}"; then
+    if ! grep --fixed-strings --line-regexp --quiet -- "${anchor}" <<<"${local_headings}"; then
       available="$(printf '%s\n' "${local_headings}" | paste -sd, -)"
       printf '[anchor-miss] %s:%s: #%s not found in %s (available: %s)\n' \
         "${src_rel}" "${lineno}" "${anchor}" \
