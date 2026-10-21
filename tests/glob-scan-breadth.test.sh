@@ -165,7 +165,7 @@ function overridable_glob_scripts() {
   local f
   for f in "${scripts[@]}"; do
     grep --quiet --extended-regexp -- '^[[:space:]]*glob_into[[:space:]]' "${f}" || continue
-    grep --quiet --extended-regexp -- '\$\{[A-Z0-9_]+_OVERRIDE[:}]' "${f}" || continue
+    LC_ALL=C grep --quiet --extended-regexp -- '\$\{[A-Z0-9_]+_OVERRIDE[:}]' "${f}" || continue
     printf '%s\n' "${f##*/}"
   done
 }
