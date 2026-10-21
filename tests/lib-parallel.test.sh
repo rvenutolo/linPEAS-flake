@@ -201,42 +201,52 @@ fi
 # 7. concurrency-bounded — with two workers and four entries that each
 # hold a marker while sleeping, the most markers any entry sees on entry
 # or exit is two. The sleep is a full second so the overlap is seen even
-# when this harness itself runs beside others on a loaded runner.
+# when this harness itself runs beside others on a loaded runner, and
+# the markers are counted by glob, which reads the directory without
+# touching entries a sibling may be removing at that moment.
 # shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
 run_scenario 'concurrency-bounded' 'done: cb-d pass' '
 function probe() {
+  local -a markers=()
   mkdir -- "${RUNNING}/$1"
-  find "${RUNNING}" -mindepth 1 -maxdepth 1 | wc --lines >"$2.peak"
+  glob_into markers markers "${RUNNING}/*"
+  printf "%d\n" "${#markers[@]}" >"$2.peak"
   sleep 1
-  find "${RUNNING}" -mindepth 1 -maxdepth 1 | wc --lines >>"$2.peak"
+  glob_into markers markers "${RUNNING}/*"
+  printf "%d\n" "${#markers[@]}" >>"$2.peak"
   rmdir -- "${RUNNING}/$1"
 }
 batch_rc=0
 CHECK_WORKERS_OVERRIDE=2 run_parallel probe "${RESULT}" cb-a cb-b cb-c cb-d
 '
 peak="$(max_peak concurrency-bounded)"
-if [[ ${rc} -eq 0 && ${peak} -eq 2 ]]; then
+if [[ ${rc} -eq 0 && ${peak} -eq 2 ]] &&
+  grep --fixed-strings --quiet -- 'done: cb-d pass' "${work}/concurrency-bounded.out"; then
   pass 'concurrency-bounded: two workers run at most two entries at once'
 else
-  fail "concurrency-bounded: expected peak 2, got peak ${peak} exit ${rc}"
-  cat -- "${work}/concurrency-bounded.out" "${work}/concurrency-bounded.err" >&2
+  fail "concurrency-bounded: expected peak 2 and every entry passing, got peak ${peak} exit ${rc}"
+  cat -- "${work}/concurrency-bounded.out" "${work}/concurrency-bounded.err" "${work}"/concurrency-bounded.result/*.out >&2
 fi
 
 # 8. concurrency-one — the same probe under one worker never overlaps.
 # shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
 run_scenario 'concurrency-one' 'done: co-c pass' '
 function probe() {
+  local -a markers=()
   mkdir -- "${RUNNING}/$1"
-  find "${RUNNING}" -mindepth 1 -maxdepth 1 | wc --lines >"$2.peak"
+  glob_into markers markers "${RUNNING}/*"
+  printf "%d\n" "${#markers[@]}" >"$2.peak"
   sleep 0.2
-  find "${RUNNING}" -mindepth 1 -maxdepth 1 | wc --lines >>"$2.peak"
+  glob_into markers markers "${RUNNING}/*"
+  printf "%d\n" "${#markers[@]}" >>"$2.peak"
   rmdir -- "${RUNNING}/$1"
 }
 batch_rc=0
 CHECK_WORKERS_OVERRIDE=1 run_parallel probe "${RESULT}" co-a co-b co-c
 '
 peak="$(max_peak concurrency-one)"
-if [[ ${rc} -eq 0 && ${peak} -eq 1 ]]; then
+if [[ ${rc} -eq 0 && ${peak} -eq 1 ]] &&
+  grep --fixed-strings --quiet -- 'done: co-c pass' "${work}/concurrency-one.out"; then
   pass 'concurrency-one: one worker never overlaps entries'
 else
   fail "concurrency-one: expected peak 1, got peak ${peak} exit ${rc}"
