@@ -2368,8 +2368,11 @@ Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
 
 Run every doc-freshness regenerate-and-diff harness
 (tests/refresh-\*.test.sh) in one devShell, printing a per-generator
-pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Runs all
-harnesses even if one fails; exits 1 if any failed, 2 if none found.
+pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Harnesses
+run concurrently, at most CHECK_WORKERS_OVERRIDE (default nproc) at a
+time, with each one's output replayed in roster order once all have
+finished. Runs all harnesses even if one fails; exits 1 if any failed,
+2 if none found.
 
 ### scripts/run-harness-group.sh
 
@@ -2386,8 +2389,11 @@ if any failed.
 
 Run every invariant-lint check in a named group from
 .github/lint-groups.yml inside one devShell, printing a per-check
-pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Runs all
-checks even if one fails; exits 1 if any failed, 2 on config error.
+pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Checks run
+concurrently, at most CHECK_WORKERS_OVERRIDE (default nproc) at a time,
+with each one's output replayed in manifest order once all have
+finished. Runs all checks even if one fails; exits 1 if any failed, 2
+on config error.
 
 ## Libraries
 

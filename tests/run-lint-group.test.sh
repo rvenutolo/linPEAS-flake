@@ -41,6 +41,13 @@ function run_scenario() {
   printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-qqq.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-mmm.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' >"${scripts_dir}/check-ddd.sh"
+  # demo-reverse lists its slowest check first, so a table in manifest
+  # order proves the rows follow the manifest and not the finish order,
+  # and fast's body landing after the last done line proves the output
+  # is replayed once every check has finished.
+  printf '#!/usr/bin/env bash\nsleep 0.6\nexit 0\n' >"${scripts_dir}/check-slow.sh"
+  printf '#!/usr/bin/env bash\nsleep 0.3\nexit 0\n' >"${scripts_dir}/check-mid.sh"
+  printf '#!/usr/bin/env bash\nprintf "fast-body\\n"\nexit 0\n' >"${scripts_dir}/check-fast.sh"
   chmod +x "${scripts_dir}"/check-*.sh
   # demo-first-fail puts its failing check first, so a zzz row proves the
   # runner kept going instead of aborting on the first failure.
@@ -63,6 +70,10 @@ twice:
   - aaa
 twice:
   - ddd
+demo-reverse:
+  - slow
+  - mid
+  - fast
 YAML
   # A merge key makes yq warn on stderr whatever is read, so it goes
   # only into the manifest of the scenario that sets MANIFEST_EXTRA.
@@ -106,10 +117,57 @@ YAML
     # $GITHUB_STEP_SUMMARY write when checks actually ran.
     printf 'FAIL: %s — GITHUB_STEP_SUMMARY missing table header\n' "${name}" >&2
     failures=$((failures + 1))
+  elif [[ ${expected_exit} -lt 2 ]] && ! rows_have_done_lines "${out_file}"; then
+    printf 'FAIL: %s — a table row lacks its done line\n' "${name}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif [[ ${group} == demo-reverse ]] && ! rows_in_order "${out_file}" slow mid fast; then
+    printf 'FAIL: %s — table rows do not follow the manifest order\n' "${name}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif [[ ${group} == demo-reverse ]] && ! body_after_done_lines "${out_file}" 'fast-body'; then
+    printf 'FAIL: %s — check output was not replayed after the last done line\n' "${name}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
   else
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
   rm --recursive --force -- "${work}" "${outcome_file}" "${out_file}" "${step_file}"
+}
+
+# @description Assert every table row of a runner's output has a `done:`
+# line naming the same check.
+# @arg $1 captured runner output
+function rows_have_done_lines() {
+  local -a rows=()
+  local row
+  mapfile -t rows < <(sed --quiet --regexp-extended 's/^\| ([^ |]+) \| (pass|FAIL) .*$/\1/p' -- "$1")
+  [[ ${#rows[@]} -gt 0 ]] || return 1
+  for row in "${rows[@]}"; do
+    grep --quiet --fixed-strings -- "done: ${row} " "$1" || return 1
+  done
+}
+
+# @description Assert the table rows name the checks in the given order.
+# @arg $1 captured runner output  @arg $@ check names in expected order
+function rows_in_order() {
+  local -r out="$1"
+  shift
+  local got
+  got="$(sed --quiet --regexp-extended 's/^\| ([^ |]+) \| (pass|FAIL) .*$/\1/p' -- "${out}" | tr '\n' ' ')"
+  # Joined by printf rather than `$*`: the harness's IFS starts with a
+  # newline, which is what `$*` would join on.
+  [[ ${got} == "$(printf '%s ' "$@")" ]]
+}
+
+# @description Assert a line of check output appears only after the last
+# `done:` line, which is where a replayed buffer lands.
+# @arg $1 captured runner output  @arg $2 the check output line
+function body_after_done_lines() {
+  local last_done first_body
+  last_done="$(grep --line-number --fixed-strings -- 'done: ' "$1" | tail --lines=1 | cut --delimiter=: --fields=1)"
+  first_body="$(grep --line-number --fixed-strings -- "$2" "$1" | head --lines=1 | cut --delimiter=: --fields=1)"
+  [[ -n ${last_done} && -n ${first_body} && ${first_body} -gt ${last_done} ]]
 }
 
 # @description Prove a failing check *.test.sh skips its check script and
@@ -200,6 +258,7 @@ function main() {
   # don't-abort: zzz must still appear in the table after fff failed
   run_scenario 'failing check does not abort the rest' 'demo-first-fail' 1 '| zzz | pass |'
   run_scenario 'missing script -> exit 1' 'demo-missing' 1 '| nope | FAIL |'
+  CHECK_WORKERS_OVERRIDE=3 run_scenario 'parallel run keeps manifest order' 'demo-reverse' 0 'fast-body'
   run_scenario 'unknown group -> exit 2' 'no-such-group' 2 ''
   # A group name is data, never expression text. Each name below closes
   # a quoted segment if spliced into the manifest read: it would run
