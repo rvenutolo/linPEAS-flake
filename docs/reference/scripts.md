@@ -2368,15 +2368,20 @@ Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
 
 Run every doc-freshness regenerate-and-diff harness
 (tests/refresh-\*.test.sh) in one devShell, printing a per-generator
-pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Runs all
-harnesses even if one fails; exits 1 if any failed, 2 if none found.
+pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Harnesses
+run concurrently, at most CHECK_WORKERS_OVERRIDE (default nproc) at a
+time, with each one's output replayed in roster order once all have
+finished. Runs all harnesses even if one fails; exits 1 if any failed,
+2 if none found.
 
 ### scripts/run-harness-group.sh
 
 Run every setup-tax failure-mode harness in one devShell,
 printing a per-harness pass/fail summary table to stdout and
-$GITHUB_STEP_SUMMARY. Runs all harnesses even if one fails; exits 1
-if any failed.
+$GITHUB_STEP_SUMMARY. Harnesses run concurrently, at most
+CHECK_WORKERS_OVERRIDE (default nproc) at a time, with each one's
+output replayed in roster order once all have finished. Runs all
+harnesses even if one fails; exits 1 if any failed.
 
 **Options:**
 
@@ -2386,8 +2391,11 @@ if any failed.
 
 Run every invariant-lint check in a named group from
 .github/lint-groups.yml inside one devShell, printing a per-check
-pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Runs all
-checks even if one fails; exits 1 if any failed, 2 on config error.
+pass/fail summary table to stdout and $GITHUB_STEP_SUMMARY. Checks run
+concurrently, at most CHECK_WORKERS_OVERRIDE (default nproc) at a time,
+with each one's output replayed in manifest order once all have
+finished. Runs all checks even if one fails; exits 1 if any failed, 2
+on config error.
 
 ## Libraries
 
@@ -3003,6 +3011,67 @@ the real failing exit code before any command substitution clobbers $?.
 One Markdown fence reader for the lints that read shell
 commands inside fences, as `awk` source to place ahead of the caller's
 program. Source after `set -Eeuo pipefail`.
+
+### scripts/lib/parallel.sh
+
+Run a caller's function over a list of names with a bounded
+number of workers at once, keeping each run's output apart. A runner
+that executes its checks one after another spends the job's wall time
+on their sum, on a runner with several CPUs; this helper spends it on
+roughly the slowest check plus the leftovers. Each run's stdout and
+stderr are buffered into its own slot file, and the only text the
+helper prints while runs are in flight is one `done:` line per name, so
+the caller replays the buffered output in roster order afterwards and
+the log reads the same whatever order the runs finished in. There is no
+signal handling: a Ctrl-C reaches every process in the foreground group
+already, and a cancelled or timed-out CI job ends the whole runner. There
+is no worker budget shared between a runner and a parallel harness it
+runs: every level reads `nproc`, and the brief oversubscription that
+nesting causes is bounded by the product of the two counts. Source after
+`set -Eeuo pipefail`.
+
+#### run_parallel()
+
+Run `fn <name> <slot>` for every name, at most
+`CHECK_WORKERS_OVERRIDE` (default `nproc`) at a time, with
+`slot="<result_dir>/<index>"` and the index zero-padded in roster order.
+The function's stdout and stderr go to `<slot>.out`; the worker writes
+`<slot>.name`, `<slot>.rc` and `<slot>.secs` from its EXIT trap and
+prints `done: <name> pass` or `done: <name> FAIL` as each run finishes.
+The function may write further files at `<slot>.<ext>`. A failing run
+never stops the batch, and the batch's return says only that every
+entry recorded a status: the per-entry verdict is `<slot>.rc`, which
+the caller reads to build its rows. That split is what keeps errexit
+live inside the function: a call made in a `||` list or an `if` would
+have bash suspend `set -e` for everything under it, the function
+included, so a failing command in its middle would be ignored. Call
+this as a bare command, with errexit on, and read the slot files. A
+function that reports nothing cannot pass silently: it passes only by
+exiting 0, and a worker that dies before its trap runs is a
+could-not-run for the whole batch.
+
+**Args:**
+
+- `$1` — name of a shell function in the caller's scope
+- `$2` — result directory, existing and owned by the caller
+- `$@` — the names, in roster order
+
+**Exit codes:**
+
+- `0` — every entry ran and recorded a status
+- `2` — (exit, not return) the worker count is not a positive integer, there are no names, or a worker left no status file
+
+#### \_run_parallel_record()
+
+Write one entry's status files and progress line; the
+worker's EXIT trap.
+
+**Args:**
+
+- `$1` — status
+- `$2` — name
+- `$3` — slot
+- `$4` — start epoch seconds
 
 ### scripts/lib/payload.sh
 
