@@ -64,6 +64,7 @@ lint-script-hygiene:
   - payload-source-helper
   - tool-guarded
   - regex-range-ascii
+  - no-pipe-into-grep-quiet
 lint-doc-invariants:
   - orphan-invariants
   - doc-anchors

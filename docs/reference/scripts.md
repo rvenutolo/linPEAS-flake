@@ -1043,6 +1043,45 @@ banned shape has, and the one a top-level-only glob never reads.
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
 Exit 0 clean, 1 on any hit, 2 on operational error.
 
+### scripts/check-no-pipe-into-grep-quiet.sh
+
+Lint: no shell file and no workflow or composite-action
+`run:` block pipes into a quiet `grep` (`-q`, a bundled flag holding
+`q`, `--quiet`, or its alias `--silent`). A quiet `grep` exits at its
+first match. A producer still writing then takes SIGPIPE, and under
+`set -o pipefail` the pipeline's status is the producer's 141, so a
+match reads as a miss. Whether the producer is still writing depends on
+how much it writes and on scheduling, so the same line passes on an
+idle machine and fails under load. The rule bans every such pipe,
+whatever the producer: capture the producer's output into a variable,
+then match it with a here-string.
+
+The matcher is textual rather than a shell syntax tree, because the
+shape also lives inside strings a harness hands to `eval` as a real
+pipeline, which a parser reads as a plain word. It counts anywhere on a
+line that is not a comment, quoted text and heredoc bodies included;
+only a comment-only line is exempt. `||` is not a pipe and `|&` is. A
+pipe that ends one line, with or without a trailing backslash, joins
+the next non-blank, non-comment line, and a hit there is reported at
+that next line.
+
+Workflow and composite-action YAML is matched on each step's extracted
+`run:` body, never on raw YAML: every `run: |` key line ends in a pipe,
+so a body opening with a quiet `grep` would read as a hit.
+
+The scan set is every tracked `*.sh` file, every tracked
+`.github/workflows/*.yml` (or `.yaml`) and every tracked
+`.github/actions/**/action.yml` (or `.yaml`), less any path with a
+`fixtures/` segment: fixture trees exist to hold violations.
+
+Honors SCAN_ROOT_OVERRIDE for fixtures: set, the scan set is globbed
+under that directory instead of listed by `git ls-files`, and paths are
+reported relative to it.
+
+Exits 0 when clean, 1 on any hit, 2 on operational error: a required
+tool is missing, the scan set is empty, a file cannot be read, or `yq`
+cannot read a workflow or one of its steps.
+
 ### scripts/check-notify-arms.sh
 
 Lint: every stated arm list of a scanner notify job must

@@ -1,0 +1,8 @@
+name: w
+on: push
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          grep --quiet x f
