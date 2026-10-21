@@ -86,9 +86,13 @@ function run_parallel() {
       # The function gets a subshell of its own so that an `exit` inside
       # it ends that subshell, not this worker while the redirection is
       # still in force, which would send the progress line into the slot.
+      # When a signal kills that subshell, this worker itself writes a job
+      # message about it to its own stderr; the outer redirection sends
+      # that message into the slot too, after the function's output,
+      # rather than onto the runner's stream while runs are in flight.
       start="$(date +%s)"
       trap '_run_parallel_record "$?" "${name}" "${slot}" "${start}"' EXIT
-      ("${fn}" "${name}" "${slot}") >"${slot}.out" 2>&1
+      { ("${fn}" "${name}" "${slot}") >"${slot}.out" 2>&1; } 2>>"${slot}.out"
     ) &
     running=$((running + 1))
     index=$((index + 1))
