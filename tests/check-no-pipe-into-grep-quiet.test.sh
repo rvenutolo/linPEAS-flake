@@ -64,11 +64,15 @@ expect bundled-flags "${FIXTURES}/bad/flags" 1 \
   'flags.sh:5: ' 'flags.sh:6: ' 'flags.sh:7: ' 'flags.sh:8: ' '4 pipe(s) into quiet grep found'
 expect pipe-amp "${FIXTURES}/bad/pipeamp" 1 'pipeamp.sh:5: '
 # A pipe that ends a line is reported at the line the quiet grep sits
-# on, with and without a backslash after the pipe.
-expect multiline "${FIXTURES}/bad/multiline" 1 'multiline.sh:6: ' 'multiline.sh:12: '
-expect eval-string "${FIXTURES}/bad/eval" 1 'eval.sh:13: '
-# The here-string fix, `||`, a comment naming the shape, a file operand
-# and a counting grep: none is a pipe into a quiet grep.
+# on, with and without a backslash after the pipe, and across a blank or
+# comment line between the two.
+expect multiline "${FIXTURES}/bad/multiline" 1 'multiline.sh:6: ' 'multiline.sh:12: ' \
+  'multiline.sh:19: ' 'multiline.sh:22: ' '4 pipe(s) into quiet grep found'
+# A quiet flag ends at a closing quote as well as at a space.
+expect eval-string "${FIXTURES}/bad/eval" 1 'eval.sh:13: ' 'eval.sh:14: '
+# The here-string fix, `||`, a comment naming the shape, a file operand,
+# a counting grep, a line-final pipe into a grep that is not quiet, and a
+# pipe inside a trailing comment: none is a pipe into a quiet grep.
 expect good "${FIXTURES}/good" 0 'scanned 1 shell file(s) and 0 run: block(s)'
 expect workflow-hit "${FIXTURES}/bad-workflow" 1 \
   '.github/workflows/w.yml: job smoke step[0] run: line 2: ' \

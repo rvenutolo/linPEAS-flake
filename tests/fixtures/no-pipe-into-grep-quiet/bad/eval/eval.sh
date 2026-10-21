@@ -11,3 +11,4 @@ function check() {
 }
 
 check "l" "printf a | grep -qF a"
+check "m" "printf b | grep -q"
