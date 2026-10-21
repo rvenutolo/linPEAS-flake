@@ -3040,7 +3040,10 @@ sort out of roster order.
 The function's stdout and stderr go to `<slot>.out`; the worker writes
 `<slot>.name`, `<slot>.rc` and `<slot>.secs` from its EXIT trap and
 prints `done: <name> pass` or `done: <name> FAIL` as each run finishes.
-The function may write further files at `<slot>.<ext>`. A failing run
+The function may write further files at `<slot>.<ext>`. Output that a
+process the function leaves running writes after the function returns
+still lands in `<slot>.out`, never in another entry's, but whatever
+arrives after the caller has replayed the slot is not shown. A failing run
 never stops the batch, and the batch's return says only that every
 entry recorded a status: the per-entry verdict is `<slot>.rc`, which
 the caller reads to build its rows. That split is what keeps errexit
