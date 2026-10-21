@@ -63,6 +63,7 @@ readonly -a HARNESSES=(
   'lib-secret-uses|lib-secret-uses.test.sh|'
   'lib-job-keys|lib-job-keys.test.sh|'
   'lib-md-fence|lib-md-fence.test.sh|'
+  'lib-parallel|lib-parallel.test.sh|'
   'md-fence-shapes|md-fence-shapes.test.sh|'
   'glob-scan-breadth|glob-scan-breadth.test.sh|'
   'repo-root-guard|repo-root-guard.test.sh|'

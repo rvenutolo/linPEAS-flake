@@ -3004,6 +3004,49 @@ One Markdown fence reader for the lints that read shell
 commands inside fences, as `awk` source to place ahead of the caller's
 program. Source after `set -Eeuo pipefail`.
 
+### scripts/lib/parallel.sh
+
+Run a caller's function over a list of names with a bounded
+number of workers at once, keeping each run's output apart. A runner
+that executes its checks one after another spends the job's wall time
+on their sum, on a runner with several CPUs; this helper spends it on
+roughly the slowest check plus the leftovers. Each run's stdout and
+stderr are buffered into its own slot file, and the only text the
+helper prints while runs are in flight is one `done:` line per name, so
+the caller replays the buffered output in roster order afterwards and
+the log reads the same whatever order the runs finished in. There is no
+signal handling: a Ctrl-C reaches every process in the foreground group
+already, and a cancelled or timed-out CI job ends the whole runner. There
+is no worker budget shared between a runner and a parallel harness it
+runs: every level reads `nproc`, and the brief oversubscription that
+nesting causes is bounded by the product of the two counts. Source after
+`set -Eeuo pipefail`.
+
+#### run_parallel()
+
+Run `fn <name> <slot>` for every name, at most
+`CHECK_WORKERS_OVERRIDE` (default `nproc`) at a time, with
+`slot="<result_dir>/<index>"` and the index zero-padded in roster order.
+The function's stdout and stderr go to `<slot>.out`; the helper writes
+`<slot>.name`, `<slot>.rc` and `<slot>.secs` and prints
+`done: <name> pass` or `done: <name> FAIL` as each run finishes. The
+function may write further files at `<slot>.<ext>`. A failing run never
+stops the batch. The status files, not the function's own reporting,
+decide the verdict, so a function that reports nothing cannot pass
+silently: it passes only by exiting 0.
+
+**Args:**
+
+- `$1` — name of a shell function in the caller's scope
+- `$2` — result directory, existing and owned by the caller
+- `$@` — the names, in roster order
+
+**Exit codes:**
+
+- `0` — every run exited 0
+- `1` — at least one run exited non-zero
+- `2` — (exit, not return) the worker count is not a positive integer, or there are no names
+
 ### scripts/lib/payload.sh
 
 Shape gate for an externally-supplied JSON payload.

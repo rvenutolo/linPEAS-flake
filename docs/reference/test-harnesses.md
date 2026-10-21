@@ -106,6 +106,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/lib-locale-gap.test.sh`     | `scripts/lib/locale-gap.sh`     | —        |
 | `tests/lib-log.test.sh`            | `scripts/lib/log.sh`            | —        |
 | `tests/lib-md-fence.test.sh`       | `scripts/lib/md-fence.sh`       | —        |
+| `tests/lib-parallel.test.sh`       | `scripts/lib/parallel.sh`       | —        |
 | `tests/lib-payload.test.sh`        | `scripts/lib/payload.sh`        | —        |
 | `tests/lib-repo.test.sh`           | `scripts/lib/repo.sh`           | —        |
 | `tests/lib-secret-uses.test.sh`    | `scripts/lib/secret-uses.sh`    | —        |
