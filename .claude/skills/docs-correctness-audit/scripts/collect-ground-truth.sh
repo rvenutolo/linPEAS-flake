@@ -43,7 +43,7 @@ list_harness_live_tree() {
     echo "(no ${roster})"
     return 0
   fi
-  local id harness enforce path markers
+  local id harness enforce path markers first_cd
   sed -n "/^readonly -a HARNESSES=(/,/^)/p" "${roster}" |
     grep -oE "^[[:space:]]*'[^']+'" |
     sed -E "s/^[[:space:]]*'//; s/'\$//" |
@@ -93,9 +93,12 @@ list_harness_live_tree() {
       # rather than a classification for that reason.
       markers="$(grep -nE '^[^#]*(cd "?\$\{REPO_ROOT\}"? &&|\$\{REPO_ROOT\}/(nix|\.github|docs|flake\.(lock|nix))|git ls-files|git -C "?\$\{?(REPO_ROOT|REAL_REPO|repo_root|here)\}?"?[[:space:]])' "${path}" |
         head -4 || true)"
+      # A harness with no `cd` at all is a valid input, so a grep miss here
+      # is not an error.
+      first_cd="$(grep -nE '^[[:space:]]*\(?cd ' "${path}" || true)"
+      first_cd="${first_cd%%$'\n'*}"
       if [[ -z ${markers} ]] &&
-        grep -nE '^[[:space:]]*\(?cd ' "${path}" | head -1 |
-        grep -qE 'cd "?\$\{REPO_ROOT\}"?[[:space:]]*$'; then
+        grep -qE 'cd "?\$\{REPO_ROOT\}"?[[:space:]]*$' <<<"${first_cd}"; then
         markers="$(grep -nE '^[[:space:]]*\(?cd "?\$\{REPO_ROOT\}"?[[:space:]]*$' "${path}" | head -1)"
       fi
       if [[ -n ${markers} ]]; then

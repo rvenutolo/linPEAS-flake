@@ -26,7 +26,9 @@ history="${HISTORY_OVERRIDE:-rewrite}"
 audit_state='.github/docs-audit-state'
 
 remove_worktree() {
-  if git -C "$repo_root" worktree list --porcelain | grep -qxF "worktree $wt"; then
+  local worktrees
+  worktrees="$(git -C "$repo_root" worktree list --porcelain)"
+  if grep -qxF "worktree $wt" <<<"$worktrees"; then
     git -C "$repo_root" worktree remove --force "$wt"
   fi
   rm -rf "$wt"

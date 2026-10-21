@@ -126,10 +126,10 @@ case "${eph}" in *"(planning-label) Phase 2 remains"*) check "inline BEGIN menti
 # --- left-boundary guards mirror the real lint's classes ---
 # Line-scoped: a hit in another class must not satisfy a guard assertion.
 eph_absent() { # $1=label $2=ERE — the class+token pair must not appear
-  if printf '%s\n' "${eph}" | grep -qE "$2"; then check "$1" 1; else check "$1" 0; fi
+  if grep -qE "$2" <<<"${eph}"; then check "$1" 1; else check "$1" 0; fi
 }
 eph_present() { # $1=label $2=ERE — the class+token pair must appear
-  if printf '%s\n' "${eph}" | grep -qE "$2"; then check "$1" 0; else check "$1" 1; fi
+  if grep -qE "$2" <<<"${eph}"; then check "$1" 0; else check "$1" 1; fi
 }
 eph_absent "guard: UTF-8 is no planning-label" '\(planning-label\).*UTF-8'
 eph_absent "guard: PDF-1.7 is no planning-label" '\(planning-label\).*PDF-1\.7'
@@ -475,78 +475,78 @@ run_it
 H
 # shellcheck disable=SC1090  # COLLECTOR path is dynamic by design
 lt_out="$(source "${COLLECTOR}" && list_harness_live_tree "${lt}/run-harness-group.sh" "${lt}/tests" "${lt}")"
-if printf '%s\n' "${lt_out}" | grep -qE '^fixture-only +no markers'; then
+if grep -qE '^fixture-only +no markers' <<<"${lt_out}"; then
   check "a harness driven only off fixtures matches no marker" 0
 else
   check "a harness driven only off fixtures matches no marker" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^reads-live +markers found'; then
+if grep -qE '^reads-live +markers found' <<<"${lt_out}"; then
   check "a scenario run from the repo root is a marker hit" 0
 else
   check "a scenario run from the repo root is a marker hit" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^has-enforce +markers found \(enforce=check-has-enforce\.sh\)'; then
+if grep -qE '^has-enforce +markers found \(enforce=check-has-enforce\.sh\)' <<<"${lt_out}"; then
   check "the enforce script is reported beside the marker result" 0
 else
   check "the enforce script is reported beside the marker result" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^reads-live +markers found \(enforce=-\)'; then
+if grep -qE '^reads-live +markers found \(enforce=-\)' <<<"${lt_out}"; then
   check "a matching harness with no enforce script still reports its markers" 0
 else
   check "a matching harness with no enforce script still reports its markers" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^absent +harness not found'; then
+if grep -qE '^absent +harness not found' <<<"${lt_out}"; then
   check "a roster entry naming a missing harness says so" 0
 else
   check "a roster entry naming a missing harness says so" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^path-form +markers found'; then
+if grep -qE '^path-form +markers found' <<<"${lt_out}"; then
   check "a repo-root-relative roster entry is resolved, not reported missing" 0
 else
   check "a repo-root-relative roster entry is resolved, not reported missing" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^git-idiom +markers found'; then
+if grep -qE '^git-idiom +markers found' <<<"${lt_out}"; then
   check "a harness reaching the checkout through git alone matches a marker" 0
 else
   check "a harness reaching the checkout through git alone matches a marker" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^preamble-only +no markers'; then
+if grep -qE '^preamble-only +no markers' <<<"${lt_out}"; then
   check "the repo-root preamble alone does not mark a harness" 0
 else
   check "the repo-root preamble alone does not mark a harness" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^comment-marker +no markers'; then
+if grep -qE '^comment-marker +no markers' <<<"${lt_out}"; then
   check "a marker word inside a comment does not mark a harness" 0
 else
   check "a marker word inside a comment does not mark a harness" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^sandbox-git +no markers'; then
+if grep -qE '^sandbox-git +no markers' <<<"${lt_out}"; then
   check "git -C against a scratch sandbox matches no marker" 0
 else
   check "git -C against a scratch sandbox matches no marker" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^cd-teardown +no markers'; then
+if grep -qE '^cd-teardown +no markers' <<<"${lt_out}"; then
   check "a cd back to the repo root after a sandbox is a teardown, not a scenario" 0
 else
   check "a cd back to the repo root after a sandbox is a teardown, not a scenario" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^cd-first +markers found'; then
+if grep -qE '^cd-first +markers found' <<<"${lt_out}"; then
   check "a cd to the repo root before anything else matches a marker" 0
 else
   check "a cd to the repo root before anything else matches a marker" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^fixture-enforce +no markers \(enforce=check-fixture-enforce\.sh\)'; then
+if grep -qE '^fixture-enforce +no markers \(enforce=check-fixture-enforce\.sh\)' <<<"${lt_out}"; then
   check "a harness with no markers still reports its enforce script" 0
 else
   check "a harness with no markers still reports its enforce script" 1
 fi
 # --- prefix-matched checkout names and fixture-path cd ---
-if printf '%s\n' "${lt_out}" | grep -qE '^prefix-var +no markers'; then
+if grep -qE '^prefix-var +no markers' <<<"${lt_out}"; then
   check "a sandbox named after the repo-root variable has no markers" 0
 else
   check "a sandbox named after the repo-root variable has no markers" 1
 fi
-if printf '%s\n' "${lt_out}" | grep -qE '^cd-fixture-path +no markers'; then
+if grep -qE '^cd-fixture-path +no markers' <<<"${lt_out}"; then
   check "a cd into a fixture tree under the repo root has no markers" 0
 else
   check "a cd into a fixture tree under the repo root has no markers" 1

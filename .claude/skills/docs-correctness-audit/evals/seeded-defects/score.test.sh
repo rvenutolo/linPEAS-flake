@@ -18,9 +18,9 @@ out="$(SEEDED_RESULTS_DIR="$tmp" "$score" \
 check "alpha 3/3" "grep -qE 'alpha .*3/3' <<<\"\$out\""
 check "beta 1/3" "grep -qE 'beta .*1/3'  <<<\"\$out\""
 check "gamma 2/3" "grep -qE 'gamma .*2/3' <<<\"\$out\""
-check "beta flagged FLAKY" "grep -E 'beta'  <<<\"\$out\" | grep -q FLAKY"
-check "gamma flagged FLAKY" "grep -E 'gamma' <<<\"\$out\" | grep -q FLAKY"
-check "alpha not flaky" "! ( grep -E 'alpha' <<<\"\$out\" | grep -q FLAKY )"
+check "beta flagged FLAKY" "row=\"\$(grep -E 'beta' <<<\"\$out\")\" && grep -q FLAKY <<<\"\$row\""
+check "gamma flagged FLAKY" "row=\"\$(grep -E 'gamma' <<<\"\$out\")\" && grep -q FLAKY <<<\"\$row\""
+check "alpha not flaky" "row=\"\$(grep -E 'alpha' <<<\"\$out\")\" && ! grep -q FLAKY <<<\"\$row\""
 # delta spans two files: all-hit cites its also location, mixed its primary
 # one, and all-miss cites the also file at an unrelated line and the primary
 # file at the also line's number. Both all-miss citations must miss — a location
@@ -28,7 +28,7 @@ check "alpha not flaky" "! ( grep -E 'alpha' <<<\"\$out\" | grep -q FLAKY )"
 # marks are pinned, not just the tally: a scorer that misses all-hit and
 # wrongly hits all-miss still totals 2/3.
 check "delta 2/3 as hit, miss, hit" "grep -qF 'delta | 2/3 | ✓ ✗ ✓ |' <<<\"\$out\""
-check "delta flagged FLAKY" "grep -E 'delta' <<<\"\$out\" | grep -q FLAKY"
+check "delta flagged FLAKY" "row=\"\$(grep -E 'delta' <<<\"\$out\")\" && grep -q FLAKY <<<\"\$row\""
 check "overall 8/12" "grep -qE '8/12' <<<\"\$out\""
 check "recall report written" "ls \"$tmp\"/recall-*.md >/dev/null 2>&1"
 
