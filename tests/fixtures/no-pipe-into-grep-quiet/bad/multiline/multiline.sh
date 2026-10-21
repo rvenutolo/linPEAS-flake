@@ -11,3 +11,13 @@ cat <<'BODY'
 printf 'b\n' | \
   grep --quiet b
 BODY
+
+# A blank line and a comment line between a pipe and the grep it joins.
+cat <<'BODY'
+printf 'c\n' |
+
+  grep --quiet c
+printf 'd\n' |
+  # the grep below is still this pipe's consumer
+  grep --quiet d
+BODY
