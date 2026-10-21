@@ -549,6 +549,42 @@ for harness in "${no_writes_names[@]}"; do
   report_no_writes_case "${harness}" "${slot}"
 done
 
+# no-writes-case-died-before-report: a case that recorded a failing
+# status but left no report, as when staging or the snapshot fails, is
+# a FAIL line naming that status, and the reporting carries on. Run in a
+# subshell with errexit live, as the parent loop is, so the failure it
+# counts stays out of this harness's own tally.
+died_slot="${work}/died-results/000"
+mkdir -- "${work}/died-results"
+printf 'staging failed\n' >"${died_slot}.out"
+printf '1\n' >"${died_slot}.rc"
+set +e
+(
+  set -e
+  failures_before="${failures}"
+  report_no_writes_case died-before-report.test.sh "${died_slot}"
+  printf 'failures counted: %d\n' "$((failures - failures_before))"
+) >"${work}/died.out" 2>"${work}/died.err"
+died_rc=$?
+set -e
+{
+  printf 'no-writes-case-died-before-report: exit status %d\n' "${died_rc}"
+  if grep --quiet --fixed-strings --line-regexp -- \
+    'FAIL: no-writes-died-before-report — the case could not run (status 1)' "${work}/died.err"; then
+    printf 'no-writes-case-died-before-report: names the status: yes\n'
+  else
+    printf 'no-writes-case-died-before-report: names the status: no\n'
+  fi
+  if grep --quiet --fixed-strings --line-regexp -- 'failures counted: 1' "${work}/died.out"; then
+    printf 'no-writes-case-died-before-report: counted as one failure: yes\n'
+  else
+    printf 'no-writes-case-died-before-report: counted as one failure: no\n'
+  fi
+} >"${work}/died.report"
+expect_line no-writes-case-died-before-report "${work}/died.report" 'exit status 0'
+expect_line no-writes-case-died-before-report "${work}/died.report" 'names the status: yes'
+expect_line no-writes-case-died-before-report "${work}/died.report" 'counted as one failure: yes'
+
 harness_assert_verify || failures=$((failures + 1))
 
 if [[ ${failures} -gt 0 ]]; then
