@@ -2378,8 +2378,10 @@ finished. Runs all harnesses even if one fails; exits 1 if any failed,
 
 Run every setup-tax failure-mode harness in one devShell,
 printing a per-harness pass/fail summary table to stdout and
-$GITHUB_STEP_SUMMARY. Runs all harnesses even if one fails; exits 1
-if any failed.
+$GITHUB_STEP_SUMMARY. Harnesses run concurrently, at most
+CHECK_WORKERS_OVERRIDE (default nproc) at a time, with each one's
+output replayed in roster order once all have finished. Runs all
+harnesses even if one fails; exits 1 if any failed.
 
 **Options:**
 

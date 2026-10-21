@@ -86,6 +86,10 @@ function run_scenario() {
     failed_check="tally claims ${tally_failed} failed, table shows ${table_failed} FAIL row(s)"
   elif ! grep --fixed-strings --quiet -- '### harness-group' "${step_file}"; then
     failed_check='GITHUB_STEP_SUMMARY missing table header'
+  elif ! rows_follow_roster "${out_file}"; then
+    failed_check='table rows are not in roster order, or a row lacks its done line'
+  elif [[ ${name} == 'parallel run keeps roster order' ]] && ! body_after_done_lines "${out_file}" 'lib-log-body'; then
+    failed_check='harness output was not replayed after the last done line'
   elif [[ -n ${forbidden_bump} && -e ${forbidden_bump} ]]; then
     failed_check='bump-linpeas harness wrongly ran a same-named script'
   elif [[ -n ${forbidden_backfill} && -e ${forbidden_backfill} ]]; then
@@ -102,6 +106,32 @@ function run_scenario() {
     printf 'PASS: %s (exit %d)\n' "${name}" "${actual_exit}"
   fi
   rm --force -- "${outcome_file}" "${out_file}" "${step_file}"
+}
+
+# @description Assert the table rows name the harnesses in the order the
+# runner's own roster lists them, whatever order the runs finished in,
+# and that each row has a `done:` line.
+# @arg $1 captured runner output
+function rows_follow_roster() {
+  local -a rows=() roster=()
+  local row
+  mapfile -t rows < <(sed --quiet --regexp-extended 's/^\| ([^ |]+) \| (pass|FAIL).*$/\1/p' -- "$1")
+  mapfile -t roster < <("${SCRIPT}" --print-roster | cut --delimiter='|' --fields=1)
+  [[ ${#rows[@]} -gt 0 ]] || return 1
+  [[ "$(printf '%s\n' "${rows[@]}")" == "$(printf '%s\n' "${roster[@]}")" ]] || return 1
+  for row in "${rows[@]}"; do
+    grep --quiet --fixed-strings -- "done: ${row} " "$1" || return 1
+  done
+}
+
+# @description Assert a line of harness output appears only after the
+# last `done:` line, which is where a replayed buffer lands.
+# @arg $1 captured runner output  @arg $2 the harness output line
+function body_after_done_lines() {
+  local last_done first_body
+  last_done="$(grep --line-number --fixed-strings -- 'done: ' "$1" | tail --lines=1 | cut --delimiter=: --fields=1)"
+  first_body="$(grep --line-number --fixed-strings -- "$2" "$1" | head --lines=1 | cut --delimiter=: --fields=1)"
+  [[ -n ${last_done} && -n ${first_body} && ${first_body} -gt ${last_done} ]]
 }
 
 # The roster-mode scenarios below assert on captured output rather than on
@@ -189,6 +219,24 @@ function main() {
   seed "${work}" 0 0 0 0 "${forbidden_bump}" "${forbidden_backfill}"
   run_scenario 'all harnesses pass -> exit 0' \
     "${work}/tests" "${work}/scripts" 0 'harnesses passed, 0 failed' \
+    "${forbidden_bump}" "${forbidden_backfill}"
+  rm --recursive --force -- "${work}"
+
+  # Scenario: runs overlap, the table still follows the roster. The first
+  # roster entry takes longest and lib-log prints a body, so rows in
+  # roster order prove the table ignores finish order, and the body
+  # landing after the last done line proves output is replayed afterwards.
+  # site-no-bytecode fails, which no other scenario makes it do, so this
+  # run's table and tally are its own.
+  work="$(mktemp -d)"
+  forbidden_bump="${work}/ran-bump"
+  forbidden_backfill="${work}/ran-backfill"
+  seed "${work}" 0 0 0 0 "${forbidden_bump}" "${forbidden_backfill}"
+  printf '#!/usr/bin/env bash\nsleep 0.6\nexit 0\n' >"${work}/tests/check-ratchet-pin-audit.test.sh"
+  printf '#!/usr/bin/env bash\nprintf "lib-log-body\\n"\nexit 0\n' >"${work}/tests/lib-log.test.sh"
+  printf '#!/usr/bin/env bash\nexit 1\n' >"${work}/tests/site-no-bytecode.test.sh"
+  CHECK_WORKERS_OVERRIDE=3 run_scenario 'parallel run keeps roster order' \
+    "${work}/tests" "${work}/scripts" 1 '| site-no-bytecode | FAIL (test) |' \
     "${forbidden_bump}" "${forbidden_backfill}"
   rm --recursive --force -- "${work}"
 

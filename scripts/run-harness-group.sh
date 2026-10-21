@@ -3,8 +3,10 @@
 #
 # @description Run every setup-tax failure-mode harness in one devShell,
 # printing a per-harness pass/fail summary table to stdout and
-# $GITHUB_STEP_SUMMARY. Runs all harnesses even if one fails; exits 1
-# if any failed.
+# $GITHUB_STEP_SUMMARY. Harnesses run concurrently, at most
+# CHECK_WORKERS_OVERRIDE (default nproc) at a time, with each one's
+# output replayed in roster order once all have finished. Runs all
+# harnesses even if one fails; exits 1 if any failed.
 # @option --print-roster print the HARNESSES roster, one pipe-delimited entry per line, and exit 0 without running anything
 
 # Harness details: ratchet-pin-audit runs its test then its live enforce
@@ -33,6 +35,12 @@
 
 set -Eeuo pipefail
 IFS=$'\n\t'
+_lib_dir="${BASH_SOURCE[0]%/*}"
+if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
+# shellcheck source=scripts/lib/parallel.sh
+source "${_lib_dir}/lib/parallel.sh"
+# shellcheck source=scripts/lib/temp.sh
+source "${_lib_dir}/lib/temp.sh"
 
 readonly TESTS_DIR="${TESTS_DIR_OVERRIDE:-tests}"
 readonly SCRIPTS_DIR="${SCRIPTS_DIR_OVERRIDE:-scripts}"
@@ -125,35 +133,69 @@ if (($# > 0)); then
   esac
 fi
 
+# Runs one roster entry by name: its test harness, then its enforce
+# script when the entry names one and the test passed. Invoked by
+# `run_parallel`, which captures the output and status; the stage that
+# failed goes to the slot so the table can name it.
+# @arg $1 harness name  @arg $2 slot path
+# shellcheck disable=SC2329 # invoked by name through run_parallel
+function run_one() {
+  local -r name="$1" slot="$2"
+  local test_rel enforce_rel test_path rc=0
+  IFS='|' read -r test_rel enforce_rel <<<"${ENTRY_BY_NAME[${name}]}"
+  if [[ ${test_rel} == */* ]]; then
+    test_path="${ROOT_DIR}/${test_rel}"
+  else
+    test_path="${TESTS_DIR}/${test_rel}"
+  fi
+  if [[ ! -f ${test_path} ]]; then
+    printf '::error::missing test harness: %s\n' "${test_path}" >&2
+    printf 'missing\n' >"${slot}.stage"
+    return 1
+  fi
+  bash "${test_path}" || rc=$?
+  if [[ ${rc} -ne 0 ]]; then
+    printf 'test\n' >"${slot}.stage"
+    return "${rc}"
+  fi
+  if [[ -n ${enforce_rel} ]]; then
+    bash "${SCRIPTS_DIR}/${enforce_rel}" || rc=$?
+    if [[ ${rc} -ne 0 ]]; then
+      printf 'enforce\n' >"${slot}.stage"
+      return "${rc}"
+    fi
+  fi
+}
+
 function main() {
   local failed=0 passed=0
-  local -a rows=()
-  local entry name test_rel enforce_rel test_path start end secs status rc stage
+  local -a rows=() names=() name_files=()
+  local entry name test_rel enforce_rel secs status rc stage slot
+  declare -A ENTRY_BY_NAME=()
   for entry in "${HARNESSES[@]}"; do
     IFS='|' read -r name test_rel enforce_rel <<<"${entry}"
-    if [[ ${test_rel} == */* ]]; then
-      test_path="${ROOT_DIR}/${test_rel}"
-    else
-      test_path="${TESTS_DIR}/${test_rel}"
-    fi
-    rc=0
+    names+=("${name}")
+    ENTRY_BY_NAME["${name}"]="${test_rel}|${enforce_rel}"
+  done
+
+  local results
+  results="$(make_temp --directory)"
+  # shellcheck disable=SC2064 # expanded now on purpose: the path is fixed once created
+  trap "rm --recursive --force -- '${results}'" EXIT
+
+  run_parallel run_one "${results}" "${names[@]}" || failed=1
+
+  glob_into name_files 'harness-group results' "${results}/*.name"
+  for slot in "${name_files[@]}"; do
+    slot="${slot%.name}"
+    name="$(<"${slot}.name")"
+    rc="$(<"${slot}.rc")"
+    secs="$(<"${slot}.secs")"
     stage=''
-    start="$(date +%s)"
-    if [[ ! -f ${test_path} ]]; then
-      printf '::error::missing test harness: %s\n' "${test_path}" >&2
-      rc=1
-      stage='missing'
-    else
-      bash "${test_path}" || rc=$?
-      if [[ ${rc} -ne 0 ]]; then
-        stage='test'
-      elif [[ -n ${enforce_rel} ]]; then
-        bash "${SCRIPTS_DIR}/${enforce_rel}" || rc=$?
-        [[ ${rc} -eq 0 ]] || stage='enforce'
-      fi
+    if [[ -f ${slot}.stage ]]; then
+      stage="$(<"${slot}.stage")"
     fi
-    end="$(date +%s)"
-    secs=$((end - start))
+    cat -- "${slot}.out"
     if [[ ${rc} -eq 0 ]]; then
       status='pass'
       passed=$((passed + 1))
@@ -164,7 +206,6 @@ function main() {
       # only runs at all when the test stage passed. The cell names the
       # stage that set rc so the row points at the thing to open.
       status="FAIL (${stage})"
-      failed=1
     fi
     rows+=("$(printf '| %s | %s | %ds |' "${name}" "${status}" "${secs}")")
   done
