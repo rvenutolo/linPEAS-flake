@@ -31,7 +31,8 @@
 # Exit codes:
 #   0 — every harness passed, or --print-roster completed.
 #   1 — at least one harness failed its test or its enforce stage.
-#   2 — usage error: an unknown or extra argument.
+#   2 — usage error: an unknown or extra argument, a roster name written
+#       twice, or a worker that left no status.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -174,6 +175,13 @@ function main() {
   declare -A ENTRY_BY_NAME=()
   for entry in "${HARNESSES[@]}"; do
     IFS='|' read -r name test_rel enforce_rel <<<"${entry}"
+    # Entries are looked up by name, so a name written twice would run
+    # the later entry twice and the earlier one never, with the table
+    # and tally showing nothing amiss.
+    if [[ -v ENTRY_BY_NAME["${name}"] ]]; then
+      printf 'run-harness-group: roster names %s twice\n' "${name}" >&2
+      exit 2
+    fi
     names+=("${name}")
     ENTRY_BY_NAME["${name}"]="${test_rel}|${enforce_rel}"
   done
@@ -183,7 +191,9 @@ function main() {
   # shellcheck disable=SC2064 # expanded now on purpose: the path is fixed once created
   trap "rm --recursive --force -- '${results}'" EXIT
 
-  run_parallel run_one "${results}" "${names[@]}" || failed=1
+  # A bare call, so errexit stays live inside run_one; the per-entry
+  # verdict is read from the slot files below. See run_parallel.
+  run_parallel run_one "${results}" "${names[@]}"
 
   glob_into name_files 'harness-group results' "${results}/*.name"
   for slot in "${name_files[@]}"; do
@@ -207,6 +217,7 @@ function main() {
       # only runs at all when the test stage passed. The cell names the
       # stage that set rc so the row points at the thing to open.
       status="FAIL (${stage})"
+      failed=1
     fi
     rows+=("$(printf '| %s | %s | %ds |' "${name}" "${status}" "${secs}")")
   done

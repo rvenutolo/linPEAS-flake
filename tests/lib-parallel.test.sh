@@ -62,16 +62,17 @@ function run_scenario() {
   harness_assert_record "${name}" "${substring}" "${outcome}" "${out}" "${err}"
 }
 
-# @description Print the largest integer held in the `.peak` files of a
-# scenario's slot directory; a scenario with none is a could-not-run.
+# @description Print the largest integer held on any line of the `.peak`
+# files of a scenario's slot directory; a scenario with none is a could-not-run.
 # @arg $1 scenario name
 function max_peak() {
   local peak=0 f n
   local -a peaks=()
   glob_into peaks 'peak files' "${work}/$1.result/*.peak"
   for f in "${peaks[@]}"; do
-    n="$(<"${f}")"
-    ((n > peak)) && peak="${n}"
+    while IFS= read -r n; do
+      ((n > peak)) && peak="${n}"
+    done <"${f}"
   done
   printf '%d\n' "${peak}"
 }
@@ -82,7 +83,7 @@ function max_peak() {
 run_scenario 'all-pass' 'done: ap-c pass' '
 function probe() { printf "ran %s\n" "$1"; }
 batch_rc=0
-run_parallel probe "${RESULT}" ap-a ap-b ap-c || batch_rc=$?
+run_parallel probe "${RESULT}" ap-a ap-b ap-c
 '
 if [[ ${rc} -eq 0 ]] &&
   grep --fixed-strings --quiet -- 'rc=0' "${work}/all-pass.out" &&
@@ -96,7 +97,7 @@ if [[ ${rc} -eq 0 ]] &&
   [[ "$(<"${work}/all-pass.result/002.rc")" == 0 ]] &&
   [[ "$(<"${work}/all-pass.result/002.out")" == 'ran ap-c' ]] &&
   ascii_match "$(<"${work}/all-pass.result/002.secs")" '^[0-9]+$'; then
-  pass 'all-pass: three entries run, slots in roster order, batch returns 0'
+  pass 'all-pass: three entries run, slots in roster order, batch completes'
 else
   fail "all-pass: expected rc=0 with three pass lines and ordered slots, got exit ${rc}"
   cat -- "${work}/all-pass.out" "${work}/all-pass.err" >&2
@@ -104,21 +105,22 @@ else
 fi
 
 # 2. one-fail — a failing entry marks its own slot and line, the entries
-# after it still run, and the batch returns 1.
+# after it still run, and the batch still completes (its verdict is in
+# the slot files, not the return).
 # shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
 run_scenario 'one-fail' 'done: of-b FAIL' '
 function probe() { if [[ $1 == of-b ]]; then exit 137; fi; printf "ran %s\n" "$1"; }
 batch_rc=0
-run_parallel probe "${RESULT}" of-a of-b of-c || batch_rc=$?
+run_parallel probe "${RESULT}" of-a of-b of-c
 '
 if [[ ${rc} -eq 0 ]] &&
-  grep --fixed-strings --quiet -- 'rc=1' "${work}/one-fail.out" &&
+  grep --fixed-strings --quiet -- 'rc=0' "${work}/one-fail.out" &&
   grep --fixed-strings --quiet -- 'done: of-c pass' "${work}/one-fail.out" &&
   [[ "$(<"${work}/one-fail.result/001.rc")" == 137 ]] &&
   [[ "$(<"${work}/one-fail.result/002.rc")" == 0 ]]; then
-  pass 'one-fail: the failing entry records 137, the rest run, batch returns 1'
+  pass 'one-fail: the failing entry records 137, the rest run, the batch completes'
 else
-  fail "one-fail: expected rc=1 with of-c still run, got exit ${rc}"
+  fail "one-fail: expected the batch to complete with of-c still run, got exit ${rc}"
   cat -- "${work}/one-fail.out" "${work}/one-fail.err" >&2
 fi
 
@@ -128,7 +130,7 @@ fi
 run_scenario 'fn-writes-nothing' 'done: fwn-a pass' '
 function probe() { :; }
 batch_rc=0
-run_parallel probe "${RESULT}" fwn-a || batch_rc=$?
+run_parallel probe "${RESULT}" fwn-a
 '
 if [[ ${rc} -eq 0 ]] &&
   grep --fixed-strings --quiet -- 'rc=0' "${work}/fn-writes-nothing.out" &&
@@ -149,7 +151,7 @@ function probe() {
   printf "b-out\n"
 }
 batch_rc=0
-run_parallel probe "${RESULT}" lw-a lw-b || batch_rc=$?
+run_parallel probe "${RESULT}" lw-a lw-b
 sleep 0.5
 '
 if [[ ${rc} -eq 0 ]] &&
@@ -167,7 +169,7 @@ fi
 run_scenario 'output-captured' 'done: oc-a pass' '
 function probe() { printf "to-stdout\n"; printf "to-stderr\n" >&2; }
 batch_rc=0
-run_parallel probe "${RESULT}" oc-a || batch_rc=$?
+run_parallel probe "${RESULT}" oc-a
 '
 if [[ ${rc} -eq 0 ]] &&
   grep --fixed-strings --quiet -- 'to-stdout' "${work}/output-captured.result/000.out" &&
@@ -186,7 +188,7 @@ fi
 run_scenario 'workers-one-serial' 'done: wos-a pass' '
 function probe() { sleep 0.2; }
 batch_rc=0
-CHECK_WORKERS_OVERRIDE=1 run_parallel probe "${RESULT}" wos-c wos-b wos-a || batch_rc=$?
+CHECK_WORKERS_OVERRIDE=1 run_parallel probe "${RESULT}" wos-c wos-b wos-a
 '
 if [[ ${rc} -eq 0 ]] &&
   [[ "$(grep --fixed-strings -- 'done: ' "${work}/workers-one-serial.out" | tr '\n' ' ')" == 'done: wos-c pass done: wos-b pass done: wos-a pass ' ]]; then
@@ -197,17 +199,20 @@ else
 fi
 
 # 7. concurrency-bounded — with two workers and four entries that each
-# hold a marker while sleeping, the most markers any entry sees is two.
+# hold a marker while sleeping, the most markers any entry sees on entry
+# or exit is two. The sleep is a full second so the overlap is seen even
+# when this harness itself runs beside others on a loaded runner.
 # shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
 run_scenario 'concurrency-bounded' 'done: cb-d pass' '
 function probe() {
   mkdir -- "${RUNNING}/$1"
-  sleep 0.5
   find "${RUNNING}" -mindepth 1 -maxdepth 1 | wc --lines >"$2.peak"
+  sleep 1
+  find "${RUNNING}" -mindepth 1 -maxdepth 1 | wc --lines >>"$2.peak"
   rmdir -- "${RUNNING}/$1"
 }
 batch_rc=0
-CHECK_WORKERS_OVERRIDE=2 run_parallel probe "${RESULT}" cb-a cb-b cb-c cb-d || batch_rc=$?
+CHECK_WORKERS_OVERRIDE=2 run_parallel probe "${RESULT}" cb-a cb-b cb-c cb-d
 '
 peak="$(max_peak concurrency-bounded)"
 if [[ ${rc} -eq 0 && ${peak} -eq 2 ]]; then
@@ -222,12 +227,13 @@ fi
 run_scenario 'concurrency-one' 'done: co-c pass' '
 function probe() {
   mkdir -- "${RUNNING}/$1"
-  sleep 0.2
   find "${RUNNING}" -mindepth 1 -maxdepth 1 | wc --lines >"$2.peak"
+  sleep 0.2
+  find "${RUNNING}" -mindepth 1 -maxdepth 1 | wc --lines >>"$2.peak"
   rmdir -- "${RUNNING}/$1"
 }
 batch_rc=0
-CHECK_WORKERS_OVERRIDE=1 run_parallel probe "${RESULT}" co-a co-b co-c || batch_rc=$?
+CHECK_WORKERS_OVERRIDE=1 run_parallel probe "${RESULT}" co-a co-b co-c
 '
 peak="$(max_peak concurrency-one)"
 if [[ ${rc} -eq 0 && ${peak} -eq 1 ]]; then
@@ -243,7 +249,7 @@ fi
 run_scenario 'bad-workers-zero' 'CHECK_WORKERS_OVERRIDE must be a positive integer, got: 0' '
 function probe() { printf "ran %s\n" "$1"; }
 batch_rc=0
-CHECK_WORKERS_OVERRIDE=0 run_parallel probe "${RESULT}" bwz-a || batch_rc=$?
+CHECK_WORKERS_OVERRIDE=0 run_parallel probe "${RESULT}" bwz-a
 '
 if [[ ${rc} -eq 2 ]] && [[ ! -e ${work}/bad-workers-zero.result/000.out ]]; then
   pass 'bad-workers-zero: 0 workers is exit 2 and runs nothing'
@@ -257,7 +263,7 @@ fi
 run_scenario 'bad-workers-text' 'CHECK_WORKERS_OVERRIDE must be a positive integer, got: abc' '
 function probe() { printf "ran %s\n" "$1"; }
 batch_rc=0
-CHECK_WORKERS_OVERRIDE=abc run_parallel probe "${RESULT}" bwt-a || batch_rc=$?
+CHECK_WORKERS_OVERRIDE=abc run_parallel probe "${RESULT}" bwt-a
 '
 if [[ ${rc} -eq 2 ]]; then
   pass 'bad-workers-text: a non-numeric count is exit 2'
@@ -272,7 +278,7 @@ fi
 run_scenario 'no-entries' 'run_parallel: no entries to run' '
 function probe() { printf "ran %s\n" "$1"; }
 batch_rc=0
-run_parallel probe "${RESULT}" || batch_rc=$?
+run_parallel probe "${RESULT}"
 '
 if [[ ${rc} -eq 2 ]]; then
   pass 'no-entries: an empty batch is exit 2'
@@ -288,13 +294,55 @@ run_scenario 'nproc-default' 'done: npd-a pass' '
 function probe() { printf "ran %s\n" "$1"; }
 batch_rc=0
 unset CHECK_WORKERS_OVERRIDE
-run_parallel probe "${RESULT}" npd-a || batch_rc=$?
+run_parallel probe "${RESULT}" npd-a
 '
 if [[ ${rc} -eq 0 ]] && grep --fixed-strings --quiet -- 'rc=0' "${work}/nproc-default.out"; then
   pass 'nproc-default: no override uses nproc and runs the batch'
 else
   fail "nproc-default: expected rc=0, got exit ${rc}"
   cat -- "${work}/nproc-default.out" "${work}/nproc-default.err" >&2
+fi
+
+# 13. errexit-inside-fn — a failing command in the middle of the function
+# ends it as a failure; the function is not left running with errexit
+# suspended by the helper's own status handling.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'errexit-inside-fn' 'done: eif-a FAIL' '
+function probe() { false; printf "after-false\n"; }
+batch_rc=0
+run_parallel probe "${RESULT}" eif-a
+'
+if [[ ${rc} -eq 0 ]] &&
+  [[ "$(<"${work}/errexit-inside-fn.result/000.rc")" == 1 ]] &&
+  ! grep --fixed-strings --quiet -- 'after-false' "${work}/errexit-inside-fn.result/000.out"; then
+  pass 'errexit-inside-fn: a failing command inside the function fails the entry at that point'
+else
+  fail "errexit-inside-fn: expected 000.rc of 1 and no after-false, got exit ${rc}"
+  cat -- "${work}/errexit-inside-fn.out" "${work}/errexit-inside-fn.err" "${work}/errexit-inside-fn.result/000.out" >&2
+fi
+
+# 14. worker-killed — an entry whose worker dies before it can write its
+# status files is a could-not-run for the whole batch, never a pass with
+# one row fewer. The function kills the worker that invoked it, read as
+# its own parent pid, before the worker's trap can record anything.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'worker-killed' 'run_parallel: 1 of 2 entries left no status' '
+function probe() {
+  if [[ $1 == wk-b ]]; then
+    IFS=" " read -r _ _ _ worker _ <"/proc/${BASHPID}/stat"
+    kill -KILL "${worker}"
+    sleep 1
+  fi
+  printf "ran %s\n" "$1"
+}
+batch_rc=0
+CHECK_WORKERS_OVERRIDE=1 run_parallel probe "${RESULT}" wk-a wk-b
+'
+if [[ ${rc} -eq 2 ]]; then
+  pass 'worker-killed: a worker that dies without a status is exit 2'
+else
+  fail "worker-killed: expected exit 2, got exit ${rc}"
+  cat -- "${work}/worker-killed.out" "${work}/worker-killed.err" >&2
 fi
 
 harness_assert_verify || failures=$((failures + 1))

@@ -209,8 +209,51 @@ function seed() {
   done < <(grep -E "^[[:space:]]*'[^']+\|[^']+\.test\.sh\|[^']*'" "${SCRIPT}")
 }
 
+# @description Run a copy of the runner whose roster lists one name twice
+# and assert it refuses to run rather than letting the later entry hide
+# the earlier one. The roster is declared in the script itself, so the
+# scenario edits a copy; the fixture tree is the all-pass one.
+function run_duplicate_name_scenario() {
+  local work copy outcome_file out_file step_file actual_exit=0
+  work="$(mktemp -d)"
+  seed "${work}" 0 0 0 0 "${work}/ran-bump" "${work}/ran-backfill"
+  copy="${work}/run-harness-group.sh"
+  # The copy keeps resolving its libraries from the real scripts tree.
+  sed --expression="s|^_lib_dir=.*|_lib_dir=${REPO_ROOT}/scripts|" \
+    --expression="/^  'lib-log|lib-log.test.sh|'$/a\\  'lib-log|lib-temp.test.sh|'" \
+    -- "${SCRIPT}" >"${copy}"
+  outcome_file="$(mktemp)"
+  out_file="$(mktemp)"
+  step_file="$(mktemp)"
+  TESTS_DIR_OVERRIDE="${work}/tests" \
+    SCRIPTS_DIR_OVERRIDE="${work}/scripts" \
+    ROOT_DIR_OVERRIDE="${work}/root" \
+    GITHUB_STEP_SUMMARY="${step_file}" \
+    bash "${copy}" >"${out_file}" 2>&1 || actual_exit=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  harness_assert_record 'duplicate roster name -> exit 2' 'roster names lib-log twice' \
+    "${outcome_file}" "${out_file}" "${step_file}"
+  if [[ ${actual_exit} -ne 2 ]]; then
+    printf 'FAIL: duplicate roster name -> exit 2 — expected exit 2, got %d\n' "${actual_exit}" >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif ! grep --fixed-strings --quiet -- 'roster names lib-log twice' "${out_file}"; then
+    printf 'FAIL: duplicate roster name -> exit 2 — output missing the diagnostic\n' >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  elif grep --fixed-strings --quiet -- 'done: ' "${out_file}"; then
+    printf 'FAIL: duplicate roster name -> exit 2 — a harness ran despite the duplicate\n' >&2
+    cat -- "${out_file}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: duplicate roster name -> exit 2\n'
+  fi
+  rm --recursive --force -- "${work}" "${outcome_file}" "${out_file}" "${step_file}"
+}
+
 function main() {
   local work forbidden_bump forbidden_backfill
+  run_duplicate_name_scenario
 
   # Scenario 1: all pass.
   work="$(mktemp -d)"

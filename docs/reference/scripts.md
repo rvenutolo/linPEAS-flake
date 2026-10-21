@@ -3035,13 +3035,20 @@ nesting causes is bounded by the product of the two counts. Source after
 Run `fn <name> <slot>` for every name, at most
 `CHECK_WORKERS_OVERRIDE` (default `nproc`) at a time, with
 `slot="<result_dir>/<index>"` and the index zero-padded in roster order.
-The function's stdout and stderr go to `<slot>.out`; the helper writes
-`<slot>.name`, `<slot>.rc` and `<slot>.secs` and prints
-`done: <name> pass` or `done: <name> FAIL` as each run finishes. The
-function may write further files at `<slot>.<ext>`. A failing run never
-stops the batch. The status files, not the function's own reporting,
-decide the verdict, so a function that reports nothing cannot pass
-silently: it passes only by exiting 0.
+The function's stdout and stderr go to `<slot>.out`; the worker writes
+`<slot>.name`, `<slot>.rc` and `<slot>.secs` from its EXIT trap and
+prints `done: <name> pass` or `done: <name> FAIL` as each run finishes.
+The function may write further files at `<slot>.<ext>`. A failing run
+never stops the batch, and the batch's return says only that every
+entry recorded a status: the per-entry verdict is `<slot>.rc`, which
+the caller reads to build its rows. That split is what keeps errexit
+live inside the function: a call made in a `||` list or an `if` would
+have bash suspend `set -e` for everything under it, the function
+included, so a failing command in its middle would be ignored. Call
+this as a bare command, with errexit on, and read the slot files. A
+function that reports nothing cannot pass silently: it passes only by
+exiting 0, and a worker that dies before its trap runs is a
+could-not-run for the whole batch.
 
 **Args:**
 
@@ -3051,9 +3058,20 @@ silently: it passes only by exiting 0.
 
 **Exit codes:**
 
-- `0` — every run exited 0
-- `1` — at least one run exited non-zero
-- `2` — (exit, not return) the worker count is not a positive integer, or there are no names
+- `0` — every entry ran and recorded a status
+- `2` — (exit, not return) the worker count is not a positive integer, there are no names, or a worker left no status file
+
+#### \_run_parallel_record()
+
+Write one entry's status files and progress line; the
+worker's EXIT trap.
+
+**Args:**
+
+- `$1` — status
+- `$2` — name
+- `$3` — slot
+- `$4` — start epoch seconds
 
 ### scripts/lib/payload.sh
 

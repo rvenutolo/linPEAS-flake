@@ -40,7 +40,9 @@ function main() {
   trap "rm --recursive --force -- '${results}'" EXIT
 
   local failed=0
-  run_parallel run_one "${results}" "${names[@]}" || failed=1
+  # A bare call, so errexit stays live inside run_one; the per-entry
+  # verdict is read from the slot files below. See run_parallel.
+  run_parallel run_one "${results}" "${names[@]}"
 
   local -a rows=() name_files=()
   local name status secs rc slot
@@ -56,6 +58,7 @@ function main() {
       status='pass'
     else
       status='FAIL'
+      failed=1
     fi
     rows+=("$(printf '| %s | %s | %ds |' "${name}" "${status}" "${secs}")")
   done
