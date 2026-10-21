@@ -16,7 +16,9 @@
 # shape also lives inside strings a harness hands to `eval` as a real
 # pipeline, which a parser reads as a plain word. It counts anywhere on a
 # line that is not a comment, quoted text and heredoc bodies included;
-# only a comment-only line is exempt. `||` is not a pipe and `|&` is. A
+# a comment-only line and a trailing comment (a `#` opening a word outside
+# quotes, through the end of the line, heredoc bodies included) are
+# exempt. `||` is not a pipe and `|&` is. A
 # pipe that ends one line, with or without a trailing backslash, joins
 # the next non-blank, non-comment line, and a hit there is reported at
 # that next line.
@@ -77,22 +79,39 @@ fi
 
 readonly HIT_DIAG='pipe into quiet grep (grep can exit before its producer finishes; under pipefail the SIGPIPE reads a match as a miss)'
 
-# Prints the line number of every hit in its input. A line ending in a
-# pipe (not `||`), optionally followed by a backslash, leaves `pending`
-# set, and the next non-blank, non-comment line is matched with a pipe in
-# front of it. The bracket escapes keep this file's own program text from
+# Prints the line number of every hit in its input. A trailing comment is
+# cut from each line before either match below, so a pipe inside one is
+# comment text. A line ending in a pipe (not `||`), optionally followed by
+# a backslash, leaves `pending` set, and the next non-blank, non-comment
+# line is matched with a pipe in front of it. The bracket escapes keep this file's own program text from
 # matching itself. A flag ends at anything that cannot continue a flag
 # word, so a quiet flag closing a quoted `eval` string still counts.
 # shellcheck disable=SC2016 # awk program: its $0 is awk's, not the shell's
 readonly HIT_PROGRAM='
+  # Cuts a trailing comment: a `#` that opens a word outside quotes.
+  # Quotes and backslash escapes are tracked on this line alone, so a
+  # quoted string spanning lines leaves its later lines read as code.
+  function code_part(s,   i, c, sq, dq, prev) {
+    prev = " "
+    for (i = 1; i <= length(s); i++) {
+      c = substr(s, i, 1)
+      if (c == "\\" && !sq) { i++; prev = "x"; continue }
+      if (c == "\047" && !dq) sq = !sq
+      else if (c == "\"" && !sq) dq = !dq
+      else if (c == "#" && !sq && !dq && prev ~ /[[:space:]]/) return substr(s, 1, i - 1)
+      prev = c
+    }
+    return s
+  }
   /^[[:space:]]*#/ { next }
   /^[[:space:]]*$/ { next }
   {
-    text = pending ? "| " $0 : $0
+    code = code_part($0)
+    text = pending ? "| " code : code
     if (text ~ /(^|[^|])[|]&?[[:space:]]*(LC_ALL=[^[:space:]]+[[:space:]]+)?grep[[:space:]]+([^|;&]*[[:space:]])?(-[[:alpha:]]*q[[:alpha:]]*|--quiet|--silent)([^[:alnum:]_-]|$)/) {
       print NR
     }
-    pending = ($0 ~ /(^|[^|])[|]&?[[:space:]]*[\\]?[[:space:]]*$/)
+    pending = (code ~ /(^|[^|])[|]&?[[:space:]]*[\\]?[[:space:]]*$/)
   }
 '
 
