@@ -21,6 +21,13 @@
 # the next non-blank, non-comment line, and a hit there is reported at
 # that next line.
 #
+# The matcher reads only what follows the pipe on one line: an `LC_ALL=`
+# assignment word is the only thing that may sit between the pipe and
+# `grep`, so `command grep`, `env ... grep`, `timeout ... grep` and
+# `LANG=C grep` are not seen. The quiet flag must sit on the `grep`
+# word's own line, and a `|` inside an earlier argument, as in
+# `grep -E 'a|b' --quiet`, hides a flag that follows it.
+#
 # Workflow and composite-action YAML is matched on each step's extracted
 # `run:` body, never on raw YAML: every `run: |` key line ends in a pipe,
 # so a body opening with a quiet `grep` would read as a hit.

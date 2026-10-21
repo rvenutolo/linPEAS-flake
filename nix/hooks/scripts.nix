@@ -60,7 +60,7 @@ in
   no-pipe-into-grep-quiet = {
     enable = true;
     name = "no-pipe-into-grep-quiet";
-    description = "No tracked shell file or workflow run: body pipes into a quiet grep.";
+    description = "No tracked shell file, workflow run: body or composite-action run: body pipes into a quiet grep.";
     entry = "${pkgs-unstable.writeShellScript "no-pipe-into-grep-quiet-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
