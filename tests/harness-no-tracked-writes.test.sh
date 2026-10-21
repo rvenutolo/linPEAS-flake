@@ -521,13 +521,22 @@ run_parallel no_writes_case "${no_writes_results}" "${no_writes_names[@]}"
 
 # @description Replay one no-writes case's slot output and emit its
 # pass/fail line and discrimination record, from the files the case left
-# under the work dir.
+# under the work dir. A case with no report gets a fail line and no
+# record.
 # @arg $1 harness basename  @arg $2 the case's `run_parallel` slot path
 function report_no_writes_case() {
   local -r harness="$1" slot="$2"
   local -r name="no-writes-${harness%.test.sh}"
   local rc
   cat -- "${slot}.out"
+  # A case that died before writing its report, as when staging or the
+  # snapshot fails, has only its slot status to go on; its replayed
+  # output above already shows the cause.
+  rc="$(<"${slot}.rc")"
+  if [[ ${rc} -ne 0 && ! -e ${work}/${name}.report ]]; then
+    fail "${name} — the case could not run (status ${rc})"
+    return 0
+  fi
   rc="$(sed --quiet 's/^harness-assert-outcome: exit=//p' -- "${work}/${name}.report")"
   if [[ ${rc} -ne 0 ]]; then
     fail "${name} — the harness exited ${rc}"
