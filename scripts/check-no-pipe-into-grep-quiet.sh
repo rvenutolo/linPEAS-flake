@@ -25,7 +25,7 @@
 # assignment word is the only thing that may sit between the pipe and
 # `grep`, so `command grep`, `env ... grep`, `timeout ... grep` and
 # `LANG=C grep` are not seen. The quiet flag must sit on the `grep`
-# word's own line, and a `|` inside an earlier argument, as in
+# word's own line, and a `|`, `;` or `&` inside an earlier argument, as in
 # `grep -E 'a|b' --quiet`, hides a flag that follows it.
 #
 # Workflow and composite-action YAML is matched on each step's extracted
