@@ -137,7 +137,7 @@ function run_probe() {
   : >"${out}"
   local rc=0
   (
-    cd -- "${probe_cwd}"
+    cd -- "${probe_cwd}" || exit 2
     env --unset=SCRATCH_TREE_ACTIVE "TMPDIR=${tmp}" "PROBE_OUT=${out}" "$@" \
       "${probe_cmd[@]}" >/dev/null 2>"${work}/${name}.err"
   ) || rc=$?
@@ -376,7 +376,7 @@ reexec_in_scratch_tree
 CALLER
 outside_rc=0
 (
-  cd -- "${outside}"
+  cd -- "${outside}" || exit 2
   env "GIT_CEILING_DIRECTORIES=${work}" "LIB_DIR=${PROBE_REPO}/scripts/lib" \
     bash caller.sh </dev/null >/dev/null 2>"${work}/outside.err"
 ) || outside_rc=$?
@@ -491,7 +491,7 @@ function no_writes_case() {
   stage_scratch_tree "${REPO_ROOT}" "${tree}"
   snapshot "${tree}" "${work}/${name}.before"
   (
-    cd -- "${tree}"
+    cd -- "${tree}" || exit 2
     env --unset=SCRATCH_TREE_ACTIVE --unset=BASH_ENV \
       "TMPDIR=${work}/${name}.tmp" \
       timeout 20m bash "tests/${harness}" </dev/null \
