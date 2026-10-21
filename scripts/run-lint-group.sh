@@ -91,6 +91,7 @@ function main() {
     name="$(<"${slot}.name")"
     rc="$(<"${slot}.rc")"
     secs="$(<"${slot}.secs")"
+    # payload-read-exempt: the slot file is this runner's own buffered copy of a check's stdout and stderr, replayed verbatim into the log; it is not a payload to parse, and a missing slot is already a could-not-run from glob_into above.
     cat -- "${slot}.out"
     if [[ ${rc} -eq 0 ]]; then
       status='pass'

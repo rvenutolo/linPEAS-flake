@@ -15,6 +15,8 @@ readonly REPO_ROOT
 source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 # shellcheck source=scripts/lib/ascii-match.sh
 source "${REPO_ROOT}/scripts/lib/ascii-match.sh"
+# shellcheck source=scripts/lib/enumerate.sh
+source "${REPO_ROOT}/scripts/lib/enumerate.sh"
 readonly LIB="${REPO_ROOT}/scripts/lib/parallel.sh"
 
 failures=0
@@ -61,12 +63,13 @@ function run_scenario() {
 }
 
 # @description Print the largest integer held in the `.peak` files of a
-# scenario's slot directory, or 0 when there are none.
+# scenario's slot directory; a scenario with none is a could-not-run.
 # @arg $1 scenario name
 function max_peak() {
   local peak=0 f n
-  for f in "${work}/$1.result"/*.peak; do
-    [[ -f ${f} ]] || continue
+  local -a peaks=()
+  glob_into peaks 'peak files' "${work}/$1.result/*.peak"
+  for f in "${peaks[@]}"; do
     n="$(<"${f}")"
     ((n > peak)) && peak="${n}"
   done
