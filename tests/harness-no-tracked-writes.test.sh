@@ -519,11 +519,14 @@ no_writes_results="${work}/no-writes-results"
 mkdir -- "${no_writes_results}"
 run_parallel no_writes_case "${no_writes_results}" "${no_writes_names[@]}"
 
-no_writes_index=0
-for harness in "${no_writes_names[@]}"; do
-  name="no-writes-${harness%.test.sh}"
-  slot="$(printf '%s/%03d' "${no_writes_results}" "${no_writes_index}")"
-  no_writes_index=$((no_writes_index + 1))
+# @description Replay one no-writes case's slot output and emit its
+# pass/fail line and discrimination record, from the files the case left
+# under the work dir.
+# @arg $1 harness basename  @arg $2 the case's `run_parallel` slot path
+function report_no_writes_case() {
+  local -r harness="$1" slot="$2"
+  local -r name="no-writes-${harness%.test.sh}"
+  local rc
   cat -- "${slot}.out"
   rc="$(sed --quiet 's/^harness-assert-outcome: exit=//p' -- "${work}/${name}.report")"
   if [[ ${rc} -ne 0 ]]; then
@@ -537,6 +540,13 @@ for harness in "${no_writes_names[@]}"; do
     pass "${name} — no file in the starting tree changed"
   fi
   harness_assert_record "${name}" 'tracked files changed: none' "${work}/${name}.report"
+}
+
+no_writes_index=0
+for harness in "${no_writes_names[@]}"; do
+  slot="$(printf '%s/%03d' "${no_writes_results}" "${no_writes_index}")"
+  no_writes_index=$((no_writes_index + 1))
+  report_no_writes_case "${harness}" "${slot}"
 done
 
 harness_assert_verify || failures=$((failures + 1))
