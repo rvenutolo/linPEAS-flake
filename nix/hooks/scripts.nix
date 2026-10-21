@@ -53,6 +53,24 @@ in
     pass_filenames = false;
     language = "system";
   };
+  # No tracked shell file and no workflow or composite-action run: body
+  # pipes into a quiet grep. grep exits at its first match, the producer
+  # takes SIGPIPE, and under pipefail the match reads as a miss. See
+  # docs/security/workflow-hardening.md.
+  no-pipe-into-grep-quiet = {
+    enable = true;
+    name = "no-pipe-into-grep-quiet";
+    description = "No tracked shell file or workflow run: body pipes into a quiet grep.";
+    entry = "${pkgs-unstable.writeShellScript "no-pipe-into-grep-quiet-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-no-pipe-into-grep-quiet.sh
+    ''}";
+    files = "^(.*\\.sh|\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*/action\\.ya?ml)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Every output-asserting tests/*.test.sh is wired to the discrimination
   # gate, and both exemption ratchets hold. See
   # docs/security/workflow-hardening.md.

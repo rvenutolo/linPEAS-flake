@@ -190,7 +190,7 @@ The matcher is textual rather than a shell syntax tree, because the shape also l
 
 The scan set is every tracked `*.sh` file, every tracked `.github/workflows/*.yml` (or `.yaml`) and every tracked `.github/actions/**/action.yml` (or `.yaml`), less any path with a `fixtures/` segment, since fixture trees exist to hold violations. Workflow and composite-action YAML is read through each step's extracted `run:` body, never as raw YAML: every `run: |` key line ends in a pipe, so a body opening with a quiet `grep` would otherwise read as a hit.
 
-Enforced by `scripts/check-no-pipe-into-grep-quiet.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-pipe-into-grep-quiet`).
+Enforced by `scripts/check-no-pipe-into-grep-quiet.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-pipe-into-grep-quiet`) and as a pre-commit hook.
 
 ## guard-exit-code
 

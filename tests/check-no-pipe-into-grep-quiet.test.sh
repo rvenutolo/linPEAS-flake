@@ -77,6 +77,11 @@ expect workflow-hit "${FIXTURES}/bad-workflow" 1 \
 # grep: only the extracted body is read, so this is clean.
 expect run-scalar "${FIXTURES}/good-workflow" 0 'scanned 0 shell file(s) and 1 run: block(s)'
 
+# The tracked tree itself: every shell file and run: body this lint
+# guards is clean. The file counts drift with the tree, so only the exit
+# code is asserted.
+expect live-tree "" 0
+
 mkdir -- "${scratch}/empty"
 expect empty-scan "${scratch}/empty" 2 'matched 0 files via shell, workflow and composite-action files'
 
