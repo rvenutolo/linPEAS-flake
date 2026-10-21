@@ -357,6 +357,61 @@ else
   cat -- "${work}/worker-killed.out" "${work}/worker-killed.err" >&2
 fi
 
+# 15. fn-killed-by-signal — when the function's own process is killed by
+# a signal, the worker's job message about it lands in that entry's .out,
+# not on the parent's streams, and the entry records the signal status.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'fn-killed-by-signal' 'done: fks-a FAIL' '
+function probe() {
+  if [[ $1 == fks-a ]]; then kill -KILL "${BASHPID}"; fi
+  printf "ran %s\n" "$1"
+}
+batch_rc=0
+run_parallel probe "${RESULT}" fks-a fks-b
+'
+if [[ ${rc} -eq 0 ]] &&
+  [[ "$(<"${work}/fn-killed-by-signal.result/000.rc")" == 137 ]] &&
+  grep --fixed-strings --quiet -- 'Killed' "${work}/fn-killed-by-signal.result/000.out" &&
+  ! grep --fixed-strings --quiet -- 'Killed' "${work}/fn-killed-by-signal.out" &&
+  ! grep --fixed-strings --quiet -- 'Killed' "${work}/fn-killed-by-signal.err"; then
+  pass 'fn-killed-by-signal: the job message goes to the killed entry slot only'
+else
+  fail "fn-killed-by-signal: expected 000.rc of 137 and Killed in 000.out only, got exit ${rc}"
+  cat -- "${work}/fn-killed-by-signal.out" "${work}/fn-killed-by-signal.err" "${work}"/fn-killed-by-signal.result/*.out >&2
+fi
+
+# 16. too-many-entries — the slot index is three digits wide, so a batch
+# of more than 999 names is a usage error and no entry runs; past that
+# width the slots would no longer sort in roster order.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'too-many-entries' 'run_parallel: at most 999 entries, got 1000' '
+function probe() { :; }
+batch_rc=0
+mapfile -t names < <(seq 1000)
+run_parallel probe "${RESULT}" "${names[@]}"
+'
+if [[ ${rc} -eq 2 ]] && [[ ! -e ${work}/too-many-entries.result/000.out ]]; then
+  pass 'too-many-entries: 1000 names is exit 2 and runs nothing'
+else
+  fail "too-many-entries: expected exit 2 and no slot, got exit ${rc}"
+  cat -- "${work}/too-many-entries.out" "${work}/too-many-entries.err" >&2
+fi
+
+# 17. max-entries — exactly 999 names is within the limit and runs.
+# shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
+run_scenario 'max-entries' 'done: 999 pass' '
+function probe() { :; }
+batch_rc=0
+mapfile -t names < <(seq 999)
+run_parallel probe "${RESULT}" "${names[@]}"
+'
+if [[ ${rc} -eq 0 ]] && [[ "$(<"${work}/max-entries.result/998.name")" == 999 ]]; then
+  pass 'max-entries: 999 names run, the last in slot 998'
+else
+  fail "max-entries: expected rc=0 and slot 998 named 999, got exit ${rc}"
+  cat -- "${work}/max-entries.err" >&2
+fi
+
 harness_assert_verify || failures=$((failures + 1))
 
 if [[ ${failures} -gt 0 ]]; then
