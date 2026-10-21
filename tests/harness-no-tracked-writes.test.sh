@@ -37,6 +37,8 @@ source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 source "${REPO_ROOT}/scripts/lib/enumerate.sh"
 # shellcheck source=scripts/lib/scratch-tree.sh
 source "${REPO_ROOT}/scripts/lib/scratch-tree.sh"
+# shellcheck source=scripts/lib/parallel.sh
+source "${REPO_ROOT}/scripts/lib/parallel.sh"
 
 failures=0
 recorded_scenario=
@@ -471,39 +473,66 @@ snapshot_case snapshot-detects-new-empty-directory yes new-empty-directory
 # no-writes-*: the harnesses that regenerate a doc or flip a fixture's mode
 # ---------------------------------------------------------------------------
 
-declare -a roster=()
-glob_into roster 'refresh harnesses' "${REPO_ROOT}/tests/refresh-*.test.sh"
-roster+=("${REPO_ROOT}/tests/check-doc-anchors.test.sh")
-
-for harness in "${roster[@]}"; do
-  name="no-writes-${harness##*/}"
-  name="${name%.test.sh}"
+# @description Stage a scratch copy of the tree, snapshot it, run one
+# harness inside it, snapshot again, and write the case's report and its
+# list of changed entries. Runs under `run_parallel`, so each case owns
+# every path it writes and the cases overlap; the pass/fail lines and the
+# discrimination records are emitted by the parent afterwards, in roster
+# order, because the assert pool is parent state.
+# @arg $1 harness basename  @arg $2 slot path (unused: the report keeps
+#   its own path under the work dir)
+# shellcheck disable=SC2329 # invoked by name through run_parallel
+function no_writes_case() {
+  local -r harness="$1"
+  local name tree rc=0 changed
+  name="no-writes-${harness%.test.sh}"
   tree="${work}/${name}/tree"
   mkdir --parents -- "${tree}" "${work}/${name}.tmp"
   stage_scratch_tree "${REPO_ROOT}" "${tree}"
   snapshot "${tree}" "${work}/${name}.before"
-  rc=0
   (
     cd -- "${tree}"
     env --unset=SCRATCH_TREE_ACTIVE --unset=BASH_ENV \
       "TMPDIR=${work}/${name}.tmp" \
-      timeout 20m bash "tests/${harness##*/}" </dev/null \
+      timeout 20m bash "tests/${harness}" </dev/null \
       >"${work}/${name}.out" 2>"${work}/${name}.err"
   ) || rc=$?
   snapshot "${tree}" "${work}/${name}.after"
   changed="$(diff --unified=0 "${work}/${name}.before" "${work}/${name}.after" |
     sed --quiet 's/^[-+]\([^-+@].*\)$/\1/p' | cut --fields=1 | sort --unique || true)"
+  printf '%s' "${changed}" >"${work}/${name}.changed"
   {
     printf 'harness-assert-outcome: exit=%d\n' "${rc}"
-    printf 'harness: %s\n' "${harness##*/}"
+    printf 'harness: %s\n' "${harness}"
     printf 'tracked files changed: %s\n' "${changed:-none}"
   } >"${work}/${name}.report"
+}
+
+declare -a roster=() no_writes_names=()
+glob_into roster 'refresh harnesses' "${REPO_ROOT}/tests/refresh-*.test.sh"
+roster+=("${REPO_ROOT}/tests/check-doc-anchors.test.sh")
+for harness in "${roster[@]}"; do
+  no_writes_names+=("${harness##*/}")
+done
+
+no_writes_results="${work}/no-writes-results"
+mkdir -- "${no_writes_results}"
+run_parallel no_writes_case "${no_writes_results}" "${no_writes_names[@]}"
+
+no_writes_index=0
+for harness in "${no_writes_names[@]}"; do
+  name="no-writes-${harness%.test.sh}"
+  slot="$(printf '%s/%03d' "${no_writes_results}" "${no_writes_index}")"
+  no_writes_index=$((no_writes_index + 1))
+  cat -- "${slot}.out"
+  rc="$(sed --quiet 's/^harness-assert-outcome: exit=//p' -- "${work}/${name}.report")"
   if [[ ${rc} -ne 0 ]]; then
     fail "${name} — the harness exited ${rc}"
     cat -- "${work}/${name}.out" "${work}/${name}.err" >&2
-  elif [[ -n ${changed} ]]; then
+  elif [[ -s ${work}/${name}.changed ]]; then
     fail "${name} — the run changed files in the tree it was started from:"
-    printf '%s\n' "${changed}" >&2
+    cat -- "${work}/${name}.changed" >&2
+    printf '\n' >&2
   else
     pass "${name} — no file in the starting tree changed"
   fi
