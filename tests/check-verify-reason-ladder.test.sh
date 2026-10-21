@@ -288,7 +288,7 @@ EOF
   printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
 
   if [[ ${got_exit} -ne ${want_exit} ]] ||
-    { [[ -n ${want_msg} ]] && ! cat -- "${stdout_file}" "${stderr_file}" | grep --fixed-strings --quiet -- "${want_msg}"; }; then
+    { [[ -n ${want_msg} ]] && ! grep --fixed-strings --quiet -- "${want_msg}" "${stdout_file}" "${stderr_file}"; }; then
     printf 'FAIL: %s — expected exit %d and output containing %q; got exit %d and output %q\n' \
       "${name}" "${want_exit}" "${want_msg}" "${got_exit}" "$(cat -- "${stdout_file}" "${stderr_file}")" >&2
     failures=$((failures + 1))

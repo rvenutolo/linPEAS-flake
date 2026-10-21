@@ -117,8 +117,7 @@ function scenario_hook_watches_pin() {
 
   local p missing=0
   for p in "${pin_files[@]}"; do
-    if ! printf '%s\n' "${p}" |
-      grep --quiet --extended-regexp -- "${ere}"; then
+    if ! grep --quiet --extended-regexp -- "${ere}" <<<"${p}"; then
       printf 'FAIL: hook files filter does not match %s (the pin lives there)\n' \
         "${p}" >&2
       missing=1

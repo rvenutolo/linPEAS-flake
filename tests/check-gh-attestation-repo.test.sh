@@ -76,7 +76,7 @@ function scenario_glob_selects_new_classes() {
 
   local class missing=0
   for class in '^\.github/actions/.*\.ya?ml$' '^justfile$' '^CHANGELOG\.md$' '^nix/.*\.nix$' '^flake\.nix$' '^treefmt\.nix$'; do
-    if ! printf '%s\n' "${selected}" | grep --quiet --extended-regexp -- "${class}"; then
+    if ! grep --quiet --extended-regexp -- "${class}" <<<"${selected}"; then
       printf '  no tracked file selected for class: %s\n' "${class}" >&2
       missing=1
     fi
@@ -143,7 +143,7 @@ function scenario_glob_hook_filter_parity() {
   while IFS= read -r p; do
     [[ -z ${p} ]] && continue
     seen=$((seen + 1))
-    if ! printf '%s\n' "${p}" | grep --quiet --extended-regexp -- "${ere}"; then
+    if ! grep --quiet --extended-regexp -- "${ere}" <<<"${p}"; then
       printf '  glob selects a path the hook filter misses: %s\n' "${p}" >&2
       uncovered=1
     fi

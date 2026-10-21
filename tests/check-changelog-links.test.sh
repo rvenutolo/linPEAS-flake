@@ -71,7 +71,7 @@ function run_regex_scenario() {
   local -r expectation="$3"
 
   local hit=0
-  printf '%s\n' "${line}" | grep --quiet --perl-regexp "${DUP_REGEX}" || hit=$?
+  grep --quiet --perl-regexp "${DUP_REGEX}" <<<"${line}" || hit=$?
 
   if [[ ${expectation} == 'match' && ${hit} -ne 0 ]]; then
     printf 'FAIL: %s — regex should match but did not\n' "${name}" >&2
