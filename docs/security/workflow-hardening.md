@@ -176,6 +176,22 @@ The lint skips comment lines (lines whose first non-whitespace character is `#`)
 
 Enforced by `scripts/check-no-opaque-procsub.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-opaque-procsub`) and as a pre-commit hook.
 
+## no-pipe-into-grep-quiet
+
+No tracked shell file and no workflow or composite-action `run:` body pipes into a quiet `grep`: `producer | grep -q PAT`, `producer | grep --quiet PAT`, the `--silent` alias, a bundled flag holding `q` (`-qE`, `-Fq`, `-qxF`), an `LC_ALL=… grep` prefix, `|&` in place of `|`, and a pipe that ends one line with the quiet `grep` on the next. There is no exemption marker and no allowlist.
+
+A quiet `grep` exits at its first match. A producer still writing then takes SIGPIPE, and under `set -o pipefail` the pipeline's status is the producer's 141 — a match read as a miss. Whether the producer is still writing depends on how much it writes and on scheduling, so the same line passes on an idle machine and fails under load, such as in a parallel CI lint group.
+
+The rule does not ask what the producer is. A producer that writes one short value today cannot write past the pipe buffer, but that is a property of its current input, not of the line; judging the shape keeps the rule decidable in one textual pass and keeps it true when the producer's output grows.
+
+The fix is to capture the producer, then match with a here-string: `out="$(producer)"`, then `grep --quiet PAT <<<"${out}"`. Where the producer is already `printf '%s\n' "${var}"`, drop it and match `<<<"${var}"` directly. The capture makes a producer failure visible to `set -e`, where the pipe read it as "no match". A producer that can legitimately exit non-zero — a `grep` used as a filter, a `git` lookup that may miss — takes an explicit `|| true` with a comment saying why its failure is not an error.
+
+The matcher is textual rather than a shell syntax tree, because the shape also lives inside strings a harness hands to `eval` as a real pipeline. It counts on any line that is not a comment, quoted text and heredoc bodies included; only a comment-only line is exempt, so a script may name the banned shape in its own documentation. `||` is not a pipe. The matcher reads only what follows the pipe on one line: an `LC_ALL=` assignment word is the only thing that may sit between the pipe and `grep`, so `command grep`, `env … grep`, `timeout … grep` and `LANG=C grep` are not seen; the quiet flag must sit on the `grep` word's own line; and a `|`, `;` or `&` inside an earlier argument, as in `grep -E 'a|b' --quiet`, hides a flag that follows it.
+
+The scan set is every tracked `*.sh` file, every tracked `.github/workflows/*.yml` (or `.yaml`) and every tracked `.github/actions/**/action.yml` (or `.yaml`), less any path with a `fixtures/` segment, since fixture trees exist to hold violations. Workflow and composite-action YAML is read through each step's extracted `run:` body, never as raw YAML: every `run: |` key line ends in a pipe, so a body opening with a quiet `grep` would otherwise read as a hit.
+
+Enforced by `scripts/check-no-pipe-into-grep-quiet.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-pipe-into-grep-quiet`) and as a pre-commit hook.
+
 ## guard-exit-code
 
 No script anywhere under `scripts/`, sourced libraries included, exits 1 out of a guard whose test is only an availability check. The three exit codes separate what the operator has to do about a run:

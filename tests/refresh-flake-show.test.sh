@@ -181,8 +181,7 @@ function main() {
       ere="$(printf '%s' "${files_re}" | sed 's/\\\\/\\/g')"
       local p uncovered=0
       for p in "${modules[@]}"; do
-        if ! printf '%s\n' "${p}" |
-          grep --quiet --extended-regexp -- "${ere}"; then
+        if ! grep --quiet --extended-regexp -- "${ere}" <<<"${p}"; then
           printf '  uncovered module: %s\n' "${p}" >&2
           uncovered=1
         fi

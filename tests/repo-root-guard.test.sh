@@ -73,6 +73,7 @@ readonly -a ROWS=(
   'check-jsonschema.sh|'
   'check-lib-source-tool-free.sh|'
   'check-lock-derived-docs.sh|'
+  'check-no-pipe-into-grep-quiet.sh|'
   'check-notify-arms.sh|'
   'check-orphan-invariants.sh|'
   'check-pin-diff-isolated.sh|'

@@ -108,7 +108,7 @@ while IFS=$'\037' read -r name files scripts; do
   total_blocks=$((total_blocks + 1))
   # Nix string literal: "\\." in source is the ERE "\.".
   ere="$(printf '%s' "${files}" | sed 's/\\\\/\\/g')"
-  printf '%s\n' 'flake.lock' | grep --quiet --extended-regexp -- "${ere}" || continue
+  grep --quiet --extended-regexp -- "${ere}" <<<'flake.lock' || continue
   lock_triggered=$((lock_triggered + 1))
   # Split on spaces explicitly: the global IFS is newline+tab, so a block
   # naming its generator more than once would otherwise stay one

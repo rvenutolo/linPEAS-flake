@@ -189,6 +189,7 @@ Hooks (alphabetical):
 | `nixfmt`                            | Nix file formatting.                                                                                                                                     |
 | `nixpkgs-hammering`                 | nixpkgs idiom checker for the linpeas derivation.                                                                                                        |
 | `no-opaque-procsub`                 | No scripts/\*.sh feeds a redirection from a process substitution.                                                                                        |
+| `no-pipe-into-grep-quiet`           | No tracked shell file, workflow run: body or composite-action run: body pipes into a quiet grep.                                                         |
 | `notify-label-descriptions`         | Every notify label description fits the labels API cap and agrees across callers.                                                                        |
 | `octoscan`                          | synacktiv/octoscan workflow vulnerability scanner.                                                                                                       |
 | `patch-tag-pins`                    | SHA-pinned uses: comments name a versioned tag (vX.Y[.Z]), not a bare major (vX).                                                                        |

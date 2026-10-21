@@ -295,7 +295,7 @@ jobs:
           # Anchor on the script path and line number so linpeas's own
           # "... not found" report lines do not match.
           missing_re='/bin/linpeas: (line )?[0-9]+: [^:]+: (command )?not found$'
-          if echo "${out}" | grep --quiet --extended-regexp "${missing_re}"; then
+          if grep --quiet --extended-regexp "${missing_re}" <<<"${out}"; then
             echo "FAIL: linpeas reported missing commands:"
             echo "${out}" | grep --extended-regexp "${missing_re}"
             exit 1
@@ -324,12 +324,12 @@ jobs:
             exit 1
           fi
           for bad in 'mktemp: failed' 'value too great for base' 'cannot find name for user ID'; do
-            if echo "${out}" | grep --quiet --fixed-strings "${bad}"; then
+            if grep --quiet --fixed-strings "${bad}" <<<"${out}"; then
               echo "FAIL: report contains '${bad}'"
               exit 1
             fi
           done
-          if ! echo "${out}" | grep --quiet --fixed-strings '/host/etc/crontab'; then
+          if ! grep --quiet --fixed-strings '/host/etc/crontab' <<<"${out}"; then
             echo "FAIL: report does not mention the fixture crontab"
             exit 1
           fi
@@ -420,7 +420,7 @@ jobs:
           # Anchor on the script path and line number so linpeas's own
           # "... not found" report lines do not match.
           missing_re='/bin/linpeas: (line )?[0-9]+: [^:]+: (command )?not found$'
-          if echo "${out}" | grep --quiet --extended-regexp "${missing_re}"; then
+          if grep --quiet --extended-regexp "${missing_re}" <<<"${out}"; then
             echo "FAIL: linpeas reported missing commands:"
             echo "${out}" | grep --extended-regexp "${missing_re}"
             exit 1
@@ -449,12 +449,12 @@ jobs:
             exit 1
           fi
           for bad in 'mktemp: failed' 'value too great for base' 'cannot find name for user ID'; do
-            if echo "${out}" | grep --quiet --fixed-strings "${bad}"; then
+            if grep --quiet --fixed-strings "${bad}" <<<"${out}"; then
               echo "FAIL: report contains '${bad}'"
               exit 1
             fi
           done
-          if ! echo "${out}" | grep --quiet --fixed-strings '/host/etc/crontab'; then
+          if ! grep --quiet --fixed-strings '/host/etc/crontab' <<<"${out}"; then
             echo "FAIL: report does not mention the fixture crontab"
             exit 1
           fi

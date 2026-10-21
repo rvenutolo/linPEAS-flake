@@ -107,7 +107,7 @@ bad_out="$(HISTORY_OVERRIDE=skip SEEDS_OVERRIDE="$here/fixtures/seeds-bad-anchor
   bad_rc=$?
 check "unresolvable anchor fails the plant" "[ '$bad_rc' -ne 0 ]"
 check "unresolvable anchor names the miss" \
-  "printf '%s' \"\$bad_out\" | grep -qF 'anchor matched 0 lines'"
+  "grep -qF 'anchor matched 0 lines' <<<\"\$bad_out\""
 "$plant" --clean >/dev/null 2>&1 || true
 
 # A seed can span two files through "also" edits. The fixture plants one seed
@@ -144,7 +144,7 @@ while IFS=$'\t' read -r fixture msg; do
   # shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
   out="$(HISTORY_OVERRIDE=skip SEEDS_OVERRIDE="$here/fixtures/$fixture" "$plant" 2>&1)" || rc=$?
   check "$fixture fails the plant" "[ '$rc' -ne 0 ]"
-  check "$fixture names its fault" "printf '%s' \"\$out\" | grep -qF '$msg'"
+  check "$fixture names its fault" "grep -qF '$msg' <<<\"\$out\""
   "$plant" --clean >/dev/null 2>&1 || true
 done <<'EOF'
 seeds-bad-also-anchor.json	anchor matched 0 lines in docs/index.md
@@ -248,7 +248,7 @@ check "planted tree is on branch main" '[ "$(pgit symbolic-ref --quiet --short H
 check "planted repo holds main as its only ref" \
   "[ \"\$(pgit for-each-ref --format='%(refname)')\" = refs/heads/main ]"
 check "planted repo has no remote" '[ -z "$(pgit remote)" ]'
-check "planted branch tracks no upstream" '! pgit status | grep -qiE "origin|upstream"'
+check "planted branch tracks no upstream" 'status_out="$(pgit status)" && ! grep -qiE "origin|upstream" <<<"$status_out"'
 check "planted repo has no reflog entries" '[ -z "$(pgit reflog list)" ]'
 check "planted repo has no ORIG_HEAD" '[ ! -e "$(pgit rev-parse --path-format=absolute --git-path ORIG_HEAD)" ]'
 # The rewrite's working files list every seeded path and hold seeded copies.
@@ -302,7 +302,7 @@ recorded_subjects() {
   done
 }
 check "every audit point resolves to its source commit" \
-  "[ \"\$(recorded_subjects '$wt')\" = \"\$(recorded_subjects '$src')\" ] && ! recorded_subjects '$wt' | grep -qx UNRESOLVED"
+  "[ \"\$(recorded_subjects '$wt')\" = \"\$(recorded_subjects '$src')\" ] && wt_subjects=\"\$(recorded_subjects '$wt')\" && ! grep -qx UNRESOLVED <<<\"\$wt_subjects\""
 check "the source records two audit points" "[ \"\$(recorded_subjects '$src' | wc -l)\" = 2 ]"
 check "planting a full history changes no file mode" \
   "[ \"\$(pgit ls-tree -r HEAD | cut -d' ' -f1 | sort | uniq -c)\" = \"\$(hgit ls-tree -r '$src_head' | grep -vF 'evals/seeds[1].json' | cut -d' ' -f1 | sort | uniq -c)\" ] && [ -x '$wt/scripts/x.sh' ]"
@@ -319,7 +319,7 @@ shallow_rc=0
 shallow_out="$(REPO_OVERRIDE="$hist/shallow" SEEDS_OVERRIDE="$here/fixtures/seeds-history.json" \
   "$plant" 2>&1)" || shallow_rc=$?
 check "a shallow source exits 2" "[ '$shallow_rc' = 2 ]"
-check "a shallow source names the cause" "printf '%s' \"\$shallow_out\" | grep -qF 'shallow'"
+check "a shallow source names the cause" "grep -qF 'shallow' <<<\"\$shallow_out\""
 
 # An audit point naming a commit that is not an ancestor of the planted head
 # cannot be carried over, and gc would leave it naming nothing: the audit
@@ -342,7 +342,7 @@ off_rc=0
 off_out="$(REPO_OVERRIDE="$hist/offmain" SEEDS_OVERRIDE="$hist/offmain/evals/seeds[1].json" \
   "$plant" 2>&1)" || off_rc=$?
 check "an audit point off the planted history fails the plant" "[ '$off_rc' = 1 ]"
-check "an audit point off the planted history is named" "printf '%s' \"\$off_out\" | grep -qF '$off_sha'"
+check "an audit point off the planted history is named" "grep -qF '$off_sha' <<<\"\$off_out\""
 check "a failed plant leaves no planted path behind" "[ ! -e '$results/worktree-path.txt' ]"
 "$plant" --clean >/dev/null 2>&1 || true
 
@@ -372,7 +372,7 @@ link_rc=0
 # shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
 link_out="$(REPO_OVERRIDE="$hist/linked" SEEDS_OVERRIDE="$hist/linked-seeds.json" "$plant" 2>&1)" || link_rc=$?
 check "a seed through a tracked symlink fails the plant" "[ '$link_rc' = 1 ]"
-check "a seed through a tracked symlink names its file" "printf '%s' \"\$link_out\" | grep -qF 'linkdir/a.md'"
+check "a seed through a tracked symlink names its file" "grep -qF 'linkdir/a.md' <<<\"\$link_out\""
 "$plant" --clean >/dev/null 2>&1 || true
 # A tracked symlink as the seed's own file is refused the same way.
 ln -s docs/a.md "$hist/linked/linkfile.md"
@@ -383,7 +383,7 @@ linkf_rc=0
 # shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
 linkf_out="$(REPO_OVERRIDE="$hist/linked" SEEDS_OVERRIDE="$hist/linkfile-seeds.json" "$plant" 2>&1)" || linkf_rc=$?
 check "a seed on a tracked symlink fails the plant" \
-  "[ '$linkf_rc' = 1 ] && printf '%s' \"\$linkf_out\" | grep -qF 'linkfile.md'"
+  "[ '$linkf_rc' = 1 ] && grep -qF 'linkfile.md' <<<\"\$linkf_out\""
 "$plant" --clean >/dev/null 2>&1 || true
 
 # Every branch of the normalized-path rule, each on its own seed set.
@@ -393,7 +393,7 @@ while IFS= read -r badpath; do
   # shellcheck disable=SC2034 # read via check()'s eval of the assertion string below, not a direct expansion here
   bp_out="$(HISTORY_OVERRIDE=skip SEEDS_OVERRIDE="$hist/badpath.json" "$plant" 2>&1)" || bp_rc=$?
   check "seed file '$badpath' is refused as not normalized" \
-    "[ '$bp_rc' = 1 ] && printf '%s' \"\$bp_out\" | grep -qF 'file is not a normalized repo-relative path'"
+    "[ '$bp_rc' = 1 ] && grep -qF 'file is not a normalized repo-relative path' <<<\"\$bp_out\""
   "$plant" --clean >/dev/null 2>&1 || true
 done <<'EOF_PATHS'
 

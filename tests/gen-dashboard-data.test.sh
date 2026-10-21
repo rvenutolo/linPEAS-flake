@@ -575,8 +575,11 @@ function run_api_error_scenario() {
   # Match on the WARN lines only: each lookup's label also appears in this
   # script's INFO progress lines, so the level filter keeps the assertion
   # pinned to a warning actually having been emitted.
-  if ! grep --fixed-strings 'WARN' "${stderr_tmp}" |
-    grep --fixed-strings --quiet -- "${expected_warn}"; then
+  # A stderr with no WARN line yields an empty capture, which the quiet grep
+  # below reports as a miss, so the FAIL branch still fires.
+  local warn_lines
+  warn_lines="$(grep --fixed-strings 'WARN' "${stderr_tmp}" || true)"
+  if ! grep --fixed-strings --quiet -- "${expected_warn}" <<<"${warn_lines}"; then
     printf 'FAIL: %s — stderr missing WARN %q\n' "${name}" "${expected_warn}" >&2
     sed 's/^/    /' "${stderr_tmp}" >&2
     fail_count=$((fail_count + 1))
