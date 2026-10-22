@@ -144,6 +144,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/classify-renovate-pr-author.test.sh`    | `scripts/classify-renovate-pr-author.sh`    | —                                            |
 | `tests/compare-repro.test.sh`                  | `scripts/compare-repro.sh`                  | `tests/fixtures/compare-repro`               |
 | `tests/docs-audit-pressure.test.sh`            | `scripts/docs-audit-pressure.sh`            | —                                            |
+| `tests/fetch-ci-run.test.sh`                   | `scripts/fetch-ci-run.sh`                   | —                                            |
 | `tests/gen-dashboard-data.test.sh`             | `scripts/gen-dashboard-data.sh`             | `tests/fixtures/dashboard-data`              |
 | `tests/glob-scan-breadth.test.sh`              | `scripts/*.sh`                              | —                                            |
 | `tests/harness-no-tracked-writes.test.sh`      | `scripts/lib/scratch-tree.sh`               | —                                            |

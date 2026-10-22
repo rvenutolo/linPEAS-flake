@@ -2347,6 +2347,32 @@ Exit codes:
       whose job ids or job keys `yq` cannot read
 ```
 
+### scripts/fetch-ci-run.sh
+
+Fetch one GitHub Actions run's jobs, steps and annotations
+through `gh api` and print the JSON that scripts/classify-ci-run.sh
+reads on stdin: the run's id, name, path, event, head_branch (null
+becomes the empty string, which the classifier requires to be a
+string), run_attempt, and its latest attempt's jobs, each carrying id,
+name, conclusion, steps and annotations. Annotations are fetched only
+for jobs whose conclusion is failure, cancelled or timed_out; every
+other job carries an empty list.
+
+Usage:
+
+```text
+  GH_TOKEN=... GITHUB_REPOSITORY=owner/repo fetch-ci-run.sh <run_id>
+```
+
+Exit codes:
+
+```text
+  0  the JSON was printed
+  1  an API call failed; the `gh` error is passed through on stderr
+  2  bad arguments, a missing tool, an unset environment variable, or an
+      API response that is not the JSON shape the reads below rely on
+```
+
 ### scripts/gen-dashboard-data.sh
 
 Generate docs/\_data/dashboard.yml for the MkDocs site
