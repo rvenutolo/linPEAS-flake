@@ -140,6 +140,18 @@ classify "all-success" ignore none \
 classify "all-success bot-pr" ignore none \
   "$(fx all-success)" --policy bot-pr
 
+# --- every rule pinned by a row that fails if the rule is wrong ------
+classify "bot-pr-cancelled-other" ignore "lint${T}superseded${T}cancelled-other" "$(fx bot-pr-cancelled-other)" --policy bot-pr
+classify "runner-shutdown" retry "lint${T}transient${T}runner-lost" "$(fx runner-shutdown)" --policy automated
+classify "workflow-run-timeout" retry "lint${T}transient${T}timed_out" "$(fx workflow-run-timeout)" --policy automated
+classify "setup-set-up-job" retry "lint${T}transient${T}setup-step:Set up job" "$(fx setup-set-up-job)" --policy automated
+classify "setup-pre-harden" retry "lint${T}transient${T}setup-step:Pre Run step-security/harden-runner@0123456789abcdef0123456789abcdef01234567" "$(fx setup-pre-harden)" --policy automated
+classify "setup-run-harden" retry "lint${T}transient${T}setup-step:Run step-security/harden-runner@0123456789abcdef0123456789abcdef01234567" "$(fx setup-run-harden)" --policy automated
+classify "setup-checkout" retry "lint${T}transient${T}setup-step:Run actions/checkout@89abcdef0123456789abcdef0123456789abcdef" "$(fx setup-checkout)" --policy automated
+classify "setup-app-token" retry "lint${T}transient${T}setup-step:Run actions/create-github-app-token@0123456789abcdef0123456789abcdef01234567" "$(fx setup-app-token)" --policy automated
+classify "post-step-real" report "lint${T}real${T}step:Post Run actions/checkout@89abcdef0123456789abcdef0123456789abcdef" "$(fx post-step-real)" --policy automated
+classify "runner-lost-over-real-step" retry "lint${T}transient${T}runner-lost" "$(fx runner-lost-over-real-step)" --policy automated
+
 # --- operational errors ----------------------------------------------
 TMP_DIR="$(mktemp --directory)"
 readonly TMP_DIR
