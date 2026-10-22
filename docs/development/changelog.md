@@ -235,8 +235,8 @@ sequence (its harden-runner egress step comes first, as in every job):
     — produces no diff).
 1. If changed, render the latest section with `git-cliff --latest --strip header` into `.release-notes.md` for the release body.
 1. If changed, create a `chore/changelog-${VERSION}` branch from
-    `main` — reusing and force-rebasing it if an open one for that
-    version already exists — and commit `CHANGELOG.md` via REST
+    `main` — reusing an open one for that version, rebuilt on `main`
+    through a staging branch so the PR never loses its diff — and commit `CHANGELOG.md` via REST
     `PUT /contents` as the App identity (GitHub web-flow-signs the
     commit).
 1. Open a PR against `main` and enable auto-merge
@@ -267,9 +267,10 @@ already exists on every recovery path, so the job's
 dispatch. With the input set, the job re-runs git-cliff over the full
 tag history and commits the corrected file — unless a
 `chore/changelog-<version>` PR for that version was already closed
-unmerged, in which case the commit step fails by design (see
-[auto-merge-decline-gate](../security/workflow-hardening.md#auto-merge-decline-gate));
-an open changelog branch is reused and force-rebased instead. (A
+unmerged by a maintainer, in which case the commit step fails by design (see
+[auto-merge-decline-gate](../security/workflow-hardening.md#auto-merge-decline-gate)).
+A PR the App closed itself is recreated, and an open changelog branch
+is reused and rebuilt on `main` instead. (A
 merged changelog PR means the entry already landed, so regeneration
 produces no diff and the commit step is skipped before that gate.)
 

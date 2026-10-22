@@ -11,7 +11,9 @@
 # calls `gh pr merge --auto`. Without inspecting PR state first, a
 # re-run in the same period overwrites a PR the maintainer explicitly
 # CLOSED (declined) or one already MERGED. The decline gate queries
-# `gh pr view --json state` and aborts non-zero on CLOSED|MERGED.
+# `gh pr view --json state` and aborts non-zero on CLOSED|MERGED. A PR
+# the workflow's own App closed is recreated inside that arm instead,
+# which this textual check neither requires nor forbids.
 #
 # This lint hard-fails if any `--auto` merge run-block lacks that gate,
 # foreclosing drift between sibling auto-merge workflows.

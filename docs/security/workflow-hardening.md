@@ -99,6 +99,8 @@ Every workflow run-block that calls `gh pr merge` with `--auto` also carries the
 
 An auto-merging update workflow recreates a per-period branch and merges its PR unattended. Without inspecting PR state first, a re-run in the same period overwrites a PR the maintainer explicitly closed (declined) or one already merged — silently reversing a human decision in a no-review flow. The gate aborts non-zero on `CLOSED|MERGED` so the run fails and a failure issue is filed instead.
 
+A PR closed by the workflow's own App is not a decision and does not block. GitHub closes a PR the moment its head has no commits beyond its base, so a branch force-moved onto `main` closes its own PR. Inside the `CLOSED|MERGED` arm, a `CLOSED` PR whose last `ClosedEvent` actor is the `Bot` named by the App token's `app-slug` output is recreated instead of aborting. Any other closer, or a lookup that fails or returns nothing, still aborts. To avoid that close in the first place, a reused open PR is rebased by writing its commits to a `<branch>-staging` branch cut from `main` and then force-moving the PR branch straight to the finished tip, so the PR branch never points at `main` itself.
+
 This protects only an explicitly closed or merged PR; routine PRs are unaffected, so the fully-automated update flow is preserved.
 
 Enforced by `scripts/check-auto-merge-decline-gate.sh`. Wired as the `lint-workflow-security` CI job (member check `auto-merge-decline-gate`) and as a pre-commit hook.
