@@ -6,6 +6,25 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261021-2fe956c4] - 2026-10-22
+
+### CI
+- Suppress zizmor self-repository inline at each site ([#1348](https://github.com/rvenutolo/linPEAS-flake/pull/1348))
+
+### Chores
+- Bump linpeas to 20261021-2fe956c4 ([#1371](https://github.com/rvenutolo/linPEAS-flake/pull/1371))
+
+### Fixes
+- Keep auto-merge PRs open across the daily rebase ([#1369](https://github.com/rvenutolo/linPEAS-flake/pull/1369))
+- Hold the glob-scan-breadth table complete against the tree ([#1365](https://github.com/rvenutolo/linPEAS-flake/pull/1365))
+- Pin the quiet-grep lint's edges and ignore pipes in trailing comments ([#1366](https://github.com/rvenutolo/linPEAS-flake/pull/1366))
+- Stop piping into quiet grep under pipefail ([#1364](https://github.com/rvenutolo/linPEAS-flake/pull/1364))
+- Harden run_parallel and harness-no-tracked-writes edge cases ([#1360](https://github.com/rvenutolo/linPEAS-flake/pull/1360))
+
+### Performance
+- Run no-tracked-writes cases in parallel ([#1352](https://github.com/rvenutolo/linPEAS-flake/pull/1352))
+- Run runner-script checks in parallel ([#1350](https://github.com/rvenutolo/linPEAS-flake/pull/1350))
+
 ## [20261019-18cc21b4] - 2026-10-20
 
 ### Chores
