@@ -166,6 +166,7 @@ jobs:
 
       - name: open PR with signed commits via REST PUT /contents
         env:
+          BUMP_APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           NEW: ${{ needs.compute-pin.outputs.new }}
           OLD: ${{ needs.compute-pin.outputs.old }}
@@ -186,18 +187,50 @@ jobs:
           case "${pr_state}" in
             OPEN)
               # Reuse the existing PR. To clear strict-required-status
-              # branch-up-to-date enforcement, force-update the branch
-              # ref to main HEAD (rebase) below before re-applying file
-              # commits. The PR survives the force-update; auto-merge
-              # picks up from the new HEAD.
+              # branch-up-to-date enforcement, its branch is rebuilt on
+              # main HEAD below before auto-merge picks it up again.
               open_pr=true
               ;;
             CLOSED|MERGED)
               # Same-version PR was already closed (declined) or merged
-              # (shipped). Recreating would overwrite that outcome.
-              # Fail loudly so notify files an issue.
-              printf 'PR for %s already in state %s - aborting\n' "${branch}" "${pr_state}" >&2
-              exit 1
+              # (shipped). Recreating would overwrite that outcome, so
+              # fail loudly and let notify file an issue. The one
+              # exception is a PR this App closed itself: GitHub closes
+              # a PR whose head is force-moved onto its base, and no
+              # human decided anything, so the bump is opened afresh.
+              closed_by=""
+              if [[ "${pr_state}" == CLOSED ]]; then
+                # A failed lookup leaves closed_by empty, which aborts.
+                pr_number="$(gh pr view "${branch}" --json number --jq .number 2>/dev/null || true)"
+                if [[ "${pr_number}" =~ ^[0-9]+$ ]]; then
+                  # shellcheck disable=SC2016 # $owner etc. are GraphQL variables, bound below
+                  closed_by="$(gh api graphql \
+                    --raw-field query='query($owner: String!, $name: String!, $number: Int!) {
+                      repository(owner: $owner, name: $name) {
+                        pullRequest(number: $number) {
+                          timelineItems(itemTypes: CLOSED_EVENT, last: 1) {
+                            nodes { ... on ClosedEvent { actor { __typename login } } }
+                          }
+                        }
+                      }
+                    }' \
+                    --raw-field owner="${REPO%%/*}" \
+                    --raw-field name="${REPO#*/}" \
+                    --field number="${pr_number}" \
+                    --jq '.data.repository.pullRequest.timelineItems.nodes[0].actor // {} | "\(.__typename)/\(.login)"' \
+                    2>/dev/null)" || closed_by=""
+                fi
+              fi
+              if [[ -n "${BUMP_APP_SLUG}" && "${closed_by}" == "Bot/${BUMP_APP_SLUG}" ]]; then
+                printf 'PR for %s was closed by %s itself - opening a new one\n' "${branch}" "${BUMP_APP_SLUG}"
+                open_pr=false
+              else
+                if [[ "${pr_state}" == CLOSED ]]; then
+                  printf 'PR for %s was closed by %s\n' "${branch}" "${closed_by:-unknown}" >&2
+                fi
+                printf 'PR for %s already in state %s - aborting\n' "${branch}" "${pr_state}" >&2
+                exit 1
+              fi
               ;;
             '')
               open_pr=false
@@ -216,33 +249,34 @@ jobs:
           pin_blob_sha="$(git rev-parse "origin/main:linpeas-pin.json")"
           flake_outputs_blob_sha="$(git rev-parse "origin/main:docs/reference/flake-outputs.md")"
 
+          # The commits are written to work_branch, created fresh from
+          # main HEAD. For a new PR that is the bump branch itself. An
+          # open PR has to be rebased onto main HEAD, because the
+          # `protect-main` ruleset sets
+          # strict_required_status_checks_policy: true and a PR cannot
+          # merge while behind. Its branch must never point at main HEAD
+          # itself: GitHub closes a PR the moment its head has no commits
+          # beyond its base. So the commits go to a staging branch, and
+          # the PR branch then moves straight to the finished tip.
           if [[ "${open_pr}" == true ]]; then
-            # Rebase the open PR's branch onto main HEAD. Required because
-            # the `protect-main` ruleset sets
-            # strict_required_status_checks_policy: true — PR cannot merge
-            # while behind. PATCH /refs with force=true rewrites the
-            # branch tip without closing the PR.
-            printf 'rebasing open PR for %s onto main HEAD %s\n' "${branch}" "${base_sha}"
-            gh api --method PATCH "repos/${REPO}/git/refs/heads/${branch}" \
-              --raw-field sha="${base_sha}" \
-              --field force=true \
-              --header "${api_header}" >/dev/null
+            work_branch="${branch}-staging"
           else
-            # Delete stale orphan branch ref (no PR attached) if a prior
-            # failed run left one behind. Safe: the PR-state gate above
-            # already rejected the case where a PR — open or closed —
-            # references this ref.
-            if gh api "repos/${REPO}/git/refs/heads/${branch}" \
-                --header "${api_header}" >/dev/null 2>&1; then
-              gh api --method DELETE "repos/${REPO}/git/refs/heads/${branch}" \
-                --header "${api_header}"
-            fi
-            # Create branch ref from main HEAD.
-            gh api --method POST "repos/${REPO}/git/refs" \
-              --field ref="refs/heads/${branch}" \
-              --field sha="${base_sha}" \
-              --header "${api_header}" >/dev/null
+            work_branch="${branch}"
           fi
+
+          # Delete a stale work_branch ref if a prior failed run left one
+          # behind. Safe: the PR-state gate above already rejected every
+          # case where a PR a human closed, or a merged PR, references
+          # the bump branch, and nothing references the staging branch.
+          if gh api "repos/${REPO}/git/refs/heads/${work_branch}" \
+              --header "${api_header}" >/dev/null 2>&1; then
+            gh api --method DELETE "repos/${REPO}/git/refs/heads/${work_branch}" \
+              --header "${api_header}"
+          fi
+          gh api --method POST "repos/${REPO}/git/refs" \
+            --field ref="refs/heads/${work_branch}" \
+            --field sha="${base_sha}" \
+            --header "${api_header}" >/dev/null
 
           # Commit 1: linpeas-pin.json. Web-flow signs this commit.
           pin_b64="$(base64 --wrap=0 linpeas-pin.json)"
@@ -250,33 +284,49 @@ jobs:
             --field message="chore: bump linpeas to ${NEW}" \
             --field content="${pin_b64}" \
             --field sha="${pin_blob_sha}" \
-            --field branch="${branch}" \
+            --field branch="${work_branch}" \
             --header "${api_header}" >/dev/null
 
           # Commit 2: docs/reference/flake-outputs.md (flake-show block refresh).
           # The doc's blob SHA on the bump branch still equals main's (only
           # linpeas-pin changed in commit 1), so reuse flake_outputs_blob_sha.
           flake_outputs_b64="$(base64 --wrap=0 docs/reference/flake-outputs.md)"
-          gh api --method PUT "repos/${REPO}/contents/docs/reference/flake-outputs.md" \
+          tip_sha="$(gh api --method PUT "repos/${REPO}/contents/docs/reference/flake-outputs.md" \
             --field message="chore: refresh flake-show for linpeas ${NEW}" \
             --field content="${flake_outputs_b64}" \
             --field sha="${flake_outputs_blob_sha}" \
-            --field branch="${branch}" \
-            --header "${api_header}" >/dev/null
+            --field branch="${work_branch}" \
+            --jq .commit.sha \
+            --header "${api_header}")"
+
+          if [[ "${open_pr}" == true ]]; then
+            printf 'rebasing open PR for %s onto main HEAD %s (new tip %s)\n' \
+              "${branch}" "${base_sha}" "${tip_sha}"
+            gh api --method PATCH "repos/${REPO}/git/refs/heads/${branch}" \
+              --raw-field sha="${tip_sha}" \
+              --field force=true \
+              --header "${api_header}" >/dev/null
+            gh api --method DELETE "repos/${REPO}/git/refs/heads/${work_branch}" \
+              --header "${api_header}"
+          fi
 
           if [[ "${open_pr}" == false ]]; then
             body="$(mktemp)"
             trap 'rm --force -- "${body}"' EXIT
             printf "Auto-generated bump from \`%s\` to \`%s\`.\n\nUpstream release: https://github.com/peass-ng/PEASS-ng/releases/tag/%s\n" \
               "${OLD}" "${NEW}" "${NEW}" > "${body}"
-            gh pr create \
+            # Merge by URL: a recovered bump branch also carries the
+            # closed PR, so the branch name alone is ambiguous.
+            pr_ref="$(gh pr create \
               --base main \
               --head "${branch}" \
               --title "chore: bump linpeas to ${NEW}" \
-              --body-file "${body}"
+              --body-file "${body}")"
+          else
+            pr_ref="${branch}"
           fi
 
-          gh pr merge "${branch}" --auto --merge
+          gh pr merge "${pr_ref}" --auto --merge
 
   notify:
     name: notify

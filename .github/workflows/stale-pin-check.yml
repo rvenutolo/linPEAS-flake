@@ -198,7 +198,8 @@ jobs:
                   look for `has no .digest field`)
                 - `linpeas-flake-bumper` GitHub App installation broken
                   (`BUMP_APP_PRIVATE_KEY` invalid, or the App uninstalled)
-                - a closed (declined) bump PR for the same version
+                - a bump PR for the same version that a maintainer closed
+                  (declined)
               - Runs are green but the pin did not move: a bump PR is open
                 with auto-merge waiting on a required check or a branch
                 update.
