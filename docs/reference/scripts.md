@@ -2203,6 +2203,48 @@ print `full` when all six exist, `none` when all six are absent, and
 fail on any partial mix. Pure and side-effect free so the decision is
 unit-testable without contacting a registry.
 
+### scripts/classify-ci-run.sh
+
+Classify one GitHub Actions run's jobs into a retry
+verdict. Reads the run JSON on stdin (id, name, path, event,
+head_branch, run_attempt, and jobs each carrying conclusion, steps and
+annotations) and prints a verdict line, `retry`, `exhausted`, `report`
+or `ignore`, followed by one `<job>\t<class>\t<reason>` line for every
+job that failed, was cancelled or timed out. `class` is `transient`
+(infrastructure, worth a rerun), `real` (a step of the job's own work
+failed) or `superseded` (cancelled by a newer run, never counted).
+Pure and side-effect free so the decision is unit-testable without a
+workflow run.
+
+Usage:
+
+```text
+  classify-ci-run.sh --policy bot-pr|automated < run.json
+  classify-ci-run.sh --print-max-attempts
+```
+
+Policies. `bot-pr` retries any counted job until the attempt cap,
+because a bot PR has no human watching a red check. `automated`
+retries only runs the repo triggers itself (schedule, workflow_run,
+push to main) and only when every counted job is transient, so a real
+regression is reported on the first attempt rather than retried.
+Other events report without retrying: a person started them and can
+rerun them.
+
+A job that fails before its own work starts (runner setup, checkout,
+the setup-nix action) is transient. A failed step after those is real,
+including `Post` steps. A failure with no failed step has nothing to
+blame the repo for and is transient.
+
+Exit codes:
+
+```text
+  0  classified (a `report` or `exhausted` verdict is an answer, not
+      this script failing)
+  2  bad arguments, or input that is not a run object with a `jobs`
+      array of the expected shape
+```
+
 ### scripts/classify-pin-ref.sh
 
 Classify one SHA-pinned action ref for

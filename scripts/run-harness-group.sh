@@ -60,6 +60,7 @@ readonly -a HARNESSES=(
   'renovate-pr-author|classify-renovate-pr-author.test.sh|'
   'flake-lock-staleness|check-flake-lock-staleness.test.sh|'
   'refresh-notify-result|classify-refresh-notify-result.test.sh|'
+  'classify-ci-run|classify-ci-run.test.sh|'
   'lib-log|lib-log.test.sh|'
   'lib-enumerate|lib-enumerate.test.sh|'
   'lib-repo|lib-repo.test.sh|'
