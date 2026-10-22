@@ -40,6 +40,14 @@ case "$*" in
 *"${STUB_BAD_ROUTE:-__none__}"*)
   printf '%s\n' "${STUB_BAD_BODY}"
   ;;
+*/check-runs/*/annotations*)
+  if [[ -n ${STUB_ANN_RAW+set} ]]; then
+    # Raw API body, run through the --jq program the fetcher passed.
+    all_args="$*"
+    jq --compact-output "${all_args#*--jq }" <<<"${STUB_ANN_RAW}"
+    exit
+  fi
+  ;;&
 */check-runs/201/annotations*)
   printf '["The job has exceeded the maximum execution time of 30m0s"]\n'
   ;;
@@ -174,6 +182,15 @@ harness_assert_also 'stub failure for /jobs'
 STUB_FAIL_ROUTE='/check-runs/' run_scenario "annotations call fails" 1 \
   'could not fetch annotations for job 201' stderr 777 || true
 harness_assert_also 'stub failure for /check-runs/'
+
+# --- a failed job with no annotations keeps an empty list -------------
+# The stub serves the raw API body and applies the fetcher's own --jq
+# program, so the program is what is under test.
+if STUB_HEAD_BRANCH='"feat/empty-annotations"' STUB_ANN_RAW='[]' run_scenario "empty annotation list" 0 '"head_branch": "feat/empty-annotations"' stdout 777; then
+  if [[ "$(jq --compact-output '[.jobs[] | select(.id == 201) | .annotations]' <"${STUB_DIR}/out")" != '[[]]' ]]; then
+    fail 'a failed job with no annotations did not keep annotations as []'
+  fi
+fi
 
 # --- malformed payloads are could-not-run (exit 2) ---------------------
 # A malformed run payload: not JSON at all.

@@ -95,7 +95,7 @@ if [[ -n ${failed_ids} ]]; then
   while IFS= read -r job_id; do
     if ! messages="$(gh api --header "${GH_API_VERSION_HEADER}" \
       "${REPO_ROUTE}/check-runs/${job_id}/annotations" \
-      --jq '[.[].message // ""]')"; then
+      --jq '[.[] | (.message // "")]')"; then
       log_err "could not fetch annotations for job ${job_id}"
       exit 1
     fi
