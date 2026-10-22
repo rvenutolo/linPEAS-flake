@@ -84,7 +84,7 @@ readonly RUN_JSON
 # jq exits 5 on malformed input and 1 when the shape check is false;
 # both are bad input.
 # shellcheck disable=SC2016 # jq program literal; $-prefixed names are jq variables, not shell
-readonly SHAPE_FILTER='
+readonly SHAPE_PROGRAM='
   (type == "object")
   and (.event | type == "string")
   and (.head_branch | type == "string")
@@ -98,7 +98,7 @@ readonly SHAPE_FILTER='
     and all(.steps[]; (.name | type == "string") and ((.conclusion | type) as $t | $t == "string" or $t == "null"))
     and (.annotations | type == "array")
     and all(.annotations[]; type == "string"))'
-if ! printf '%s' "${RUN_JSON}" | jq --exit-status "${SHAPE_FILTER}" >/dev/null 2>&1; then
+if ! printf '%s' "${RUN_JSON}" | jq --exit-status "${SHAPE_PROGRAM}" >/dev/null 2>&1; then
   printf 'input is not a run object with the expected jobs shape\n' >&2
   exit 2
 fi
@@ -107,7 +107,7 @@ SETUP_PREFIXES_JSON="$(printf '%s\n' "${SETUP_PREFIXES[@]}" | jq --raw-input . |
 readonly SETUP_PREFIXES_JSON
 
 # shellcheck disable=SC2016 # jq program literal; $-prefixed names are jq variables, not shell
-readonly CLASSIFY_FILTER='
+readonly CLASSIFY_PROGRAM='
   def anns: .annotations;
   .jobs[]
   | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")
@@ -131,7 +131,7 @@ readonly CLASSIFY_FILTER='
     )
   | [$job.name, .[0], .[1]] | join("\t")'
 
-classified="$(printf '%s' "${RUN_JSON}" | jq --raw-output --argjson prefixes "${SETUP_PREFIXES_JSON}" "${CLASSIFY_FILTER}")"
+classified="$(printf '%s' "${RUN_JSON}" | jq --raw-output --argjson prefixes "${SETUP_PREFIXES_JSON}" "${CLASSIFY_PROGRAM}")"
 
 transient=0
 real=0
