@@ -272,7 +272,9 @@ its own work, still gets its issue, and a cancelled run is filed later
 rather than never. A fetch or classifier error also files, with a
 workflow warning: a broken classifier must never silence an issue. The
 fetch needs `actions: read` and `checks: read` on every job that calls the
-composite, and is bounded at 180 seconds; a timeout reports like any other
+composite, by its local path or its pinned self-reference
+(`tests/notify-caller-permissions.test.sh` asserts both scopes on every
+such job), and is bounded at 180 seconds; a timeout reports like any other
 fetch error.
 
 The classification covers the whole run, so a caller's notify job must

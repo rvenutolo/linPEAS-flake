@@ -34,7 +34,9 @@ description: "Open/update a deduped issue on workflow failure or cancellation; c
 # `report`, `exhausted` and `ignore`, and any failure to fetch or classify
 # (the step warns and reports), because a broken classifier must never
 # silence an issue. `success` and `skipped` never classify. Callers' jobs
-# need `actions: read` and `checks: read` for the fetch, and the scripts
+# need `actions: read` and `checks: read` for the fetch
+# (tests/notify-caller-permissions.test.sh asserts both on every job
+# that calls this composite), and the scripts
 # are read from the caller's checkout, so the caller checks out the
 # repository before this step. The classify step carries no `if:`, so a
 # result cannot skip it: it decides for itself whether to classify. The

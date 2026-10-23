@@ -124,6 +124,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: read # the composite fetches this run's jobs to classify a failure
+      checks: read # and their check-run annotations
       issues: write
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
