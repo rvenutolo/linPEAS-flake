@@ -165,7 +165,7 @@ All third-party actions are SHA-pinned, with `# vX.Y[.Z]` patch-tag comments exc
 
 ## Cron schedule
 
-Every fixed-time schedule fits the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). One schedule runs outside those windows: `ci-watchdog` is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead; it also runs on the `workflow_run` completion of every other workflow, and the cron is the fallback for a completion that trigger misses. The monthly `docs-audit-reminder` sits at the very tail of the daily window (10:00 on the 1st) and clear of every daily cron in it, so a once-a-month reminder never competes with the bump pipeline for attention.
+Every fixed-time schedule fits the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). One schedule runs outside those windows: `ci-watchdog` is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead; it also runs on the `workflow_run` completion of every other workflow, and sweeps only on one that did not conclude `success` or `skipped` and whose head is in this repository (any other completion leaves nothing to retry, so its run skips the sweep), and the cron is the fallback for a completion that trigger misses. The monthly `docs-audit-reminder` sits at the very tail of the daily window (10:00 on the 1st) and clear of every daily cron in it, so a once-a-month reminder never competes with the bump pipeline for attention.
 
 | Workflow                     | Cron            | UTC          | Purpose                                                                                                                                                                                      |
 | ---------------------------- | --------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -279,7 +279,7 @@ such job), and is bounded at 180 seconds; a timeout reports like any other
 fetch error.
 
 The classification covers the whole run, so a caller's notify job must
-`needs:` every job in the run that can fail. A job still running has no
+`needs:` every non-notify job in the run. A job still running has no
 conclusion and is ignored, so a notify job that does not wait for it can
 see only transient failures, hold off, and lose a later real failure: the
 watchdog then reports the run instead of re-running it, and the workflow

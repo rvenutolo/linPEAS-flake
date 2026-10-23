@@ -183,10 +183,11 @@ The automated loop re-ran the newest `<event>` run of `<workflow>` until
 its 3-attempt budget was spent, and every attempt failed only for
 transient-shaped reasons (setup step, lost runner, timeout). The watchdog
 files this issue only for a workflow that does not call the
-`notify-workflow-result` composite (by `uses: ./.github/actions/notify-workflow-result`
-or by its pinned self-reference): `ci` on `push`, `gitleaks`, `trufflehog`,
-`actions-cache-prune`, `links`, `reproducibility-check` and
-`docs-audit-reminder`. A workflow that calls it files its own issue through
+`notify-workflow-result` composite: one whose workflow file has no step
+`uses:` of it, neither the local path
+`./.github/actions/notify-workflow-result` nor the pinned self-reference
+`rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@<sha>`.
+A workflow that calls it files its own issue through
 it on the final attempt, and the watchdog only prints a notice, so one
 failure never gets two issues. If the watchdog cannot read the workflow
 file to tell, it logs a warning and files, because an unfiled exhausted
