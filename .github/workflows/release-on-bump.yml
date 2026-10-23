@@ -1482,9 +1482,12 @@ jobs:
           # changelog PR sat open (and, once tag-exists flipped true, could
           # never re-run to rebase it). Fail on a closed PR so the notify job
           # surfaces it; a re-run (force-republish) then recovers. A PR still
-          # open at the deadline with auto-merge armed and no merge conflict
-          # is waiting on checks, which ci-watchdog retries on bot PRs, so the
-          # step hands it over and succeeds; any other open PR fails the step.
+          # open at the deadline is handed to ci-watchdog, and the step
+          # succeeds, only when the watchdog will act on it: auto-merge armed,
+          # not behind main or conflicting, and a failed check on its head to
+          # re-run (scripts/changelog-pr-handoff.sh decides). Any other open
+          # PR fails the step, so notify files rather than leave a PR open
+          # that nothing will ever re-run or report.
           # `gh pr view` by number still resolves after --delete-branch.
           pr_number="$(gh pr view "${pr_ref}" --json number --jq .number)"
           gh pr merge "${pr_number}" --auto --merge --delete-branch
@@ -1500,15 +1503,13 @@ jobs:
               exit 1
             fi
             if (($(date +%s) > deadline)); then
-              # `mergeable` is UNKNOWN while GitHub computes it; only
-              # CONFLICTING is a conflict.
-              handoff="$(gh pr view "${pr_number}" --json autoMergeRequest,mergeable \
-                --jq '(.autoMergeRequest != null) and (.mergeable != "CONFLICTING")')"
-              if [[ "${handoff}" == true ]]; then
-                printf '::warning::changelog PR #%s not merged after 35m; auto-merge armed, handing to ci-watchdog\n' "${pr_number}"
+              decision="$(gh pr view "${pr_number}" --json autoMergeRequest,mergeStateStatus,statusCheckRollup |
+                scripts/changelog-pr-handoff.sh)"
+              if [[ "${decision}" == handoff ]]; then
+                printf '::warning::changelog PR #%s not merged after 35m; a check failed with auto-merge armed, handing to ci-watchdog\n' "${pr_number}"
                 break
               fi
-              printf 'changelog PR #%s did not merge within 35m; auto-merge is not armed or the PR conflicts\n' "${pr_number}" >&2
+              printf 'changelog PR #%s did not merge within 35m: %s\n' "${pr_number}" "${decision#fail$'\t'}" >&2
               exit 1
             fi
             sleep 20

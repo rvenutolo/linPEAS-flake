@@ -187,9 +187,12 @@ still flake, depending on how it was tuned.
 Blind spot this accepts: only tags predating the last CHANGELOG.md commit are
 guarded. A release whose changelog never lands stays unguarded until some
 later changelog commit exists, and two releases stacking up inside the window
-would exclude both. That is tolerable because a dropped changelog job fails
-loudly through the release-on-bump notify path — this check is the backstop,
-not the primary signal.
+would exclude both. That is tolerable because a changelog that does not land
+is signalled elsewhere first: a changelog job that fails, or whose PR is
+still open at its deadline with nothing for the CI watchdog to re-run, files
+through the release-on-bump notify path, and a PR handed to the watchdog
+because a check failed is re-run and, once its retries are exhausted, filed
+by the watchdog. This check is the backstop, not the primary signal.
 
 git-cliff is invoked only via the flake-pinned `.#git-cliff` output, per the
 nix-run-pinned invariant. Offline and deterministic: git-cliff parses the PR
@@ -2195,6 +2198,44 @@ rejected one; a stale line, by contrast, is read before it is judged.
 ### scripts/bump-linpeas.sh
 
 Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
+
+### scripts/changelog-pr-handoff.sh
+
+Decide whether release-on-bump's changelog job may hand a
+changelog PR still open at its deadline to the CI watchdog. Reads the
+JSON of `gh pr view --json autoMergeRequest,mergeStateStatus,statusCheckRollup`
+on stdin and prints one line: `handoff` when the watchdog will act on
+the PR, or `fail<TAB><reason>` when it will not, in which case the job
+fails and its notify job files.
+
+The watchdog acts only on a bot PR with auto-merge armed and a failed
+workflow run on its head, so all three of these must hold to hand off:
+auto-merge is armed (`autoMergeRequest` is not null); the merge state
+is not `BEHIND` (auto-merge never updates the branch, so the PR waits
+forever) or `DIRTY` (a conflict); and at least one check run on the
+head concluded `FAILURE`, `CANCELLED` or `TIMED_OUT`, which is what the
+watchdog re-runs. A PR whose checks are all still pending or green past
+the deadline has nothing for the watchdog to re-run, and a required
+check that never started leaves no failed run at all, so both fail
+here rather than sit open with no issue. A hung check is cancelled by
+its own job timeout well inside the deadline, so it counts as failed.
+Commit status contexts are not counted: the watchdog re-runs workflow
+runs, and a status context has none.
+
+Usage:
+
+```text
+  gh pr view <n> --json autoMergeRequest,mergeStateStatus,statusCheckRollup \
+    | changelog-pr-handoff.sh
+```
+
+Exit codes:
+
+```text
+  0  the decision was printed (a `fail` line is an answer, not this
+      script failing)
+  2  bad arguments, or input that is not the expected object
+```
 
 ### scripts/classify-backfill-image-mode.sh
 

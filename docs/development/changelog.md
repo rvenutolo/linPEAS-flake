@@ -195,9 +195,12 @@ changelog or still flake, depending on how it was tuned.
 This accepts one blind spot: only tags predating the last `CHANGELOG.md` commit
 are covered. A release whose changelog never lands stays uncovered until some
 later changelog commit exists, and two releases stacking up inside the window
-would exclude both. That is tolerable because a dropped changelog job fails
-loudly through the `release-on-bump` notify path — this check is the backstop,
-not the primary signal.
+would exclude both. That is tolerable because a changelog that does not land
+is signalled elsewhere first: a changelog job that fails, or whose PR is still
+open at its deadline with nothing for `ci-watchdog` to re-run, files through
+the `release-on-bump` notify path, and a PR handed to the watchdog because a
+check failed is re-run and, once its retries are exhausted, filed by the
+watchdog. This check is the backstop, not the primary signal.
 
 The exclusion depends on an ordering property of `release-on-bump.yml`, and
 changing that workflow can silently weaken this guard. The release job creates
@@ -243,11 +246,17 @@ sequence (its harden-runner egress step comes first, as in every job):
     (`gh pr merge --auto --merge --delete-branch`), then block until
     the PR merges: the wait is bounded to 35 minutes. A closed PR fails
     the job so `notify` files an issue. A PR still open at the deadline
-    with auto-merge armed and no merge conflict is handed to
-    `ci-watchdog`, which retries its failed checks, and the job succeeds
-    with a warning; an open PR without armed auto-merge, or one in
-    conflict, fails the job. The PR lands once the `protect-main`
-    required status checks pass.
+    is handed to `ci-watchdog`, which retries its failed checks, and the
+    job succeeds with a warning, only when the watchdog will act on it:
+    auto-merge is armed, the PR is neither behind `main` nor in
+    conflict, and at least one check run on its head concluded
+    `FAILURE`, `CANCELLED` or `TIMED_OUT`
+    (`scripts/changelog-pr-handoff.sh` decides). Any other open PR —
+    auto-merge not armed, behind `main` (auto-merge never updates the
+    branch), conflicting, or with every check still pending or green,
+    such as a required check that never started — fails the job, so
+    `notify` files rather than leave a PR that nothing will re-run. The
+    PR lands once the `protect-main` required status checks pass.
 1. If changed, patch the just-published release's body: build
     `.release-body.md` from `.release-notes.md` plus the upstream
     tracking footer and apply it with
