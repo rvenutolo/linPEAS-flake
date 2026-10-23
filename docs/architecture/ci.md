@@ -268,7 +268,18 @@ its own work, still gets its issue, and a cancelled run is filed later
 rather than never. A fetch or classifier error also files, with a
 workflow warning: a broken classifier must never silence an issue. The
 fetch needs `actions: read` and `checks: read` on every job that calls the
-composite.
+composite, and is bounded at 180 seconds; a timeout reports like any other
+fetch error.
+
+The classification covers the whole run, so a caller's notify job must
+`needs:` every job in the run that can fail. A job still running has no
+conclusion and is ignored, so a notify job that does not wait for it can
+see only transient failures, hold off, and lose a later real failure: the
+watchdog then reports the run instead of re-running it, and the workflow
+files its own issues, so nothing files. `image-cve-scan.yml` lists both
+scanner jobs in the `needs:` of all four of its notify jobs for this
+reason, and each notify job's gate and `result:` still name only the
+scanner it reports on.
 
 A never-scheduled cancel is also unpageable from inside the run. The
 `notify` job that would file the issue needs the runner that was

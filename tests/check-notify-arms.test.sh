@@ -196,6 +196,8 @@ readonly CLEAN="10 body marker(s) and 10 docs marker(s) match the arms of 10 sca
 readonly DOC='docs/scanners.md'
 readonly CQ='.github/workflows/codeql.yml'
 readonly SC='.github/workflows/scorecard-drift-check.yml'
+readonly ZZ='.github/workflows/zizmor-drift-check.yml'
+readonly OS='.github/workflows/octoscan.yml'
 readonly CQ_FINDING_GATE="if: always() && github.event_name != 'pull_request' && needs.analyze.result == 'failure' && needs.analyze.outputs.has-finding == 'true'"
 readonly CQ_INFRA_DOC='and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->.'
 readonly CQ_INFRA_BODY='An infrastructure failure. <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->'
@@ -1107,6 +1109,30 @@ and `codeql-infra` <!-- notify-arms: codeql.yml/notify-infra = failure cancelled
   fresh_root
   edit "${SC}" 'needs: drift-check' 'needs: [drift-check, other]'
   run_scenario multi-needs-exits-2 2 'scorecard-drift-check.yml: job notify: needs: does not name exactly one job as a string'
+
+  # A needs: list is read when the gate carries always() and names exactly
+  # one of its jobs: that one is the watched job, the rest only order the
+  # notify job after them. The gate below files on failure only, so the
+  # marker's "failure cancelled" disagrees, which shows the list was read.
+  fresh_root
+  edit "${SC}" 'needs: drift-check' 'needs: [drift-check, other]'
+  edit "${SC}" 'if: always()' "if: always() && needs.drift-check.result == 'failure'"
+  run_scenario multi-needs-gate-names-one-is-read 1 \
+    'marker for scorecard-drift-check.yml/notify declares "failure cancelled"; the workflow files on "failure"'
+
+  fresh_root
+  edit "${ZZ}" 'needs: drift-check' 'needs: [drift-check, other]'
+  edit "${ZZ}" 'if: always()' "if: always() && needs.drift-check.result != 'skipped' && needs.other.result != 'skipped'"
+  run_scenario multi-needs-gate-names-two-exits-2 2 \
+    'zizmor-drift-check.yml: job notify: needs: does not name exactly one job as a string'
+
+  fresh_root
+  edit "${OS}" "needs: scan
+    if: always() && github.event_name != 'pull_request' && needs.scan.result == 'failure' &&" \
+    "needs: [scan, other]
+    if: github.event_name != 'pull_request' && needs.scan.result == 'failure' &&"
+  run_scenario multi-needs-gate-without-always-exits-2 2 \
+    'octoscan.yml: job notify-finding: needs: does not name exactly one job as a string'
 
   fresh_root
   edit "${SC}" 'result: ${{ needs.drift-check.result }}' 'result: ${{ needs.drift-check.outputs.result || needs.drift-check.result }}'

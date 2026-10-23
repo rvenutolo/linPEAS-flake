@@ -1164,7 +1164,10 @@ other shape, or prints no event, or whose file `yq` reads as several
 YAML documents, is refused when it has to be derived, and so is one
 whose `needs:` is not one job named by a scalar carrying the string
 tag (read through an alias, including an alias of a list whose one
-item is an alias of the job's name). So is
+item is an alias of the job's name). A `needs:` list of several such
+strings is read when the gate carries `always()` and names exactly one
+of them as `needs.<job>.`: that one is the watched job, and the others
+only order the job after them. So is
 a job whose notify step has an
 `if:` of its own, follows a step other than step-security/harden-runner
 or actions/checkout (each owner and repository read with its ASCII

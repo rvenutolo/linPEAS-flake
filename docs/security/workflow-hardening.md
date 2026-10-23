@@ -726,7 +726,7 @@ Every notify job in the scanner workflows (`codeql.yml`, `image-cve-scan.yml`, `
 The gate grammar is what these workflows use: `always()`, `==`, `!=`, `!` (which binds to one operand, so `!x == 'y'` compares a boolean and is refused), `&&`, `||`, parentheses, quoted strings, `github.event_name`, and the watched job's `result` and `outputs.has-finding`. Context names and string comparison are case-insensitive, as in GitHub's expressions, and a literal is compared as written, with no escape decoding. A gate with no `always()` carries GitHub's implicit `success()`. The lint refuses a job it cannot model when it has to derive it, which it does for every scanner notify job and for any job a marker names. That covers:
 
 - a gate outside the grammar;
-- a `needs:` that is not one job named by a string;
+- a `needs:` that is not one job named by a string, or a list of such strings whose gate lacks `always()` or does not name exactly one of them as `needs.<job>.` (the one it names is the watched job; the others only order the job after them);
 - a `result:` other than a literal result or the watched job's raw result;
 - a notify step with an `if:` of its own;
 - a step before the notify step other than `step-security/harden-runner` or `actions/checkout` (each owner and repository matched with its ASCII letters in either case), since its failure would skip the composite;

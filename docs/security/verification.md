@@ -351,7 +351,7 @@ notify jobs can distinguish a real CRITICAL CVE from an
 infrastructure failure that prevented a CRITICAL count from being
 produced.
 
-Two follow-on jobs (`needs: image-cve-scan-trivy`) gate on that
+Two follow-on jobs (which wait for both scanner jobs and gate on the Trivy one) gate on that
 output and open / update deduped issues via
 `notify-workflow-result`:
 
@@ -397,7 +397,7 @@ count step; the two notify jobs below distinguish the cases. Advisory only — n
 a required status check; prevention path is a nixpkgs bump via
 `update-flake-lock`.
 
-Two follow-on jobs (`needs: image-cve-scan-grype`) open or update a
+Two follow-on jobs (which wait for both scanner jobs and gate on the Grype one) open or update a
 deduped issue via the `notify-workflow-result` composite:
 
 - `image-cve-scan-grype-notify-finding` (label: `image-cve-critical-grype`) — real

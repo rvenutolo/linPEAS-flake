@@ -37,7 +37,18 @@ description: "Open/update a deduped issue on workflow failure or cancellation; c
 # need `actions: read` and `checks: read` for the fetch, and the scripts
 # are read from the caller's checkout, so the caller checks out the
 # repository before this step. The classify step carries no `if:`, so a
-# result cannot skip it: it decides for itself whether to classify.
+# result cannot skip it: it decides for itself whether to classify. The
+# fetch is bounded at 180 seconds, and a timeout reports like any other
+# fetch error.
+#
+# CALLER CONTRACT: the classification covers the whole run, so a caller's
+# notify job must `needs:` every job in the run that can fail. A job that
+# is still running has no conclusion yet and is ignored, so a notify job
+# that does not wait for it can see only transient failures, hold off, and
+# leave a later real failure with no issue because the watchdog then reports
+# the run instead of re-running it. A notify job that watches one of
+# several jobs lists all of them in `needs:`, keeps `always()` in its `if:`
+# and names only the job it watches in the gate and the `result:` input.
 #
 # DEDUPLICATION BEHAVIOR: the composite lists open issues by
 # `label`, then opens one if none exist. Two concurrent runs of the
@@ -90,6 +101,9 @@ runs:
     - name: classify the run for a transient hold-off
       id: classify
       shell: bash
+      # A broken classify step must never stop the issue step: an absent
+      # verdict files.
+      continue-on-error: true
       env:
         RESULT: ${{ inputs.result }}
         GH_TOKEN: ${{ inputs.github-token }}
@@ -99,16 +113,21 @@ runs:
         # Only a failed or cancelled result can be held off; any other
         # result leaves the verdict empty.
         if [[ ${RESULT} != 'failure' && ${RESULT} != 'cancelled' ]]; then
-          printf 'verdict=\n' >>"${GITHUB_OUTPUT}"
+          printf 'verdict=\n' >>"${GITHUB_OUTPUT}" || true
           exit 0
         fi
         verdict='report'
         detail=''
         run_json=''
         classified=''
-        if ! run_json="$("${GITHUB_WORKSPACE}/scripts/fetch-ci-run.sh" "${GITHUB_RUN_ID}")"; then
-          printf '::warning::fetching run %s failed, so the failure is reported rather than held off\n' \
+        fetch_status=0
+        run_json="$(timeout 180 "${GITHUB_WORKSPACE}/scripts/fetch-ci-run.sh" "${GITHUB_RUN_ID}")" || fetch_status=$?
+        if [[ ${fetch_status} -eq 124 ]]; then
+          printf '::warning::fetching run %s timed out after 180s, so the failure is reported rather than held off\n' \
             "${GITHUB_RUN_ID}"
+        elif [[ ${fetch_status} -ne 0 ]]; then
+          printf '::warning::fetching run %s failed (exit %s), so the failure is reported rather than held off\n' \
+            "${GITHUB_RUN_ID}" "${fetch_status}"
         elif ! classified="$("${GITHUB_WORKSPACE}/scripts/classify-ci-run.sh" --policy automated <<<"${run_json}")"; then
           printf '::warning::classifying run %s failed, so the failure is reported rather than held off\n' \
             "${GITHUB_RUN_ID}"
@@ -119,12 +138,20 @@ runs:
           fi
         fi
         max_attempts="$("${GITHUB_WORKSPACE}/scripts/classify-ci-run.sh" --print-max-attempts)" || max_attempts=''
-        delimiter="detail_$(od --address-radix=n --format=x1 --read-bytes=16 /dev/urandom | tr --delete ' \n')"
-        {
+        # A failure to write the outputs leaves the verdict empty, which
+        # the issue step treats as filing; it must not fail this step.
+        delimiter="detail_$(od --address-radix=n --format=x1 --read-bytes=16 /dev/urandom | tr --delete ' \n')" ||
+          delimiter=''
+        if [[ ${#delimiter} -lt 30 ]]; then
+          delimiter="detail_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
+        fi
+        if ! {
           printf 'verdict=%s\n' "${verdict}"
           printf 'max_attempts=%s\n' "${max_attempts}"
           printf 'detail<<%s\n%s\n%s\n' "${delimiter}" "${detail}" "${delimiter}"
-        } >>"${GITHUB_OUTPUT}"
+        } >>"${GITHUB_OUTPUT}"; then
+          printf '::warning::could not write the classification outputs, so the failure is reported\n'
+        fi
     - name: open, comment, or close issue
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
