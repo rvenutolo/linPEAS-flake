@@ -1234,9 +1234,15 @@ jobs:
       && (needs.release.outputs.tag-exists == 'false' || inputs.force-republish)
       && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
+    # checks/statuses/pull-requests read serve the one `gh pr view` that reads
+    # a PR's check rollup with the job token (see the mint step below); the
+    # App token is minted without checks or statuses read.
     permissions:
+      checks: read
       contents: read
+      pull-requests: read
+      statuses: read
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
@@ -1271,7 +1277,9 @@ jobs:
           # (contents:write) plus open/auto-merge the changelog PR
           # (pull-requests:write). protect-main bypass_actors == [] so
           # direct-to-main commits are blocked; PR + auto-merge is the
-          # only path that satisfies the pull_request rule.
+          # only path that satisfies the pull_request rule. The token cannot
+          # read a PR's check rollup (checks and statuses read are not
+          # granted), so the deadline hand-off reads it with the job token.
           permission-contents: write
           permission-pull-requests: write
 
@@ -1326,6 +1334,7 @@ jobs:
           BUMP_APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
+          ROLLUP_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.release.outputs.version }}
         run: |
           set -Eeuo pipefail
@@ -1480,12 +1489,21 @@ jobs:
           # forgetting: `gh pr merge --auto` returns 0 as soon as auto-merge
           # is armed, so without this poll the job reported success while the
           # changelog PR sat open (and, once tag-exists flipped true, could
-          # never re-run to rebase it). Fail on a closed PR or a stall so the
-          # notify job surfaces it; a re-run (force-republish) then recovers.
+          # never re-run to rebase it). Fail on a closed PR so the notify job
+          # surfaces it; a re-run (force-republish) then recovers. A PR still
+          # open at the deadline is handed to ci-watchdog, and the step
+          # succeeds, only when the watchdog will act on it: auto-merge armed,
+          # not behind main or conflicting, and a failed check on its head to
+          # re-run (scripts/changelog-pr-handoff.sh decides). Any other open
+          # PR fails the step, so notify files rather than leave a PR open
+          # that nothing will ever re-run or report. The hand-off read is the
+          # only call made with the job token (ROLLUP_TOKEN): statusCheckRollup
+          # needs checks and statuses read, which the App token lacks. A
+          # failed read fails the step under `set -Eeuo pipefail`.
           # `gh pr view` by number still resolves after --delete-branch.
           pr_number="$(gh pr view "${pr_ref}" --json number --jq .number)"
           gh pr merge "${pr_number}" --auto --merge --delete-branch
-          deadline=$(($(date +%s) + 720))
+          deadline=$(($(date +%s) + 2100))
           while :; do
             state="$(gh pr view "${pr_number}" --json state --jq .state)"
             if [[ "${state}" == MERGED ]]; then
@@ -1497,7 +1515,13 @@ jobs:
               exit 1
             fi
             if (($(date +%s) > deadline)); then
-              printf 'changelog PR #%s did not merge within 12m; auto-merge armed but required checks may be stuck or conflicting\n' "${pr_number}" >&2
+              decision="$(GH_TOKEN="${ROLLUP_TOKEN}" gh pr view "${pr_number}" --json autoMergeRequest,mergeStateStatus,statusCheckRollup |
+                scripts/changelog-pr-handoff.sh)"
+              if [[ "${decision}" == handoff ]]; then
+                printf '::warning::changelog PR #%s not merged after 35m; a check failed with auto-merge armed, handing to ci-watchdog\n' "${pr_number}"
+                break
+              fi
+              printf 'changelog PR #%s did not merge within 35m: %s\n' "${pr_number}" "${decision#fail$'\t'}" >&2
               exit 1
             fi
             sleep 20
@@ -1528,8 +1552,11 @@ jobs:
       && needs.release.result == 'success'
       && (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || inputs.backfill-tag != '')
       && github.repository == 'rvenutolo/linPEAS-flake'
+    # Worst case is 30 minutes of work plus the retry sleeps: 4 attestation
+    # refs and 6 cosign refs, each retried up to 4 times at 30 s, plus the
+    # pin attestation (11 x 4 x 30 s = 22 minutes).
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: read
       attestations: read
@@ -1592,7 +1619,8 @@ jobs:
             "oci://docker.io/rvenutolo/linpeas@${HUB_AMD64_DIGEST}" \
             "oci://ghcr.io/rvenutolo/linpeas@${GHCR_ARM64_DIGEST}" \
             "oci://docker.io/rvenutolo/linpeas@${HUB_ARM64_DIGEST}"; do
-            gh attestation verify "${ref}" --repo rvenutolo/linPEAS-flake
+            ./scripts/retry-command.sh 5 30 -- \
+              gh attestation verify "${ref}" --repo rvenutolo/linPEAS-flake
           done
 
       - name: cosign verify per-arch + multi-arch images (keyless)
@@ -1622,7 +1650,8 @@ jobs:
             "docker.io/rvenutolo/linpeas@${HUB_ARM64_DIGEST}" \
             "ghcr.io/rvenutolo/linpeas@${GHCR_INDEX_DIGEST}" \
             "docker.io/rvenutolo/linpeas@${HUB_INDEX_DIGEST}"; do
-            nix shell .#cosign --command cosign verify \
+            ./scripts/retry-command.sh 5 30 -- \
+              nix shell .#cosign --command cosign verify \
               --certificate-identity "${COSIGN_IDENTITY}" \
               --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
               "${ref}" > /dev/null
@@ -1639,7 +1668,8 @@ jobs:
           # Re-fetch the pin file from the release (avoids any chance of
           # local checkout drift altering the bytes).
           gh release download "${VERSION}" --pattern linpeas-pin.json --clobber
-          gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
+          ./scripts/retry-command.sh 5 30 -- \
+            gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
 
       - name: cosign verify-blob for release-asset sidecars
         # Re-fetch each release asset + .sigstore sidecar from the
@@ -1752,6 +1782,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: read
+      checks: read
       issues: write
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1

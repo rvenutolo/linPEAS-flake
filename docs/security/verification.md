@@ -7,6 +7,7 @@ How to verify a release of this wrapper yourself. None of this trusts the Pages 
 - [Tools needed](#tools-needed)
 - [Verify the OCI image's build provenance](#verify-the-oci-images-build-provenance)
 - [Multi-arch attestations](#multi-arch-attestations)
+- [Release-time verification retries](#release-time-verification-retries)
 - [Verify the weekly parity check is current](#verify-the-weekly-parity-check-is-current)
 - [Bump-script integrity guards](#bump-script-integrity-guards)
 - [verify-latest-release upstream parity](#verify-latest-release-upstream-parity)
@@ -117,6 +118,27 @@ This means:
     `cosign verify` against the tag covers the index itself, since the
     index digest is signed — see
     [Cosign keyless signatures](#cosign-keyless-signatures).
+
+## Release-time verification retries<a name="release-time-verification-retries"></a>
+
+The `verify` job of `release-on-bump.yml` checks each artifact moments
+after it is published. Docker Hub's referrers index can lag a push by a
+minute or two, so a signature or attestation that is present can still
+read as missing. Three of its steps therefore run each check through
+`scripts/retry-command.sh`, up to 5 attempts 30 seconds apart:
+
+- `verify per-arch attestations`, for each of the four per-arch digests;
+- `cosign verify per-arch + multi-arch images (keyless)`, for each of
+    the four per-arch and two index digests;
+- `verify pin file attestation`, for `linpeas-pin.json`. This check reads
+    the GitHub attestation API rather than the Docker Hub referrers index,
+    so its retry covers a transient API error or a lag before a newly
+    created attestation is readable there.
+
+The last attempt's output is shown unchanged, and a check that still
+fails after it fails the job. The weekly `verify-latest-release.yml` does
+not retry these checks: it runs long after publication, when the index
+has caught up.
 
 ## Verify the weekly parity check is current<a name="verify-the-weekly-parity-check-is-current"></a>
 
@@ -351,9 +373,9 @@ notify jobs can distinguish a real CRITICAL CVE from an
 infrastructure failure that prevented a CRITICAL count from being
 produced.
 
-Two follow-on jobs (`needs: image-cve-scan-trivy`) gate on that
-output and open / update deduped issues via
-`notify-workflow-result`:
+Two follow-on jobs open or update deduped issues via
+`notify-workflow-result`. Each waits for both scanner jobs and gates on
+the Trivy job's result and its `has-finding` output:
 
 - `image-cve-scan-trivy-notify-finding` (label: `image-cve-critical-trivy`) — real
     CRITICAL CVE reported by Trivy <!-- notify-arms: image-cve-scan.yml/image-cve-scan-trivy-notify-finding = finding -->.
@@ -397,8 +419,9 @@ count step; the two notify jobs below distinguish the cases. Advisory only — n
 a required status check; prevention path is a nixpkgs bump via
 `update-flake-lock`.
 
-Two follow-on jobs (`needs: image-cve-scan-grype`) open or update a
-deduped issue via the `notify-workflow-result` composite:
+Two follow-on jobs open or update a deduped issue via the
+`notify-workflow-result` composite. Each waits for both scanner jobs and
+gates on the Grype job's result and its `has-finding` output:
 
 - `image-cve-scan-grype-notify-finding` (label: `image-cve-critical-grype`) — real
     CRITICAL CVE was identified by Grype <!-- notify-arms: image-cve-scan.yml/image-cve-scan-grype-notify-finding = finding -->.

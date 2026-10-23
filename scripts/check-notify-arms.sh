@@ -68,7 +68,10 @@
 # YAML documents, is refused when it has to be derived, and so is one
 # whose `needs:` is not one job named by a scalar carrying the string
 # tag (read through an alias, including an alias of a list whose one
-# item is an alias of the job's name). So is
+# item is an alias of the job's name). A `needs:` list of several such
+# strings is read when the gate carries `always()` and names exactly one
+# of them as `needs.<job>.`: that one is the watched job, and the others
+# only order the job after them. So is
 # a job whose notify step has an
 # `if:` of its own, follows a step other than step-security/harden-runner
 # or actions/checkout (each owner and repository read with its ASCII
@@ -156,7 +159,7 @@ readonly -a SCANNER_WORKFLOWS=(
 # opens its success branch: the input wiring and every line that decides
 # whether a result files, closes or does nothing. Update it only after
 # checking that the arm model below still describes the composite.
-readonly COMPOSITE_SHA256='28fe77a370006e9d4e68faf5526a863f11f1e69b7f4ba1066b3339420c36ad9f'
+readonly COMPOSITE_SHA256='8b745b7fb37fd912f7819c1cdb30896ca09723c5b09b164f0284937e82d1dd4f'
 
 function die2() {
   printf 'notify-arms: %s\n' "$1" >&2
@@ -192,8 +195,9 @@ function check_composite() {
 # @description Print one record per step in a workflow whose `uses:`
 #              names the notify composite in any form: the `uses:` value,
 #              job id, the watched job (`-` unless `needs:` names exactly
-#              one), the job's `if:` gate (`-` for none), the `result:`
-#              input and the step's own `if:` (`-` for none), with tabs and
+#              one, or lists several and the gate names exactly one), the
+#              job's `if:` gate (`-` for none), the `result:` input and
+#              the step's own `if:` (`-` for none), with tabs and
 #              newlines folded to spaces. Printed raw rather than as TSV,
 #              which would quote a field holding a double quote.
 # @arg $1 workflow path
@@ -203,10 +207,15 @@ function notify_jobs() {
   yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) // {}"'
     | to_entries | .[] | (.key | explode(.) | tostring) as $job | .value as $j
     | ($j.needs | explode(.) | explode(.) | [.] | flatten) as $n
+    | (($j.if // "") | tostring) as $gate
+    | (if ($n | length) == 1 then $n[0]
+        elif ($n | length) > 1 and ($n | all_c(kind == "scalar" and tag == "!!str")) and ($gate | contains("always()"))
+        then ([$n[] | . as $x | select($gate | contains("needs." + $x + "."))] | select(length == 1) | .[0])
+        else null end) as $w
     | ($j.steps // [])[]
     | select((.uses // "") | test("notify-workflow-result"))
     | [(.uses | tostring), $job,
-        (($n | select(length == 1) | .[0] | select(kind == "scalar" and tag == "!!str")) // "-"),
+        (($w | select(kind == "scalar" and tag == "!!str")) // "-"),
         (($j.if // "-") | tostring),
         ((.with.result // "-") | tostring),
         ((.if // "-") | tostring)]

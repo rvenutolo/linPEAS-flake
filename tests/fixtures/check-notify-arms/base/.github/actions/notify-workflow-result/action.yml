@@ -22,6 +22,39 @@ description: "Open/update a deduped issue on workflow failure or cancellation; c
 #     `^[0-9]{8}-[0-9a-f]{7,40}$` pin shape enforced by
 #     stale-pin-check.yml before reaching this composite)
 #
+# TRANSIENT HOLD-OFF: when `result` is `failure` or `cancelled`, the
+# composite classifies its own run (the run named by GITHUB_RUN_ID) with
+# scripts/fetch-ci-run.sh and scripts/classify-ci-run.sh --policy
+# automated, the same predicate the CI watchdog applies before it re-runs
+# a run. On the exact verdict `retry` the run is one the watchdog
+# re-runs, so the composite files nothing and prints a notice; the re-run
+# reaches this composite again, and files if it fails again for a reason
+# that is not retryable or once the attempt cap is spent (`exhausted`).
+# Every other outcome files: the verdicts `report`, `exhausted` and
+# `ignore`, and any failure to fetch or classify (the step warns and
+# reports), because a broken classifier must never silence an issue.
+# `success` and `skipped` never classify. Callers' jobs need
+# `actions: read` and `checks: read` for the fetch
+# (tests/notify-caller-permissions.test.sh asserts both on every job
+# that calls this composite). The scripts are read from the caller's
+# checkout, so the caller checks out the repository before this step,
+# and they are the checkout's `scripts/*`, not this composite revision's:
+# a caller that pins this composite by SHA must keep its checkout
+# compatible with that revision, in the arguments, output and exit codes
+# this file relies on. The classify step carries no `if:`, so a result
+# cannot skip it: it decides for itself whether to classify. The fetch is
+# bounded at 180 seconds, and a timeout reports like any other fetch
+# error.
+#
+# CALLER CONTRACT: the classification covers the whole run, so a caller's
+# notify job must `needs:` every non-notify job in the run. A job that
+# is still running has no conclusion yet and is ignored, so a notify job
+# that does not wait for it can see only transient failures, hold off, and
+# leave a later real failure with no issue because the watchdog then reports
+# the run instead of re-running it. A notify job that watches one of
+# several jobs lists all of them in `needs:`, keeps `always()` in its `if:`
+# and names only the job it watches in the gate and the `result:` input.
+#
 # DEDUPLICATION BEHAVIOR: the composite lists open issues by
 # `label`, then opens one if none exist. Two concurrent runs of the
 # SAME caller workflow can race the `listForRepo` -> `issues.create`
@@ -40,7 +73,10 @@ inputs:
       infrastructure failure — a job the runner pool never picked up,
       or `timeout-minutes` exceeded: it files/updates the same deduped
       issue as `failure`, with the issue text flagging the run as
-      cancelled so triage does not read it as a finding. `skipped` is
+      cancelled so triage does not read it as a finding. `failure` and
+      `cancelled` file nothing while the run's own classification is
+      `retry` (a transient failure the CI watchdog re-runs); a fetch or
+      classifier error files. `success` closes open issues. `skipped` is
       inert.
     required: true
   label:
@@ -57,7 +93,7 @@ inputs:
     required: false
     default: b60205
   label-description:
-    description: "Description string for the label. Set on creation, and refreshed on a later run when the live label's description differs."
+    description: "Description string for the label. Written when a run opens a new issue: set on label creation, and refreshed when the live label's description differs."
     required: false
     default: Workflow failure auto-filed by .github/actions/notify-workflow-result
   github-token:
@@ -67,6 +103,60 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: classify the run for a transient hold-off
+      id: classify
+      shell: bash
+      # A broken classify step must never stop the issue step: an absent
+      # verdict files.
+      continue-on-error: true
+      env:
+        RESULT: ${{ inputs.result }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -Eeuo pipefail
+        IFS=$'\n\t'
+        # Only a failed or cancelled result can be held off; any other
+        # result leaves the verdict empty.
+        if [[ ${RESULT} != 'failure' && ${RESULT} != 'cancelled' ]]; then
+          printf 'verdict=\n' >>"${GITHUB_OUTPUT}" || true
+          exit 0
+        fi
+        verdict='report'
+        detail=''
+        run_json=''
+        classified=''
+        fetch_status=0
+        run_json="$(timeout 180 "${GITHUB_WORKSPACE}/scripts/fetch-ci-run.sh" "${GITHUB_RUN_ID}")" || fetch_status=$?
+        if [[ ${fetch_status} -eq 124 ]]; then
+          printf '::warning::fetching run %s timed out after 180s, so the failure is reported rather than held off\n' \
+            "${GITHUB_RUN_ID}"
+        elif [[ ${fetch_status} -ne 0 ]]; then
+          printf '::warning::fetching run %s failed (exit %s), so the failure is reported rather than held off\n' \
+            "${GITHUB_RUN_ID}" "${fetch_status}"
+        elif ! classified="$("${GITHUB_WORKSPACE}/scripts/classify-ci-run.sh" --policy automated <<<"${run_json}")"; then
+          printf '::warning::classifying run %s failed, so the failure is reported rather than held off\n' \
+            "${GITHUB_RUN_ID}"
+        else
+          verdict="${classified%%$'\n'*}"
+          if [[ ${classified} == *$'\n'* ]]; then
+            detail="${classified#*$'\n'}"
+          fi
+        fi
+        max_attempts="$("${GITHUB_WORKSPACE}/scripts/classify-ci-run.sh" --print-max-attempts)" || max_attempts=''
+        # A failure to write the outputs leaves the verdict empty, which
+        # the issue step treats as filing; it must not fail this step.
+        delimiter="detail_$(od --address-radix=n --format=x1 --read-bytes=16 /dev/urandom | tr --delete ' \n')" ||
+          delimiter=''
+        if [[ ${#delimiter} -lt 30 ]]; then
+          delimiter="detail_${RANDOM}${RANDOM}${RANDOM}${RANDOM}"
+        fi
+        if ! {
+          printf 'verdict=%s\n' "${verdict}"
+          printf 'max_attempts=%s\n' "${max_attempts}"
+          printf 'detail<<%s\n%s\n%s\n' "${delimiter}" "${detail}" "${delimiter}"
+        } >>"${GITHUB_OUTPUT}"; then
+          printf '::warning::could not write the classification outputs, so the failure is reported\n'
+        fi
     - name: open, comment, or close issue
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
@@ -76,6 +166,9 @@ runs:
         BODY: ${{ inputs.body }}
         LABEL_COLOR: ${{ inputs.label-color }}
         LABEL_DESCRIPTION: ${{ inputs.label-description }}
+        VERDICT: ${{ steps.classify.outputs.verdict }}
+        DETAIL: ${{ steps.classify.outputs.detail }}
+        MAX_ATTEMPTS: ${{ steps.classify.outputs.max_attempts }}
       with:
         github-token: ${{ inputs.github-token }}
         script: |
@@ -85,6 +178,9 @@ runs:
           const body = process.env.BODY;
           const labelColor = process.env.LABEL_COLOR;
           const labelDescription = process.env.LABEL_DESCRIPTION;
+          const verdict = process.env.VERDICT;
+          const detail = process.env.DETAIL;
+          const maxAttempts = process.env.MAX_ATTEMPTS;
           const runUrl =
             `https://github.com/${context.repo.owner}/${context.repo.repo}` +
             `/actions/runs/${context.runId}`;
@@ -108,6 +204,19 @@ runs:
           // silent.
           if (result !== 'success' && result !== 'failure' && !cancelled) {
             core.notice(`Result is '${result}'; no action.`);
+            return;
+          }
+
+          // Only the exact verdict `retry` holds off: the CI watchdog
+          // re-runs the run, and the re-run files if it fails again.
+          // The classify step reports on any fetch or classifier error,
+          // so a broken classifier never silences an issue.
+          if (verdict === 'retry') {
+            core.notice(
+              'Holding off: the CI watchdog retries transient failures on ' +
+                'eligible runs; this run is eligible (attempt ' +
+                `${process.env.GITHUB_RUN_ATTEMPT} of ${maxAttempts}).\n${detail}`,
+            );
             return;
           }
 

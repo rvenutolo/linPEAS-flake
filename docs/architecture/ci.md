@@ -165,11 +165,11 @@ All third-party actions are SHA-pinned, with `# vX.Y[.Z]` patch-tag comments exc
 
 ## Cron schedule
 
-Every fixed-time schedule fits the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). One schedule runs outside those windows: `ci-watchdog` is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead. The monthly `docs-audit-reminder` sits at the very tail of the daily window (10:00 on the 1st) and clear of every daily cron in it, so a once-a-month reminder never competes with the bump pipeline for attention.
+Every fixed-time schedule fits the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). One schedule runs outside those windows: `ci-watchdog` is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead; it also runs on the `workflow_run` completion of every other workflow, and sweeps only on one that did not conclude `success` or `skipped` and whose head is in this repository (the sweep runs with write scopes, and a fork's run can never be acted on: the bot-PR loop covers only bot PRs and the automated loop ignores `pull_request` runs, so its run skips the sweep), and the cron is the fallback for a completion that trigger misses. The monthly `docs-audit-reminder` sits at the very tail of the daily window (10:00 on the 1st) and clear of every daily cron in it, so a once-a-month reminder never competes with the bump pipeline for attention.
 
 | Workflow                     | Cron            | UTC          | Purpose                                                                                                                                                                                      |
 | ---------------------------- | --------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci-watchdog`                | `20,50 * * * *` | every 30 min | Re-run failed jobs on stuck auto-merge bot PRs, bounded to 3 attempts                                                                                                                        |
+| `ci-watchdog`                | `20,50 * * * *` | every 30 min | Re-run failed jobs on stuck auto-merge bot PRs and transient failures of automated runs, bounded to 3 attempts                                                                               |
 | `actions-cache-prune`        | `0 8 * * *`     | 08:00 daily  | Bound the lifetime of any Actions-cache entry a third-party action creates (nothing in-repo writes one)                                                                                      |
 | `update-linpeas`             | `5 8 * * *`     | 08:05 daily  | Check upstream peass-ng for new release; open auto-merge bump PR                                                                                                                             |
 | `stale-pin-check`            | `0 9 * * *`     | 09:00 daily  | Auto-file issue when the pin has sat behind upstream past the staleness threshold                                                                                                            |
@@ -253,6 +253,40 @@ against a sibling job in the same run: when the other jobs still carry
 full step timings, nothing expired and the empty one never started. The
 log archive answers the same way — download it and list its entries
 rather than reading one job's absence from it as expiry.
+
+The composite holds off on a transient cancel or failure that the CI
+watchdog is about to re-run. When its `result` is `failure` or
+`cancelled`, it fetches its own run with `scripts/fetch-ci-run.sh` and
+classifies it with `scripts/classify-ci-run.sh --policy automated`, the
+predicate the watchdog's automated loop applies before it re-runs a
+`push` run on `main`, a `schedule` run or a `workflow_run` run (see the
+[CI retry watchdog runbook](../runbooks/ci-watchdog.md)). That policy
+never retries `release-on-bump`, whose re-runs are not idempotent, or
+`ci-watchdog`, which never re-runs itself, so their notify jobs file on
+the first failure. The verdict
+`retry` means every counted job failed for infrastructure reasons and the
+attempt cap is not spent, so the composite prints a notice naming the
+attempt and the classified jobs and files nothing; the re-run reaches the
+composite again and files if it fails again. Any other verdict files as
+before, so a run that exhausts its attempts, or that has a failed step of
+its own work, still gets its issue, and a cancelled run is filed later
+rather than never. A fetch or classifier error also files, with a
+workflow warning: a broken classifier must never silence an issue. The
+fetch needs `actions: read` and `checks: read` on every job that calls the
+composite, by its local path or its pinned self-reference
+(`tests/notify-caller-permissions.test.sh` asserts both scopes on every
+such job), and is bounded at 180 seconds; a timeout reports like any other
+fetch error.
+
+The classification covers the whole run, so a caller's notify job must
+`needs:` every non-notify job in the run. A job still running has no
+conclusion and is ignored, so a notify job that does not wait for it can
+see only transient failures, hold off, and lose a later real failure: the
+watchdog then reports the run instead of re-running it, and the workflow
+files its own issues, so nothing files. `image-cve-scan.yml` lists both
+scanner jobs in the `needs:` of all four of its notify jobs for this
+reason, and each notify job's gate and `result:` still name only the
+scanner it reports on.
 
 A never-scheduled cancel is also unpageable from inside the run. The
 `notify` job that would file the issue needs the runner that was

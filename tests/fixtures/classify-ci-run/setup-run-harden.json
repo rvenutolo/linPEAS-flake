@@ -1,0 +1,28 @@
+{
+  "id": 100,
+  "name": "ci",
+  "path": ".github/workflows/ci.yml",
+  "event": "schedule",
+  "head_branch": "main",
+  "run_attempt": 1,
+  "jobs": [
+    {
+      "id": 1,
+      "name": "lint",
+      "conclusion": "failure",
+      "steps": [
+        {
+          "number": 1,
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "number": 2,
+          "name": "Run step-security/harden-runner@0123456789abcdef0123456789abcdef01234567",
+          "conclusion": "failure"
+        }
+      ],
+      "annotations": []
+    }
+  ]
+}

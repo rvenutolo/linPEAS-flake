@@ -1,0 +1,28 @@
+{
+  "id": 100,
+  "name": "ci",
+  "path": ".github/workflows/ci.yml",
+  "event": "pull_request",
+  "head_branch": "renovate/x",
+  "run_attempt": 2,
+  "jobs": [
+    {
+      "id": 1,
+      "name": "lint",
+      "conclusion": "failure",
+      "steps": [
+        {
+          "number": 1,
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "number": 2,
+          "name": "Run scripts/run-lint-group.sh",
+          "conclusion": "failure"
+        }
+      ],
+      "annotations": []
+    }
+  ]
+}

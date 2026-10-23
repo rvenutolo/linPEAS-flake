@@ -1,30 +1,86 @@
 name: ci-watchdog
 
-# Re-runs failed jobs on auto-merge bot PRs, bounded to 3 attempts per run.
+# Re-runs failed jobs, bounded to 3 attempts per run, in two sweeps:
+# open bot PRs with auto-merge enabled, and the runs the repo starts
+# itself (pushes to main, schedules, and `workflow_run` chains).
 #
 # Nothing else in this repo re-runs a failed job. A bot PR with auto-merge
 # enabled that hits a transient infrastructure failure sits open forever,
-# because auto-merge waits on checks that will never re-run.
+# because auto-merge waits on checks that will never re-run, and a
+# scheduled or main-branch run that hits one stays red until its next
+# trigger.
 #
 # The bound needs no stored state: `reRunWorkflowFailedJobs` re-runs a run in
 # place and increments its `run_attempt`, so the API already holds the counter.
 # A new commit produces a new run at attempt 1, which resets the budget.
 #
-# Every failure is re-run, without classifying it as transient. A signature
-# list would rot, and it cannot work here anyway: `connection refused` is both
-# the CDN-blip signature and the harden-runner egress-block signature, and the
-# latter is a permanent configuration bug.
+# scripts/classify-ci-run.sh decides, per run, whether to retry, escalate,
+# report or skip; it is the single source of truth for which failures
+# count. Under `--policy bot-pr` every failed or timed-out job counts,
+# without a signature list, which would rot: `connection refused` is both
+# the CDN-blip signature and the harden-runner egress-block signature, and
+# the latter is a permanent configuration bug. Under `--policy automated`
+# a run is retried only when every counted job failed before its own work
+# started, lost its runner, or timed out, so a real regression on main is
+# reported on its first attempt instead of being retried into silence.
+# That policy is also the predicate the notify composite applies before
+# it holds an issue off for a retry, so the two cannot disagree; it
+# excludes release-on-bump.yml, whose re-runs are not idempotent, and
+# this workflow, which never re-runs itself (the classifier's header says
+# why). A job that exceeds its timeout is
+# recorded as `cancelled`, not `timed_out`, so the classifier recognizes
+# it by its annotation and counts it. A cancel superseded by a newer run
+# is ignored because re-running it would resurrect a run for a replaced
+# commit. Any other cancel (manual, or a job that never got a runner) is
+# ignored because it carries no timeout evidence to count.
 #
-# On exhausting the bound, one issue is opened per stuck PR, deduped by title.
-# A watchdog that gives up silently recreates the bug it exists to fix.
+# The automated sweep considers runs whose latest attempt finished in the
+# last 24 hours (listed by creation over 72 hours, so a re-run that
+# finished inside the lookback is seen): the newest push or schedule run
+# of each workflow per event, and every `workflow_run` run, never
+# counting a `skipped` run as a replacement
+# (scripts/select-automated-runs.sh applies these rules). It skips this
+# workflow's own runs and any run the bot-PR sweep already acted on in
+# the same tick. On exhausting the bound it opens an issue
+# only for a workflow that does not call the notify-workflow-result
+# composite; every other workflow files its own through that composite,
+# and a second filer would mean two issues for one failure. A workflow
+# file it cannot read counts as calling no notify, so the failure is
+# filed rather than lost.
 #
-# An error against one PR is caught and confined to that PR: the sweep still
-# processes every remaining PR, and the job fails at the end naming the ones
-# that errored. An error that aborts the loop starves every PR behind it,
-# which is the same stuck-forever PR the watchdog exists to clear. The one
-# exception is a rate limit: once the request budget is gone, continuing to
-# request against it can extend the block, so the sweep halts and names
-# every PR it left untried instead of silently starving them.
+# On exhausting the bound, one issue is opened per stuck PR or per
+# workflow and event, deduped by title. A watchdog that gives up silently
+# recreates the bug it exists to fix, and so does one that fails
+# silently: the `notify` job files a `ci-watchdog-failure` issue through
+# the notify-workflow-result composite when the `retry` job fails, on
+# the first failure, because the classifier never retries this
+# workflow's own runs.
+#
+# An error against one PR or run is caught and confined to it: the sweep
+# still processes every remaining item, and the job fails at the end
+# naming the ones that errored. An error that aborts the loop starves
+# every item behind it, which is the same stuck-forever failure the
+# watchdog exists to clear. The one exception is a rate limit: once the
+# request budget is gone, continuing to request against it can extend the
+# block, so the sweep halts, in either loop, and names every item it left
+# untried in both instead of silently starving them.
+#
+# The `workflow_run` trigger starts a sweep minutes after any other
+# workflow completes without succeeding, re-runs included: a completion
+# that concluded `success` or `skipped` leaves nothing to retry, so the
+# job skips it, which keeps the request volume down. So does a
+# completion of a run whose head is in another repository (a fork PR's
+# CI): it must not start a sweep holding `actions: write` and
+# `issues: write`, and nothing the sweep retries comes from a fork. The
+# cron is the fallback, and it and `workflow_dispatch` always sweep. On
+# a `workflow_run` event the watchdog runs this file from the default
+# branch with the default branch checked out and never checks out or
+# runs code from the triggering run, so the privilege-escalation pattern
+# zizmor's dangerous-triggers audit warns about is not present (see
+# zizmor.yml). Its `workflows:` list names every other workflow,
+# asserted by tests/ci-watchdog-coverage.test.sh. The `concurrency`
+# group collapses a burst of completions to one pending sweep, which is
+# enough because every sweep covers everything.
 #
 # Runbook: docs/runbooks/ci-watchdog.md
 
@@ -32,20 +88,62 @@ on:
   schedule:
     - cron: "20,50 * * * *" # every 30 minutes
   workflow_dispatch:
+  workflow_run:
+    types: [completed]
+    workflows:
+      - actions-cache-prune
+      - ci
+      - codeql
+      - cron-table-drift-check
+      - dependency-review
+      - dockerhub-sync
+      - docs-audit-reminder
+      - flake-lock-staleness-check
+      - gitleaks
+      - image-cve-scan
+      - labeler
+      - links
+      - octoscan
+      - pages
+      - pr-title-lint
+      - ratchet-pin-audit
+      - release-on-bump
+      - renovate-flake-lock-refresh
+      - reproducibility-check
+      - scorecard-drift-check
+      - stale-pin-check
+      - trufflehog
+      - update-flake-lock
+      - update-linpeas
+      - verify-latest-release
+      - zizmor-drift-check
 
 permissions: {}
 
+# A `workflow_run` completion that concluded `success` or `skipped`, or
+# whose head is in another repository, needs no sweep, so the job's `if:`
+# skips it. Such a run still joins its concurrency group before the `if:`
+# is read, and a run queued in a group cancels the one already pending
+# there, so a skipped no-op would cancel a pending real sweep. The no-op
+# runs therefore get a group of their own. The `workflow_run` conditions
+# here are the exact complement of the ones in the `retry` job's `if:`.
 concurrency:
-  group: ci-watchdog
+  group: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'skipped' || github.event.workflow_run.head_repository.full_name != github.repository) && format('ci-watchdog-noop-{0}', github.run_id) || 'ci-watchdog' }}
   cancel-in-progress: false
 
 jobs:
   retry:
-    if: github.repository == 'rvenutolo/linPEAS-flake'
+    if: >-
+      github.repository == 'rvenutolo/linPEAS-flake' &&
+      (github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion != 'success' &&
+      github.event.workflow_run.conclusion != 'skipped' &&
+      github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       actions: write # reRunWorkflowFailedJobs
+      checks: read # job annotations that classify a cancel as a timeout
       contents: read
       issues: write # escalation on exhausting the retry bound
       pull-requests: read # enumerate bot PRs and their auto-merge state
@@ -59,15 +157,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: re-run failed jobs on stuck bot PRs
+      - name: re-run failed jobs on stuck bot PRs and automated runs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          MAX_ATTEMPTS: "3"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           # A GitHub 5xx on any request otherwise faults the whole sweep.
-          # This retry is per-HTTP-request and is unrelated to MAX_ATTEMPTS,
-          # which bounds workflow-run re-runs.
+          # This retry is per-HTTP-request and is unrelated to the attempt
+          # cap, which bounds workflow-run re-runs.
           #
           # The exempt list is the action's default plus 409. The input
           # replaces the default wholesale, so every code must be restated:
@@ -81,8 +180,173 @@ jobs:
           retries: "3"
           retry-exempt-status-codes: 400,401,403,404,409,422
           script: |
-            const maxAttempts = Number(process.env.MAX_ATTEMPTS);
+            const { execFileSync } = require('child_process');
             const { owner, repo } = context.repo;
+            const scripts = `${process.env.GITHUB_WORKSPACE}/scripts`;
+            const execOpts = { encoding: 'utf8', timeout: 180000 };
+            const maxAttempts = Number(
+              execFileSync(`${scripts}/classify-ci-run.sh`, ['--print-max-attempts'], execOpts),
+            );
+
+            // Opens, or comments on, the one issue for `title`. `detail` is
+            // the markdown that names what failed, `observation` the stable
+            // string of everything this sweep saw: a report that repeats the
+            // last observation is not posted. Dedupe is by exact title, so
+            // each stuck subject gets one issue.
+            async function escalate({ title, detail, observation }) {
+              // The observation is carried in an HTML comment because the
+              // marker has to survive in the issue and read as nothing to a
+              // human: the alternative, re-deriving it by parsing the prose
+              // back out of a previous comment, breaks the moment the prose
+              // is reworded.
+              const marker = `<!-- ci-watchdog-observation: ${observation} -->`;
+              const body =
+                `The retry watchdog exhausted the ${maxAttempts}-attempt ` +
+                `budget (the original run plus ${maxAttempts - 1} re-runs) and ` +
+                `the jobs failed every time. This is no longer a transient — ` +
+                `treat it as a real failure.\n\n` +
+                `${detail}\n\n` +
+                `Filed by the \`ci-watchdog\` workflow.\n\n` +
+                `What to do: ` +
+                `https://github.com/${owner}/${repo}/blob/main/docs/runbooks/ci-watchdog.md` +
+                `\n\n${marker}`;
+
+              const open = await github.paginate(github.rest.issues.listForRepo, {
+                owner,
+                repo,
+                state: 'open',
+                labels: 'ci-watchdog',
+                per_page: 100,
+              });
+              const existing = open.find((i) => i.title === title);
+
+              if (existing) {
+                // The open issue is already the signal that this subject is
+                // stuck. A tick that observed exactly what the last report
+                // did adds nothing, and this workflow ticks on a schedule
+                // for as long as it stays red — so commenting
+                // unconditionally buries the reports that DO carry news
+                // under an unbounded run of identical ones.
+                //
+                // The comparison is against the LAST marker on the issue,
+                // body included: the body carries the first observation, and
+                // each later comment carries the one that displaced it. A
+                // report the watchdog has already made and then moved past
+                // must be able to recur — a PR that gets pushed to, fails
+                // differently, and is then reverted is genuinely news twice.
+                const comments = await github.paginate(
+                  github.rest.issues.listComments,
+                  { owner, repo, issue_number: existing.number, per_page: 100 },
+                );
+                const reports = [existing.body ?? '', ...comments.map((c) => c.body ?? '')]
+                  .filter((b) => b.includes('<!-- ci-watchdog-observation: '));
+                const last = reports[reports.length - 1];
+                if (last !== undefined && last.includes(marker)) {
+                  core.notice(
+                    `${title}: issue #${existing.number} already reports ` +
+                      `this observation; not commenting.`,
+                  );
+                  return;
+                }
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: existing.number,
+                  body:
+                    `Still exhausted, and this check observed something the ` +
+                    `last report did not.\n\n${detail}\n\n${marker}`,
+                });
+                core.notice(`${title}: appended to issue #${existing.number}`);
+                return;
+              }
+
+              // createLabel 422s when the label already exists; swallow only that.
+              // Any other status rethrows to the caller, which fails this
+              // subject without stopping the sweep.
+              try {
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name: 'ci-watchdog',
+                  color: 'b60205',
+                  description: 'Bot PR or automated CI run stuck after exhausting retries',
+                });
+              } catch (err) {
+                if (err.status !== 422) {
+                  throw err;
+                }
+              }
+
+              const created = await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+                labels: ['ci-watchdog'],
+              });
+              core.notice(`${title}: opened issue #${created.data.number}`);
+            }
+
+            // Runs `fetch-ci-run.sh` then `classify-ci-run.sh` on one run and
+            // returns the verdict and the markdown line for each classified job.
+            function classify(run, policy) {
+              const runJson = execFileSync(`${scripts}/fetch-ci-run.sh`, [String(run.id)], execOpts);
+              const [verdict, ...lines] = execFileSync(
+                `${scripts}/classify-ci-run.sh`,
+                ['--policy', policy],
+                { ...execOpts, input: runJson },
+              )
+                .split('\n')
+                .filter((l) => l !== '');
+              const jobLines = lines.map((l) => {
+                const [job, cls, reason] = l.split('\t');
+                return `  - \`${job}\`: ${cls} (${reason})`;
+              });
+              return { verdict, jobLines };
+            }
+
+            // Every item that errored, named as the halt and summary messages
+            // print it, and every item a rate-limit halt left untried.
+            const failures = [];
+            let notAttempted = null;
+
+            // Logs one item's error, records the item as errored, and returns
+            // whether the error is a rate limit, on which the caller halts.
+            function recordError(label, err) {
+              // The status and the stack are the whole diagnostic: this path has no
+              // test coverage and cannot be provoked on demand, so the job log is the
+              // only evidence a human ever gets. A bare message names neither the
+              // failing API call nor the HTTP code.
+              core.error(`${label}: ${err.status ?? 'no status'} ${err.stack ?? err.message}`);
+              failures.push(label);
+
+              // A rate limit is not a permissions gap, and continuing to request
+              // against an exhausted budget can extend a secondary limit's block, so
+              // the caller halts rather than burn through every remaining item.
+              // Halting silently would recreate the starvation bug the per-item
+              // catch exists to prevent, so the caller names every item the halt
+              // leaves untried. Two paths carry the signal. An Octokit error is a
+              // 403 whose response has `x-ratelimit-remaining: 0` or a `retry-after`
+              // header. A fetch-ci-run.sh error comes from `gh api` inside a child
+              // process, so it has no response headers: its stderr ends
+              // `gh: <message> (HTTP 403)` or `(HTTP 429)`, and the message names
+              // the rate limit.
+              const headers = err.response?.headers;
+              const isOctokitRateLimit =
+                err.status === 403 &&
+                (headers?.['x-ratelimit-remaining'] === '0' || headers?.['retry-after'] !== undefined);
+              const stderr = String(err.stderr ?? '');
+              const isGhRateLimit = /rate limit/i.test(stderr) && /\(HTTP (403|429)\)/.test(stderr);
+              return isOctokitRateLimit || isGhRateLimit;
+            }
+
+            // Runs the bot-PR loop re-ran or escalated in this sweep. A run can be
+            // seen by both loops (a `workflow_run`-event run on a bot PR's head
+            // commit), and the automated loop skips these so one sweep never acts
+            // on a run twice.
+            const handledRunIds = new Set();
+
+            // --- Bot PRs: retry any counted failure up to the attempt cap ------
 
             const prs = await github.paginate(github.rest.pulls.list, {
               owner,
@@ -90,9 +354,6 @@ jobs:
               state: 'open',
               per_page: 100,
             });
-
-            const failures = [];
-            let notAttempted = null;
 
             for (let i = 0; i < prs.length; i++) {
               const pr = prs[i];
@@ -109,10 +370,12 @@ jobs:
                   continue;
                 }
 
-                const runs = await github.paginate(
-                  github.rest.actions.listWorkflowRunsForRepo,
-                  { owner, repo, head_sha: pr.head.sha, per_page: 100 },
-                );
+                const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+                  owner,
+                  repo,
+                  head_sha: pr.head.sha,
+                  per_page: 100,
+                });
 
                 // Never race a run that is still going.
                 if (runs.some((r) => r.status !== 'completed')) {
@@ -120,190 +383,290 @@ jobs:
                   continue;
                 }
 
-                // `cancelled` is excluded: it is nearly always a
-                // concurrency-group cancel superseded by a newer run, so
-                // re-running it would resurrect a run for a replaced commit.
-                const failed = runs.filter(
-                  (r) => r.conclusion === 'failure' || r.conclusion === 'timed_out',
+                // Candidates are every run that did not succeed. The
+                // classifier, not the conclusion, decides which count: a
+                // timeout is recorded as `cancelled`, while a cancel
+                // superseded by a newer run must not be resurrected.
+                const candidates = runs.filter(
+                  (r) =>
+                    r.conclusion === 'failure' || r.conclusion === 'timed_out' || r.conclusion === 'cancelled',
                 );
-                if (failed.length === 0) {
-                  continue;
-                }
 
-                const retryable = failed.filter((r) => r.run_attempt < maxAttempts);
-                const exhausted = failed.filter((r) => r.run_attempt >= maxAttempts);
+                const exhausted = [];
+                for (const run of candidates) {
+                  const { verdict, jobLines } = classify(run, 'bot-pr');
 
-                for (const run of retryable) {
-                  core.notice(
-                    `PR #${pr.number}: re-running ${run.name} ` +
-                      `(attempt ${run.run_attempt}/${maxAttempts})`,
-                  );
-                  await github.rest.actions.reRunWorkflowFailedJobs({
-                    owner,
-                    repo,
-                    run_id: run.id,
-                  });
+                  if (verdict === 'retry') {
+                    core.notice(
+                      `PR #${pr.number}: re-running ${run.name} ` +
+                        `(attempt ${run.run_attempt}/${maxAttempts})\n` +
+                        jobLines.join('\n'),
+                    );
+                    await github.rest.actions.reRunWorkflowFailedJobs({ owner, repo, run_id: run.id });
+                    handledRunIds.add(run.id);
+                  } else if (verdict === 'exhausted') {
+                    exhausted.push({ run, jobLines });
+                  } else if (verdict !== 'ignore') {
+                    throw new Error(
+                      `classify-ci-run.sh returned unexpected verdict \`${verdict}\` for run ${run.id}`,
+                    );
+                  }
                 }
 
                 if (exhausted.length === 0) {
                   continue;
                 }
 
-                // Escalate. Dedupe by exact title so each stuck PR gets one
-                // issue; a second exhaustion comments only when it observed
-                // something new.
-                const title = `ci-watchdog: PR #${pr.number} exhausted retries`;
-                const detail = exhausted
-                  .map(
-                    (r) =>
+                const runDetail = exhausted
+                  .map(({ run: r, jobLines }) =>
+                    [
                       `- \`${r.name}\` — attempt ${r.run_attempt}, ` +
-                      `conclusion \`${r.conclusion}\` — ${r.html_url}`,
+                        `conclusion \`${r.conclusion}\` — ${r.html_url}`,
+                      ...jobLines.map((l) => `  ${l}`),
+                    ].join('\n'),
                   )
                   .join('\n');
-                // Everything this sweep actually observed about the PR,
-                // rendered as one stable string. Run ids are sorted so the
-                // order the API happened to page them in is not part of the
-                // identity. Carried in an HTML comment because the marker has
-                // to survive in the issue and read as nothing to a human:
-                // the alternative, re-deriving the observation by parsing the
-                // prose back out of a previous comment, breaks the moment the
-                // prose is reworded.
-                const observation = [
-                  pr.head.sha,
-                  ...exhausted
-                    .map((r) => `${r.id}:${r.run_attempt}:${r.conclusion}`)
-                    .sort(),
-                ].join(' ');
-                const marker = `<!-- ci-watchdog-observation: ${observation} -->`;
-                const body =
-                  `The retry watchdog exhausted this PR's ${maxAttempts}-attempt ` +
-                  `budget (the original run plus ${maxAttempts - 1} re-runs) and ` +
-                  `the jobs failed every time. This is no longer a transient — ` +
-                  `treat it as a real failure.\n\n` +
-                  `PR: ${pr.html_url}\nHead commit: \`${pr.head.sha}\`\n\n` +
-                  `Exhausted runs:\n\n${detail}\n\n` +
-                  `Filed by the \`ci-watchdog\` workflow.\n\n` +
-                  `What to do: ` +
-                  `https://github.com/${owner}/${repo}/blob/main/docs/runbooks/ci-watchdog.md` +
-                  `\n\n${marker}`;
-
-                const open = await github.paginate(github.rest.issues.listForRepo, {
-                  owner,
-                  repo,
-                  state: 'open',
-                  labels: 'ci-watchdog',
-                  per_page: 100,
+                // Run ids are sorted so the order the API happened to page
+                // them in is not part of the identity.
+                await escalate({
+                  title: `ci-watchdog: PR #${pr.number} exhausted retries`,
+                  detail:
+                    `PR: ${pr.html_url}\nHead commit: \`${pr.head.sha}\`\n\n` +
+                    `Exhausted runs:\n\n${runDetail}`,
+                  observation: [
+                    pr.head.sha,
+                    ...exhausted.map(({ run: r }) => `${r.id}:${r.run_attempt}:${r.conclusion}`).sort(),
+                  ].join(' '),
                 });
-                const existing = open.find((i) => i.title === title);
-
-                if (existing) {
-                  // The open issue is already the signal that this PR is
-                  // stuck. A tick that observed exactly what the last report
-                  // did adds nothing, and this workflow ticks on a schedule
-                  // for as long as the PR stays red — so commenting
-                  // unconditionally buries the reports that DO carry news
-                  // under an unbounded run of identical ones.
-                  //
-                  // The comparison is against the LAST marker on the issue,
-                  // body included: the body carries the first observation, and
-                  // each later comment carries the one that displaced it. A
-                  // report the watchdog has already made and then moved past
-                  // must be able to recur — a PR that gets pushed to, fails
-                  // differently, and is then reverted is genuinely news twice.
-                  const comments = await github.paginate(
-                    github.rest.issues.listComments,
-                    { owner, repo, issue_number: existing.number, per_page: 100 },
-                  );
-                  const reports = [existing.body ?? '', ...comments.map((c) => c.body ?? '')]
-                    .filter((b) => b.includes('<!-- ci-watchdog-observation: '));
-                  const last = reports[reports.length - 1];
-                  if (last !== undefined && last.includes(marker)) {
-                    core.notice(
-                      `PR #${pr.number}: issue #${existing.number} already reports ` +
-                        `this observation; not commenting.`,
-                    );
-                    continue;
-                  }
-                  await github.rest.issues.createComment({
-                    owner,
-                    repo,
-                    issue_number: existing.number,
-                    body:
-                      `Still exhausted, and this check observed something the ` +
-                      `last report did not.\n\n` +
-                      `Head commit: \`${pr.head.sha}\`\n\n` +
-                      `Exhausted runs:\n\n${detail}\n\n${marker}`,
-                  });
-                  core.notice(`PR #${pr.number}: appended to issue #${existing.number}`);
-                  continue;
+                for (const { run: r } of exhausted) {
+                  handledRunIds.add(r.id);
                 }
-
-                // createLabel 422s when the label already exists; swallow only that.
-                // Any other status rethrows to the per-PR catch, which fails this PR
-                // without stopping the sweep.
-                try {
-                  await github.rest.issues.createLabel({
-                    owner,
-                    repo,
-                    name: 'ci-watchdog',
-                    color: 'b60205',
-                    description: 'Auto-merge bot PR stuck after exhausting CI retries',
-                  });
-                } catch (err) {
-                  if (err.status !== 422) {
-                    throw err;
-                  }
-                }
-
-                const created = await github.rest.issues.create({
-                  owner,
-                  repo,
-                  title,
-                  body,
-                  labels: ['ci-watchdog'],
-                });
-                core.notice(`PR #${pr.number}: opened issue #${created.data.number}`);
               } catch (err) {
-                // The status and the stack are the whole diagnostic: this path has no
-                // test coverage and cannot be provoked on demand, so the job log is the
-                // only evidence a human ever gets. A bare message names neither the
-                // failing API call nor the HTTP code.
-                core.error(
-                  `PR #${pr.number}: ${err.status ?? 'no status'} ` +
-                    `${err.stack ?? err.message}`,
-                );
-                failures.push(pr.number);
-
-                // A 403 with `x-ratelimit-remaining: 0` or a `retry-after`
-                // header is a primary or secondary rate limit, not a
-                // permissions gap. Continuing to request against an
-                // exhausted budget can extend a secondary limit's block, so
-                // halt rather than let the sweep burn through every
-                // remaining PR. Halting silently would recreate the
-                // starvation bug this catch exists to prevent, so name every
-                // PR the halt leaves untried.
-                const headers = err.response?.headers;
-                const isRateLimit =
-                  err.status === 403 &&
-                  (headers?.['x-ratelimit-remaining'] === '0' ||
-                    headers?.['retry-after'] !== undefined);
-                if (isRateLimit) {
-                  notAttempted = prs.slice(i + 1).map((p) => p.number);
+                if (recordError(`PR #${pr.number}`, err)) {
+                  notAttempted = [
+                    ...prs.slice(i + 1).map((p) => `PR #${p.number}`),
+                    'every automated run (sweep not started)',
+                  ];
                   break;
+                }
+              }
+            }
+
+            // --- Automated runs: retry only transient failures -----------------
+            //
+            // Runs the repo starts itself: pushes to main, schedules, and
+            // `workflow_run` chains. classify-ci-run.sh --policy automated is the
+            // eligibility predicate, and the notify composite applies the same one
+            // before it holds off, so every run notify holds off on is one this
+            // loop retries. Candidates are runs whose latest attempt finished in
+            // the last 24 hours, so the first sweep after a deploy does not retry
+            // old history. Runs are listed by creation over 72 hours, so a run
+            // created before the lookback whose re-run finished inside it is
+            // still listed; scripts/select-automated-runs.sh applies the lookback
+            // to `updated_at` and the rest of the rules (the newest-run rule for
+            // push and schedule, `workflow_run` runs each on their own, `skipped`
+            // runs never replacing anything).
+
+            const runLabel = (r) => `run ${r.id} (${r.name}, ${r.event})`;
+
+            const notifyCallers = new Map();
+            // Whether the workflow file calls the notify-workflow-result composite,
+            // by its local path or by its pinned self-reference (pages.yml).
+            // Such a workflow files its own issue on the final attempt, and a second
+            // filer would mean two issues for one failure. A file that cannot be
+            // read counts as calling no notify, so the watchdog files: a broken
+            // check must never leave an exhausted run with no issue at all.
+            function workflowCallsNotify(path) {
+              if (!notifyCallers.has(path)) {
+                let calls = false;
+                try {
+                  const count = execFileSync(
+                    'yq',
+                    [
+                      '[.jobs[].steps[]? | select((.uses // "") | test("^([.]/|rvenutolo/linPEAS-flake/)[.]github/actions/notify-workflow-result(@|$)"))] | length',
+                      `${process.env.GITHUB_WORKSPACE}/${path}`,
+                    ],
+                    execOpts,
+                  ).trim();
+                  if (!/^[0-9]+$/.test(count)) {
+                    throw new Error(`yq printed ${JSON.stringify(count)}, not a count`);
+                  }
+                  calls = Number(count) > 0;
+                } catch (err) {
+                  core.warning(
+                    `${path}: could not tell whether it calls the notify composite ` +
+                      `(${err.message}); treating it as not, so the watchdog files.`,
+                  );
+                }
+                notifyCallers.set(path, calls);
+              }
+              return notifyCallers.get(path);
+            }
+
+            if (notAttempted === null) {
+              let items = [];
+              try {
+                // The selector compares instants as `YYYY-MM-DDTHH:MM:SSZ`
+                // strings, the shape the API returns, so the milliseconds
+                // `toISOString` adds are dropped.
+                const isoSeconds = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+                const listedSince = isoSeconds(Date.now() - 72 * 60 * 60 * 1000);
+                const updatedSince = isoSeconds(Date.now() - 24 * 60 * 60 * 1000);
+                // One query per event, because the endpoint caps a filtered query
+                // at 1,000 results and pull_request runs would otherwise fill it.
+                // No `status` filter: a newer push or schedule run still in progress
+                // must count as the newest, so the older one it replaced is not
+                // retried.
+                const queries = [
+                  { event: 'push', branch: 'main' },
+                  { event: 'schedule' },
+                  { event: 'workflow_run' },
+                ];
+                const byId = new Map();
+                for (const query of queries) {
+                  const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+                    owner,
+                    repo,
+                    created: `>=${listedSince}`,
+                    per_page: 100,
+                    ...query,
+                  });
+                  for (const run of runs) {
+                    byId.set(run.id, run);
+                  }
+                }
+                const selection = [...byId.values()].map((r) => ({
+                  id: r.id,
+                  workflow_id: r.workflow_id,
+                  path: r.path,
+                  event: r.event,
+                  head_branch: r.head_branch,
+                  created_at: r.created_at,
+                  updated_at: r.updated_at,
+                  status: r.status,
+                  conclusion: r.conclusion,
+                }));
+                // The selector prints ids in ascending order, so the order of the
+                // halt and summary messages is stable.
+                items = execFileSync(`${scripts}/select-automated-runs.sh`, ['--updated-since', updatedSince], {
+                  ...execOpts,
+                  input: JSON.stringify(selection),
+                })
+                  .split('\n')
+                  .filter((l) => l !== '')
+                  .map((id) => byId.get(Number(id)))
+                  .filter((run) => !handledRunIds.has(run.id));
+              } catch (err) {
+                // Enumeration failing leaves nothing to confine the error to, so
+                // it is recorded against the sweep as a whole.
+                items = [];
+                if (recordError('automated-run enumeration', err)) {
+                  notAttempted = ['every automated run (enumeration halted)'];
+                }
+              }
+
+              for (let i = 0; notAttempted === null && i < items.length; i++) {
+                const run = items[i];
+                try {
+                  const { verdict, jobLines } = classify(run, 'automated');
+                  if (verdict === 'retry') {
+                    core.notice(
+                      `${runLabel(run)}: re-running ${run.name} ` +
+                        `(attempt ${run.run_attempt}/${maxAttempts})\n` +
+                        jobLines.join('\n'),
+                    );
+                    await github.rest.actions.reRunWorkflowFailedJobs({ owner, repo, run_id: run.id });
+                  } else if (verdict === 'exhausted') {
+                    if (workflowCallsNotify(run.path)) {
+                      core.notice(
+                        `${runLabel(run)}: exhausted retries; ${run.path} files its own ` +
+                          `issue through its notify job, so the watchdog does not.`,
+                      );
+                    } else {
+                      const detail = jobLines.map((l) => l.trimStart()).sort();
+                      await escalate({
+                        title: `ci-watchdog: ${run.name} (${run.event}) exhausted retries`,
+                        detail:
+                          `Run: ${run.html_url} — attempt ${run.run_attempt}, ` +
+                          `conclusion \`${run.conclusion}\`\n` +
+                          `Workflow: \`${run.path}\`\nHead commit: \`${run.head_sha}\`\n\n` +
+                          `Classified jobs:\n\n${detail.join('\n')}`,
+                        observation: [`${run.id}:${run.run_attempt}`, ...detail].join(' '),
+                      });
+                    }
+                  } else if (verdict !== 'report' && verdict !== 'ignore') {
+                    throw new Error(
+                      `classify-ci-run.sh returned unexpected verdict \`${verdict}\` for run ${run.id}`,
+                    );
+                  }
+                } catch (err) {
+                  if (recordError(runLabel(run), err)) {
+                    notAttempted = items.slice(i + 1).map(runLabel);
+                  }
                 }
               }
             }
 
             if (notAttempted) {
               core.setFailed(
-                `Sweep halted by rate limit; ${failures.length} PR(s) errored: ` +
-                  failures.map((n) => `#${n}`).join(', ') +
-                  `; ${notAttempted.length} PR(s) not attempted: ` +
-                  notAttempted.map((n) => `#${n}`).join(', '),
+                `Sweep halted by rate limit; ${failures.length} item(s) errored: ` +
+                  failures.join(', ') +
+                  `; ${notAttempted.length} item(s) not attempted: ` +
+                  notAttempted.join(', '),
               );
             } else if (failures.length > 0) {
               core.setFailed(
-                `Sweep completed; ${failures.length} PR(s) errored: ` +
-                  failures.map((n) => `#${n}`).join(', '),
+                `Sweep completed; ${failures.length} item(s) errored: ` + failures.join(', '),
               );
             }
+
+  # A sweep that fails leaves every failure the notify composite held off
+  # for a retry neither retried nor filed, and a red watchdog run is
+  # otherwise the only sign. The classifier never retries this workflow's
+  # own runs, so this files on the first failed sweep. A skipped `retry`
+  # (a no-op `workflow_run` completion, or a fork) has nothing to report
+  # or close, so the job is skipped with it rather than start a runner.
+  notify:
+    name: notify
+    needs: retry
+    if: always() && needs.retry.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      checks: read
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
+        with:
+          result: ${{ needs.retry.result }}
+          label: ci-watchdog-failure
+          title: "ci-watchdog: the retry sweep itself failed"
+          body: |
+            The `ci-watchdog` workflow's own `retry` job failed, so this sweep
+            did not finish retrying or filing.
+
+            - Trigger: `${{ github.event_name }}`
+            - `retry` conclusion: `${{ needs.retry.result }}`
+
+            Failures that a workflow's notify job held off for a retry may be
+            waiting: until a sweep succeeds they are neither re-run nor filed.
+            Bot PRs stuck on a transient failure stay stuck too.
+
+            What to do: the "When the watchdog itself fails" section of
+            https://github.com/rvenutolo/linPEAS-flake/blob/main/docs/runbooks/ci-watchdog.md
+
+            The next successful sweep auto-closes this issue.
+          label-description: ci-watchdog sweep failed; held-off CI failures may be waiting unretried
+          github-token: ${{ secrets.GITHUB_TOKEN }}

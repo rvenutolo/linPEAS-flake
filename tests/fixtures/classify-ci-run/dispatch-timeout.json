@@ -1,0 +1,28 @@
+{
+  "id": 100,
+  "name": "ci",
+  "path": ".github/workflows/ci.yml",
+  "event": "workflow_dispatch",
+  "head_branch": "main",
+  "run_attempt": 1,
+  "jobs": [
+    {
+      "id": 1,
+      "name": "lint",
+      "conclusion": "timed_out",
+      "steps": [
+        {
+          "number": 1,
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "number": 2,
+          "name": "Run scripts/run-lint-group.sh",
+          "conclusion": "success"
+        }
+      ],
+      "annotations": []
+    }
+  ]
+}

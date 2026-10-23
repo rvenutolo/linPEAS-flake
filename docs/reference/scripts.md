@@ -187,9 +187,12 @@ still flake, depending on how it was tuned.
 Blind spot this accepts: only tags predating the last CHANGELOG.md commit are
 guarded. A release whose changelog never lands stays unguarded until some
 later changelog commit exists, and two releases stacking up inside the window
-would exclude both. That is tolerable because a dropped changelog job fails
-loudly through the release-on-bump notify path — this check is the backstop,
-not the primary signal.
+would exclude both. That is tolerable because a changelog that does not land
+is signalled elsewhere first: a changelog job that fails, or whose PR is
+still open at its deadline with nothing for the CI watchdog to re-run, files
+through the release-on-bump notify path, and a PR handed to the watchdog
+because a check failed is re-run and, once its retries are exhausted, filed
+by the watchdog. This check is the backstop, not the primary signal.
 
 git-cliff is invoked only via the flake-pinned `.#git-cliff` output, per the
 nix-run-pinned invariant. Offline and deterministic: git-cliff parses the PR
@@ -1164,7 +1167,10 @@ other shape, or prints no event, or whose file `yq` reads as several
 YAML documents, is refused when it has to be derived, and so is one
 whose `needs:` is not one job named by a scalar carrying the string
 tag (read through an alias, including an alias of a list whose one
-item is an alias of the job's name). So is
+item is an alias of the job's name). A `needs:` list of several such
+strings is read when the gate carries `always()` and names exactly one
+of them as `needs.<job>.`: that one is the watched job, and the others
+only order the job after them. So is
 a job whose notify step has an
 `if:` of its own, follows a step other than step-security/harden-runner
 or actions/checkout (each owner and repository read with its ASCII
@@ -2193,6 +2199,44 @@ rejected one; a stale line, by contrast, is read before it is judged.
 
 Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
 
+### scripts/changelog-pr-handoff.sh
+
+Decide whether release-on-bump's changelog job may hand a
+changelog PR still open at its deadline to the CI watchdog. Reads the
+JSON of `gh pr view --json autoMergeRequest,mergeStateStatus,statusCheckRollup`
+on stdin and prints one line: `handoff` when the watchdog will act on
+the PR, or `fail<TAB><reason>` when it will not, in which case the job
+fails and its notify job files.
+
+The watchdog acts only on a bot PR with auto-merge armed and a failed
+workflow run on its head, so all three of these must hold to hand off:
+auto-merge is armed (`autoMergeRequest` is not null); the merge state
+is not `BEHIND` (auto-merge never updates the branch, so the PR waits
+forever) or `DIRTY` (a conflict); and at least one check run on the
+head concluded `FAILURE`, `CANCELLED` or `TIMED_OUT`, which is what the
+watchdog re-runs. A PR whose checks are all still pending or green past
+the deadline has nothing for the watchdog to re-run, and a required
+check that never started leaves no failed run at all, so both fail
+here rather than sit open with no issue. A hung check is cancelled by
+its own job timeout well inside the deadline, so it counts as failed.
+Commit status contexts are not counted: the watchdog re-runs workflow
+runs, and a status context has none.
+
+Usage:
+
+```text
+  gh pr view <n> --json autoMergeRequest,mergeStateStatus,statusCheckRollup \
+    | changelog-pr-handoff.sh
+```
+
+Exit codes:
+
+```text
+  0  the decision was printed (a `fail` line is an answer, not this
+      script failing)
+  2  bad arguments, or input that is not the expected object
+```
+
 ### scripts/classify-backfill-image-mode.sh
 
 Classify whether a release-on-bump `backfill-tag` run
@@ -2202,6 +2246,59 @@ amd64@ghcr amd64@hub arm64@ghcr arm64@hub index@ghcr index@hub,
 print `full` when all six exist, `none` when all six are absent, and
 fail on any partial mix. Pure and side-effect free so the decision is
 unit-testable without contacting a registry.
+
+### scripts/classify-ci-run.sh
+
+Classify one GitHub Actions run's jobs into a retry
+verdict. Reads the run JSON on stdin (id, name, path, event,
+head_branch, run_attempt, and jobs each carrying conclusion, steps and
+annotations) and prints a verdict line, `retry`, `exhausted`, `report`
+or `ignore`, followed by one `<job>\t<class>\t<reason>` line for every
+job that failed, was cancelled or timed out. `class` is `transient`
+(infrastructure, worth a rerun), `real` (a step of the job's own work
+failed) or `superseded` (cancelled by a newer run, never counted).
+Pure and side-effect free so the decision is unit-testable without a
+workflow run.
+
+Usage:
+
+```text
+  classify-ci-run.sh --policy bot-pr|automated < run.json
+  classify-ci-run.sh --print-max-attempts
+```
+
+Policies. `bot-pr` retries any counted job until the attempt cap,
+because a bot PR has no human watching a red check. `automated`
+retries only runs the repo triggers itself (schedule, workflow_run,
+push to main) and only when every counted job is transient, so a real
+regression is reported on the first attempt rather than retried.
+Other events report without retrying: a person started them and can
+rerun them. A run of `.github/workflows/release-on-bump.yml` also
+reports without retrying under `automated`, because re-running its
+failed jobs is not idempotent: a `release` job lost after it created
+the GitHub release re-runs into `tag-exists=true`, which skips every
+image, manifest and verify job and finishes green with no images
+published, and an image job lost after its docker.io push re-pushes
+over the orphan tag that docs/runbooks/dockerhub-recovery.md deletes
+first. Its own notify job and that runbook are the recovery path. A
+run of `.github/workflows/ci-watchdog.yml` reports without retrying as
+well: the watchdog never re-runs itself, so a held-off failure of its
+own would wait on a retry that never comes, and its notify job files
+on the first failure instead.
+
+A job that fails before its own work starts (runner setup, checkout,
+the setup-nix action) is transient. A failed step after those is real,
+including `Post` steps. A failure with no failed step has nothing to
+blame the repo for and is transient.
+
+Exit codes:
+
+```text
+  0  classified (a `report` or `exhausted` verdict is an answer, not
+      this script failing)
+  2  bad arguments, or input that is not a run object with a `jobs`
+      array of the expected shape
+```
 
 ### scripts/classify-pin-ref.sh
 
@@ -2303,6 +2400,32 @@ Exit codes:
       LAST_AUDIT_SHA=<40-hex> line, or names a commit this history does
       not contain, and a workflow at either ref that git cannot show or
       whose job ids or job keys `yq` cannot read
+```
+
+### scripts/fetch-ci-run.sh
+
+Fetch one GitHub Actions run's jobs, steps and annotations
+through `gh api` and print the JSON that scripts/classify-ci-run.sh
+reads on stdin: the run's id, name, path, event, head_branch (null
+becomes the empty string, which the classifier requires to be a
+string), run_attempt, and its latest attempt's jobs, each carrying id,
+name, conclusion, steps and annotations. Annotations are fetched only
+for jobs whose conclusion is failure, cancelled or timed_out; every
+other job carries an empty list.
+
+Usage:
+
+```text
+  GH_TOKEN=... GITHUB_REPOSITORY=owner/repo fetch-ci-run.sh <run_id>
+```
+
+Exit codes:
+
+```text
+  0  the JSON was printed
+  1  an API call failed; the `gh` error is passed through on stderr
+  2  bad arguments, a missing tool, an unset environment variable, or an
+      API response that is not the JSON shape the reads below rely on
 ```
 
 ### scripts/gen-dashboard-data.sh
@@ -2412,6 +2535,32 @@ Suppressions (CLI flags — `--config-file` is documented but
 Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
 (renovate.json customManager scoped to this file).
 
+### scripts/retry-command.sh
+
+Run a command up to N times, sleeping between attempts, and
+exit with the last attempt's status. Bounds the wait for a registry
+index that lags a push (Docker Hub's referrers index can trail it by a
+minute or two), so a signature or attestation check that races the
+index retries instead of failing the release. The command's stdout and
+stderr pass through unchanged; after each failed attempt except the
+last, a `retry-command: attempt N/M failed (exit X); retrying in Ds`
+line goes to stderr.
+
+Usage:
+
+```text
+  retry-command.sh <attempts> <delay-seconds> -- <command> [args...]
+```
+
+Exit codes:
+
+```text
+  0  the command succeeded on some attempt
+  2  usage error: a non-numeric or zero attempt count, a non-numeric
+      delay, a missing `--`, or no command after it
+  *  the last attempt's exit code, when every attempt failed
+```
+
 ### scripts/run-doc-freshness.sh
 
 Run every doc-freshness regenerate-and-diff harness
@@ -2444,6 +2593,53 @@ concurrently, at most CHECK_WORKERS_OVERRIDE (default nproc) at a time,
 with each one's output replayed in manifest order once all have
 finished. Runs all checks even if one fails; exits 1 if any failed, 2
 on config error.
+
+### scripts/select-automated-runs.sh
+
+Pick the runs the CI watchdog's automated sweep
+classifies. Reads a JSON array of workflow runs on stdin (each with
+id, workflow_id, path, event, head_branch, created_at, updated_at,
+status and conclusion, as `listWorkflowRunsForRepo` returns them) and
+prints the id of every candidate, one per line, in ascending order.
+The caller lists runs created over a span longer than the lookback,
+so a run created before the lookback whose latest attempt finished
+inside it is still listed; this script applies every eligibility
+rule, the lookback included, so they are testable without a run.
+
+Rules. Only `push` runs on `main`, `schedule` runs and `workflow_run`
+runs are considered, and never the watchdog's own
+(`.github/workflows/ci-watchdog.yml`). The classifier already reports
+those without retrying; dropping them here as well keeps a failing
+watchdog from fetching its own failed runs on every sweep, which adds
+requests exactly when a rate limit may be what is failing it. A
+candidate is completed, concluded `failure`, `cancelled` or
+`timed_out`, and has an `updated_at` at or after the `--updated-since`
+instant: `updated_at` is when its latest attempt finished, so the
+lookback measures the attempt the notify composite held off on, not
+the run's first attempt. A `push` or
+`schedule` run is a candidate only when it is the newest run of its
+workflow for its event, by `created_at`: a newer run, finished or
+still in progress, replaced it. A `workflow_run` run is a candidate
+on its own, because each is chained to a different upstream run (a
+different branch or commit) and a newer one replaces nothing. A
+`skipped` run never counts as replacing anything: a workflow whose
+jobs are all gated off by an `if:` concludes `skipped` on most
+triggers, and letting that hide an earlier failure would leave the
+failure with no retry and no issue.
+
+Usage:
+
+```text
+  select-automated-runs.sh --updated-since <YYYY-MM-DDTHH:MM:SSZ> < runs.json
+```
+
+Exit codes:
+
+```text
+  0  the candidates were printed (possibly none)
+  2  bad arguments, or input that is not an array of run objects of
+      the expected shape
+```
 
 ## Libraries
 

@@ -1,0 +1,30 @@
+{
+  "id": 100,
+  "name": "ci-watchdog",
+  "path": ".github/workflows/ci-watchdog.yml",
+  "event": "schedule",
+  "head_branch": "main",
+  "run_attempt": 1,
+  "jobs": [
+    {
+      "id": 1,
+      "name": "retry",
+      "conclusion": "cancelled",
+      "steps": [
+        {
+          "number": 1,
+          "name": "Set up job",
+          "conclusion": "success"
+        },
+        {
+          "number": 2,
+          "name": "re-run failed jobs on stuck bot PRs and automated runs",
+          "conclusion": "cancelled"
+        }
+      ],
+      "annotations": [
+        "The job has exceeded the maximum execution time of 15m0s"
+      ]
+    }
+  ]
+}
