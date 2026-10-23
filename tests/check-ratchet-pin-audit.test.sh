@@ -442,6 +442,13 @@ function expect_merge_order() {
   fi
   printf 'OK   %s\n' "${name}"
 }
+# The notify job's read scopes are part of its exact set: the composite's
+# self-classification needs them, and a notify job holding only the write
+# scope would fail that fetch and file every transient it should hold off.
+expect_shape 'a notify job without its read scopes is refused' \
+  $'      actions: read\n      checks: read\n      issues: write\n' $'      issues: write\n' '' 1 \
+  "job notify: permissions must be exactly { actions: read, checks: read, issues: write } (got: issues:write)
+${ONE_FAILED}"
 expect_merge_order 'a merge list in the check job is read first mapping wins: the writer first is refused' \
   '[*write, *read]' 1 \
   "job check: permissions must be exactly { contents: read } (got: contents:write)
