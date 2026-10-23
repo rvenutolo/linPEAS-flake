@@ -106,13 +106,19 @@ function run_scenario() {
 
 # @description Make a temp dir whose `docker` stub exits with a fixed code,
 #              standing in for octoscan's scan return so the has-finding /
-#              exit-code contract can be exercised without a daemon.
-# @arg $1 exit code the stub docker returns
+#              exit-code contract can be exercised without a daemon. The
+#              runner-label probe is the only call that passes
+#              `runner-label`, and it gets its own code.
+# @arg $1 exit code the stub docker returns for a workflow scan
+# @arg $2 exit code for the runner-label probe (default 2: label still flagged)
 function make_docker_stub() {
   local -r code="$1"
+  local -r probe_code="${2:-2}"
   local d
   d="$(mktemp -d)"
-  printf '#!/usr/bin/env bash\nexit %s\n' "${code}" >"${d}/docker"
+  # shellcheck disable=SC2016 # the stub's own "$@" and ${a} must reach the file unexpanded.
+  printf '#!/usr/bin/env bash\nfor a in "$@"; do [[ ${a} == runner-label ]] && exit %s; done\nexit %s\n' \
+    "${probe_code}" "${code}" >"${d}/docker"
   chmod +x "${d}/docker"
   printf '%s' "${d}"
 }
@@ -127,6 +133,7 @@ function make_docker_stub_seq() {
   d="$(mktemp -d)"
   cat >"${d}/docker" <<SEQ
 #!/usr/bin/env bash
+for a in "\$@"; do [[ \${a} == runner-label ]] && exit 2; done
 counter="${d}/n"
 n=0
 [[ -f "\${counter}" ]] && n="\$(cat -- "\${counter}")"
@@ -177,6 +184,22 @@ function main() {
     1 '' 'has-finding=false' \
     'classification=infra-failure (no findings recorded)' "PATH=${stub3}:${PATH}"
   rm --recursive --force -- "${stub0}" "${stub2}" "${stub3}"
+
+  # A suppressed runner label the probe no longer sees flagged is a dead
+  # suppression: the scan itself was clean, but the run fails under its own
+  # classification so the entry is removed. A probe that errors is a scanner
+  # error like any per-file one.
+  local stub_stale stub_probe_err
+  stub_stale="$(make_docker_stub 0 0)"
+  stub_probe_err="$(make_docker_stub 0 3)"
+  run_scenario 'stale runner-label suppression -> exit 1' \
+    1 'octoscan now accepts runner label' 'has-finding=false' \
+    'classification=stale-suppression' "PATH=${stub_stale}:${PATH}"
+  run_scenario 'runner-label probe error -> infra failure' \
+    1 'could not probe runner label' 'has-finding=false' \
+    'classification=infra-failure (no findings recorded)' \
+    "PATH=${stub_probe_err}:${PATH}"
+  rm --recursive --force -- "${stub_stale}" "${stub_probe_err}"
 
   # A per-file scanner error (rc 1 = file never analyzed) mixed with a finding
   # (rc 2) must classify as an infra failure — has-finding=false, exit 1 — so

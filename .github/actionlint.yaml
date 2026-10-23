@@ -1,0 +1,15 @@
+# .github/actionlint.yaml
+#
+# actionlint hard-codes the GitHub-hosted runner labels it accepts, and
+# its release lags GitHub's runner images. A hosted label it does not
+# know yet is listed here so the `runner-label` rule accepts it; the
+# rule keeps checking every other label.
+#
+# Each entry stays only while actionlint still rejects the label on its
+# own. scripts/check-actionlint-runner-labels-needed.sh fails once it
+# stops, so the entry is removed instead of lingering as dead config.
+# octoscan carries the same labels in its own list in
+# scripts/octoscan-scan.sh. See docs/development/linting.md#runner-label-allowlist.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04-arm

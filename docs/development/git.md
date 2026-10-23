@@ -143,6 +143,7 @@ Hooks (alphabetical):
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `actionlint`                        | GitHub Actions workflow syntax (shellcheck pinned).                                                                                                      |
 | `actionlint-pyflakes-active`        | actionlint pyflakes integration canary.                                                                                                                  |
+| `actionlint-runner-labels-needed`   | Every allowlisted actionlint runner label is still one actionlint rejects.                                                                               |
 | `actionlint-shellcheck-active`      | actionlint shellcheck integration canary.                                                                                                                |
 | `auto-merge-decline-gate`           | Auto-merge run-blocks carry the CLOSED/MERGED decline gate.                                                                                              |
 | `bump-script-integrity`             | scripts/bump-linpeas.sh keeps its URL-prefix, .digest, and atomic-write guards.                                                                          |

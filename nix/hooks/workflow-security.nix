@@ -447,6 +447,25 @@
     pass_filenames = false;
     language = "system";
   };
+
+  # Fires once actionlint accepts a runner label `.github/actionlint.yaml`
+  # allowlists, so a dead entry is removed instead of lingering.
+  # See docs/development/linting.md#runner-label-allowlist.
+  actionlint-runner-labels-needed = {
+    enable = true;
+    name = "actionlint-runner-labels-needed";
+    description = "Every allowlisted actionlint runner label is still one actionlint rejects.";
+    entry = "${pkgs-unstable.writeShellScript "check-actionlint-runner-labels-needed-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${actionlintWrapped}/bin:${pkgs-unstable.yq-go}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-actionlint-runner-labels-needed.sh
+    ''}";
+    files = "^(flake\\.(nix|lock)|nix/wrappers\\.nix|\\.github/actionlint\\.yaml|scripts/check-actionlint-runner-labels-needed\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Asserts every workflow that writes a flake.lock runs a generator for
   # each freshness hook that names `flake.lock` a trigger. A lock-derived
   # doc a lock-writing workflow skips reaches its PR stale, and the

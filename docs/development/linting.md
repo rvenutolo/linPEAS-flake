@@ -138,6 +138,44 @@ commit. The pinned image digest and the version label tracked by
 Renovate both live in `scripts/octoscan-scan.sh` (single source of
 truth).
 
+## Runner-label allowlist
+
+actionlint and octoscan both hard-code the GitHub-hosted runner labels
+they accept. octoscan's `runner-label` rule is built on actionlint's. A
+hosted label GitHub has shipped but the linter has not learned is
+reported as unknown (actionlint) or as a possible self-hosted runner
+(octoscan). Each tool carries its own allowlist for such labels, because
+each learns new labels on its own release schedule:
+
+- **actionlint:** `.github/actionlint.yaml` lists the label under
+    `self-hosted-runner.labels`. actionlint then accepts that exact string
+    and keeps checking every other label.
+- **octoscan:** `RUNNER_LABEL_SUPPRESSIONS` in `scripts/octoscan-scan.sh`.
+    Each entry adds an `--ignore` alternative matching only that label's
+    message.
+
+An entry is kept only while the tool still rejects the label on its own,
+and each list has a check that fails once it stops:
+
+- `scripts/check-actionlint-runner-labels-needed.sh` lints a one-job
+    workflow per allowlisted label with an empty config, so the allowlist
+    is out of play. It runs as the `actionlint-runner-labels-needed`
+    pre-commit hook and through its harness in the CI `harness-group` job,
+    so an actionlint bump in `flake.lock` that learns a label fails the
+    bump's own PR.
+- `scripts/octoscan-scan.sh` probes each suppressed label alone after
+    the scan, with only `runner-label` enabled and no `--ignore`. A label
+    octoscan no longer flags fails the run with
+    `classification=stale-suppression`, so an image-digest bump that
+    learns a label fails the bump's own PR.
+
+When either check fires, delete the named label from that tool's list.
+Once `.github/actionlint.yaml` lists no label, delete the file together
+with its check, hook and harness: the check exits 2 on an empty list
+rather than passing over nothing. Adding a label works the same way in
+reverse: add it to both lists, and confirm each check passes, which
+proves the tool still rejects it.
+
 ## Ephemeral-reference lint
 
 `scripts/check-ephemeral-refs.sh` gates Markdown prose — and the
