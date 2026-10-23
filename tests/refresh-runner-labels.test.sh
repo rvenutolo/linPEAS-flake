@@ -298,7 +298,7 @@ function main() {
   # stands for, so the docs stay fresh.
   dir="$(new_case aliased-job-key)"
   sed --in-place --expression='s/^  smoke-test-arm64:$/  *arm-smoke:/' \
-    --expression='s/^name: \(.*\)$/name: \1\nx-names: [\&arm-smoke smoke-test-arm64]/' "${dir}/ci.yml"
+    --expression='s/^name: \(.*\)$/name: \1\nx-names:\n  - \&arm-smoke smoke-test-arm64/' "${dir}/ci.yml"
   run_gen "${dir}" run --check
   harness_assert_record 'aliased-job-key' 'are up to date' "${dir}/run.outcome" "${dir}/run.out" "${dir}/run.err"
   if [[ ${gen_rc} -eq 0 ]] && grep --fixed-strings --quiet -- 'are up to date' "${dir}/run.err" &&
