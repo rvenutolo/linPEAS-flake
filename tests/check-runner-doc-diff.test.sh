@@ -10,6 +10,11 @@
 # refuses the generator's own re-padded output blocks every runner bump,
 # so the re-pad rows feed it what scripts/refresh-runner-labels.sh writes
 # for a wider label rather than a hand-built table.
+#
+# The floor runs in a job that has only the runner image's awk, which on
+# ubuntu-latest is mawk, so every scenario runs twice: once with `awk`
+# shimmed to mawk and once to gawk. Each pass first proves which awk its
+# shim reaches, so a pass that silently ran gawk twice cannot go green.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -34,6 +39,11 @@ function fail() {
 }
 
 work=''
+# The current pass: its scratch directory, its awk's name, and the
+# directory whose `awk` is that awk.
+pass_dir=''
+flavor=''
+shim=''
 function cleanup() {
   if [[ -n ${work} && -d ${work} ]]; then
     rm --recursive --force -- "${work}"
@@ -46,24 +56,26 @@ trap cleanup EXIT
 # @arg $1 scenario name  @arg $2 live doc
 # @stdout the scenario directory
 function new_case() {
-  local -r dir="${work}/$1" live="$2"
+  local -r dir="${pass_dir}/$1" live="$2"
   mkdir -- "${dir}"
   cp -- "${live}" "${dir}/old.md"
   cp -- "${live}" "${dir}/new.md"
   printf '%s' "${dir}"
 }
 
-# @description Run the floor and require an exit status and a stderr
-# substring, recording the scenario for the discrimination gate.
+# @description Run the floor under the current pass's awk and require an
+# exit status and a stderr substring, recording the scenario (tagged with
+# the pass) for the discrimination gate.
 # @arg $1 scenario name  @arg $2 scenario dir  @arg $3 wanted exit status
 # @arg $4 wanted stderr substring  @arg $@ floor arguments
 function expect() {
-  local -r name="$1" dir="$2" want_rc="$3" text="$4"
+  local -r name="$1 [${flavor}]" dir="$2" want_rc="$3" text="$4"
   shift 4
   local rc=0
-  "${SCRIPT}" "$@" >"${dir}/run.out" 2>"${dir}/run.err" || rc=$?
+  PATH="${shim}:${PATH}" "${SCRIPT}" "$@" >"${dir}/run.out" 2>"${dir}/run.err" || rc=$?
   printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${dir}/run.outcome"
-  harness_assert_record "${name}" "${text}" "${dir}/run.outcome" "${dir}/run.out" "${dir}/run.err"
+  harness_assert_record "${name}" "${text}" "${dir}/run.outcome" "${pass_dir}/awk.version" \
+    "${dir}/run.out" "${dir}/run.err"
   if [[ ${rc} -eq ${want_rc} ]] && grep --fixed-strings --quiet -- "${text}" "${dir}/run.err"; then
     pass "${name}: exits ${want_rc} naming ${text}"
   else
@@ -85,34 +97,27 @@ function table_length() {
   awk -v start="$2" 'NR >= start { if ($0 ~ /^\|/) n++; else exit } END { print n + 0 }' "$1"
 }
 
-function main() {
-  work="$(mktemp --directory)"
-  local dir
-  local -r tick=$'\x60'
-  # Edits are written against the labels the live workflow carries today,
-  # so a runner bump does not turn this harness red.
-  local arm_label x86_label
-  arm_label="$(yq '.jobs.build-linpeas-arm64.runs-on' "${LIVE_WORKFLOW}")"
-  x86_label="$(yq '.jobs.build-linpeas.runs-on' "${LIVE_WORKFLOW}")"
-  local -r wide_arm="${arm_label}-much-wider-label"
-  # A label as wide as the live one, so swapping it in re-pads nothing.
-  local same_width
-  same_width="$(printf '%*s' "${#arm_label}" '' | tr ' ' 'x')"
-
-  local ci_header ci_rows nix_header nix_rows arm_rows arm_line smoke_line nix_arm_line
-  ci_header="$(line_of "${LIVE_CI_DOC}" '^\| Job +\| Runner +\| What it tests +\|$')"
-  ci_rows="$(table_length "${LIVE_CI_DOC}" "${ci_header}")"
-  nix_header="$(line_of "${LIVE_NIX_DOC}" '^\| System +\| Flake builds +\| CI tested +\|$')"
-  nix_rows="$(table_length "${LIVE_NIX_DOC}" "${nix_header}")"
-  arm_rows="$(grep --count --extended-regexp -- "^\\| ${tick}[^${tick}]*-arm64${tick} " "${LIVE_CI_DOC}")"
-  arm_line="$(line_of "${LIVE_CI_DOC}" "^\\| ${tick}build-linpeas-arm64${tick} ")"
-  smoke_line="$(line_of "${LIVE_CI_DOC}" "^\\| ${tick}smoke-test${tick} ")"
-  nix_arm_line="$(line_of "${LIVE_NIX_DOC}" "^\\| ${tick}aarch64-linux${tick} ")"
-  if [[ -z ${ci_header} || -z ${nix_header} || -z ${arm_line} || -z ${smoke_line} || -z ${nix_arm_line} ||
-    ${arm_rows} -lt 1 ]]; then
-    fail 'the live docs no longer hold the rows this harness edits'
-    exit 1
+# @description Run every scenario with `awk` shimmed to one awk. The
+# pass first requires that `awk -W version` through the shim names the
+# wanted awk, and records that line with each scenario.
+# Globals: sets pass_dir and shim; reads flavor and main's locals.
+# @arg $1 path to the awk binary
+function run_pass() {
+  local -r awk_bin="$1"
+  pass_dir="${work}/${flavor}"
+  shim="${pass_dir}/bin"
+  mkdir --parents -- "${shim}"
+  ln --symbolic -- "${awk_bin}" "${shim}/awk"
+  PATH="${shim}:${PATH}" awk -W version 2>&1 | head --lines=1 >"${pass_dir}/awk.version" || true
+  local want='^mawk '
+  [[ ${flavor} == gawk ]] && want='^GNU Awk '
+  if grep --extended-regexp --quiet -- "${want}" "${pass_dir}/awk.version"; then
+    pass "${flavor} pass: awk is $(<"${pass_dir}/awk.version")"
+  else
+    fail "${flavor} pass: awk reports '$(<"${pass_dir}/awk.version")', want ${want}"
+    return
   fi
+  local dir
 
   # identical-ok: an unchanged doc passes with nothing changed.
   dir="$(new_case identical-ok "${LIVE_CI_DOC}")"
@@ -127,25 +132,15 @@ function main() {
     "${CI_PATH}: ${arm_rows} runner cell(s) changed, ${arm_rows} table line(s) differ" \
     "${CI_PATH}" "${dir}/old.md" "${dir}/new.md"
 
-  # repad-ok / nix-repad-ok: the generator's own output for a wider arm
-  # label, which re-pads every line of both tables.
-  dir="${work}/repad"
-  mkdir -- "${dir}"
-  cp -- "${LIVE_CI_DOC}" "${dir}/ci.md"
-  cp -- "${LIVE_NIX_DOC}" "${dir}/nix.md"
-  sed "s/runs-on: ${arm_label//./\\.}\$/runs-on: ${wide_arm}/" "${LIVE_WORKFLOW}" >"${dir}/ci.yml"
-  if ! CI_WORKFLOW_OVERRIDE="${dir}/ci.yml" CI_DOC_OVERRIDE="${dir}/ci.md" NIX_DOC_OVERRIDE="${dir}/nix.md" \
-    "${GENERATOR}" 2>"${dir}/gen.err"; then
-    fail 'repad: the generator failed on a wider arm label'
-    sed 's/^/    /' -- "${dir}/gen.err" >&2
-  fi
-  mkdir -- "${dir}/ci" "${dir}/nix"
-  expect 'repad-ok' "${dir}/ci" 0 \
+  # repad-ok / nix-repad-ok: the generator's re-padded output, built once
+  # in main under the devShell's awk.
+  mkdir -- "${pass_dir}/repad-ci" "${pass_dir}/repad-nix"
+  expect 'repad-ok' "${pass_dir}/repad-ci" 0 \
     "${CI_PATH}: ${arm_rows} runner cell(s) changed, ${ci_rows} table line(s) differ" \
-    "${CI_PATH}" "${LIVE_CI_DOC}" "${dir}/ci.md"
-  expect 'nix-repad-ok' "${dir}/nix" 0 \
+    "${CI_PATH}" "${LIVE_CI_DOC}" "${work}/repad/ci.md"
+  expect 'nix-repad-ok' "${pass_dir}/repad-nix" 0 \
     "${NIX_PATH}: 1 runner cell(s) changed, ${nix_rows} table line(s) differ" \
-    "${NIX_PATH}" "${LIVE_NIX_DOC}" "${dir}/nix.md"
+    "${NIX_PATH}" "${LIVE_NIX_DOC}" "${work}/repad/nix.md"
 
   # prose-edit-refused: a description cell changes.
   dir="$(new_case prose-edit-refused "${LIVE_CI_DOC}")"
@@ -253,6 +248,18 @@ function main() {
     "${CI_PATH}: old file: no table with the header row | Job | Runner | What it tests |" \
     "${CI_PATH}" "${dir}/old.md" "${dir}/new.md"
 
+  # fenced-header-ignored: a copy of the header row inside a fence
+  # indented three spaces is not a second table.
+  dir="$(new_case fenced-header-ignored "${LIVE_NIX_DOC}")"
+  {
+    printf '\n   ```text\n'
+    sed --quiet "${nix_header}p" -- "${LIVE_NIX_DOC}"
+    printf '   ```\n'
+  } >>"${dir}/old.md"
+  cp -- "${dir}/old.md" "${dir}/new.md"
+  expect 'fenced-header-ignored' "${dir}" 0 "${NIX_PATH}: 0 runner cell(s) changed, 0 table line(s) differ" \
+    "${NIX_PATH}" "${dir}/old.md" "${dir}/new.md"
+
   # header-twice-refused: the header row appears again further down.
   dir="$(new_case header-twice-refused "${LIVE_CI_DOC}")"
   printf '\n' >>"${dir}/old.md"
@@ -283,22 +290,77 @@ function main() {
   expect 'wrong-arg-count' "${dir}" 2 'usage: check-runner-doc-diff.sh <doc-path> <old-file> <new-file>' \
     "${CI_PATH}" "${dir}/old.md"
 
-  # no-gawk: a PATH holding every tool the script runs except gawk.
-  dir="$(new_case no-gawk "${LIVE_CI_DOC}")"
+}
+
+function main() {
+  work="$(mktemp --directory)"
+  local dir
+  local -r tick=$'\x60'
+  # Edits are written against the labels the live workflow carries today,
+  # so a runner bump does not turn this harness red.
+  local arm_label x86_label
+  arm_label="$(yq '.jobs.build-linpeas-arm64.runs-on' "${LIVE_WORKFLOW}")"
+  x86_label="$(yq '.jobs.build-linpeas.runs-on' "${LIVE_WORKFLOW}")"
+  local -r wide_arm="${arm_label}-much-wider-label"
+  # A label as wide as the live one, so swapping it in re-pads nothing.
+  local same_width
+  same_width="$(printf '%*s' "${#arm_label}" '' | tr ' ' 'x')"
+
+  local ci_header ci_rows nix_header nix_rows arm_rows arm_line smoke_line nix_arm_line
+  ci_header="$(line_of "${LIVE_CI_DOC}" '^\| Job +\| Runner +\| What it tests +\|$')"
+  ci_rows="$(table_length "${LIVE_CI_DOC}" "${ci_header}")"
+  nix_header="$(line_of "${LIVE_NIX_DOC}" '^\| System +\| Flake builds +\| CI tested +\|$')"
+  nix_rows="$(table_length "${LIVE_NIX_DOC}" "${nix_header}")"
+  arm_rows="$(grep --count --extended-regexp -- "^\\| ${tick}[^${tick}]*-arm64${tick} " "${LIVE_CI_DOC}")"
+  arm_line="$(line_of "${LIVE_CI_DOC}" "^\\| ${tick}build-linpeas-arm64${tick} ")"
+  smoke_line="$(line_of "${LIVE_CI_DOC}" "^\\| ${tick}smoke-test${tick} ")"
+  nix_arm_line="$(line_of "${LIVE_NIX_DOC}" "^\\| ${tick}aarch64-linux${tick} ")"
+  if [[ -z ${ci_header} || -z ${nix_header} || -z ${arm_line} || -z ${smoke_line} || -z ${nix_arm_line} ||
+    ${arm_rows} -lt 1 ]]; then
+    fail 'the live docs no longer hold the rows this harness edits'
+    exit 1
+  fi
+
+  # The generator's own output for a wider arm label, which re-pads every
+  # line of both tables. It runs once, outside the awk passes: the
+  # generator runs under the devShell's gawk in CI, and only the floor
+  # meets the runner's awk.
+  dir="${work}/repad"
+  mkdir -- "${dir}"
+  cp -- "${LIVE_CI_DOC}" "${dir}/ci.md"
+  cp -- "${LIVE_NIX_DOC}" "${dir}/nix.md"
+  sed "s/runs-on: ${arm_label//./\\.}\$/runs-on: ${wide_arm}/" "${LIVE_WORKFLOW}" >"${dir}/ci.yml"
+  if ! CI_WORKFLOW_OVERRIDE="${dir}/ci.yml" CI_DOC_OVERRIDE="${dir}/ci.md" NIX_DOC_OVERRIDE="${dir}/nix.md" \
+    "${GENERATOR}" 2>"${dir}/gen.err"; then
+    fail 'repad: the generator failed on a wider arm label'
+    sed 's/^/    /' -- "${dir}/gen.err" >&2
+  fi
+  local awk_bin
+  for flavor in mawk gawk; do
+    if ! awk_bin="$(command -v "${flavor}")"; then
+      fail "${flavor} is not on PATH; the devShell provides both mawk and gawk"
+      continue
+    fi
+    run_pass "${awk_bin}"
+  done
+
+  # no-awk: a PATH holding every tool the script runs except awk.
+  pass_dir="${work}"
+  dir="$(new_case no-awk "${LIVE_CI_DOC}")"
   mkdir -- "${dir}/bin"
   local tool
-  for tool in bash date mktemp rm; do
+  for tool in bash date mktemp rm tail wc; do
     ln --symbolic -- "$(command -v "${tool}")" "${dir}/bin/${tool}"
   done
   local rc=0
   PATH="${dir}/bin" "${SCRIPT}" "${CI_PATH}" "${dir}/old.md" "${dir}/new.md" \
     >"${dir}/run.out" 2>"${dir}/run.err" || rc=$?
   printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${dir}/run.outcome"
-  harness_assert_record 'no-gawk' 'missing required tool: gawk' "${dir}/run.outcome" "${dir}/run.out" "${dir}/run.err"
-  if [[ ${rc} -eq 2 ]] && grep --fixed-strings --quiet -- 'missing required tool: gawk' "${dir}/run.err"; then
-    pass 'no-gawk: exits 2 naming the missing tool'
+  harness_assert_record 'no-awk' 'missing required tool: awk' "${dir}/run.outcome" "${dir}/run.out" "${dir}/run.err"
+  if [[ ${rc} -eq 2 ]] && grep --fixed-strings --quiet -- 'missing required tool: awk' "${dir}/run.err"; then
+    pass 'no-awk: exits 2 naming the missing tool'
   else
-    fail "no-gawk: exit ${rc}, want 2 and stderr naming gawk"
+    fail "no-awk: exit ${rc}, want 2 and stderr naming awk"
     sed 's/^/    /' -- "${dir}/run.err" >&2
   fi
 

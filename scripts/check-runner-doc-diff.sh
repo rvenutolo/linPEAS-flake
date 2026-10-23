@@ -50,8 +50,8 @@
 #   0  only runner cells (and table padding) differ
 #   1  refused: stderr names the first offending line and the reason
 #   2  could not check: wrong argument count, an unknown doc path, a file
-#      that is not a readable regular file, no gawk on PATH, or a read
-#      failure
+#      that is not a readable regular file, a missing tool, or an awk
+#      that fails or prints no verdict
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -71,19 +71,23 @@ readonly DOC_PATH="$1"
 readonly OLD_FILE="$2"
 readonly NEW_FILE="$3"
 
-# The comparer. Both files are read with getline from ENVIRON, not as
-# operands, so no path is ever parsed as an awk assignment, and the
-# program is BEGIN-only. It runs under LC_ALL=C: every comparison is
-# byte for byte and nothing measures a width. Output is one line on
-# stdout; the exit status is the verdict.
+# The comparer. It is POSIX awk, because the job that runs it has only
+# the runner image's awk, which on ubuntu-latest is mawk. Both files are
+# read with getline from ENVIRON, not as operands, so no path is ever
+# parsed as an awk assignment, and the program is BEGIN-only. It runs
+# under LC_ALL=C: every comparison is byte for byte and nothing measures
+# a width. awk cannot see whether a file's last line ends in a newline,
+# so the caller passes that in as `old_nl` / `new_nl` (1 or 0). Output is
+# one tab-tagged line on stdout, `ok`, `refuse` or `cannot`; the caller
+# accepts a verdict only when the tag matches the exit status.
 # shellcheck disable=SC2016 # awk program text; its $ fields are awk's
 readonly FLOOR_AWK='
 function refuse(line, msg) {
-  print docname ":" line ": " msg
+  print "refuse\t" docname ":" line ": " msg
   exit 1
 }
 function cannot(msg) {
-  print msg
+  print "cannot\t" msg
   exit 2
 }
 function trim(s) {
@@ -110,13 +114,9 @@ function header_text(   i, s) {
   for (i = 1; i <= hn; i++) s = s " " want[i] " |"
   return s
 }
-function slurp(path, lines, side,   n, rc, line) {
+function slurp(path, lines,   n, rc, line) {
   n = 0
-  term[side] = ""
-  while ((rc = (getline line < path)) > 0) {
-    lines[++n] = line
-    term[side] = RT
-  }
+  while ((rc = (getline line < path)) > 0) lines[++n] = line
   if (rc < 0) cannot("cannot read " path)
   close(path)
   return n
@@ -126,7 +126,9 @@ function locate(lines, n, side,   i, k, c, fence, found, at, same) {
   fence = 0
   found = 0
   for (i = 1; i <= n; i++) {
-    if (lines[i] ~ /^ {0,3}(```|~~~)/) { fence = !fence; continue }
+    # Up to three spaces of indent, spelled out: not every awk reads
+    # interval expressions.
+    if (lines[i] ~ /^ ? ? ?(```|~~~)/) { fence = !fence; continue }
     if (fence || lines[i] !~ /^\|/) continue
     if (cells(lines[i], c) != hn) continue
     same = 1
@@ -137,7 +139,7 @@ function locate(lines, n, side,   i, k, c, fence, found, at, same) {
     at = i
   }
   if (!found) {
-    print docname ": " side " file: no table with the header row " header_text()
+    print "refuse\t" docname ": " side " file: no table with the header row " header_text()
     exit 1
   }
   return at
@@ -150,13 +152,14 @@ BEGIN {
   col = mode == "ci" ? 2 : 3
   shape = mode == "ci" ? "one backticked label" : "yes (<backticked label>)"
 
-  n = slurp(ENVIRON["FLOOR_OLD"], o, "old")
-  m = slurp(ENVIRON["FLOOR_NEW"], w, "new")
+  if (old_nl !~ /^[01]$/ || new_nl !~ /^[01]$/) cannot("bad final-newline flags")
+  n = slurp(ENVIRON["FLOOR_OLD"], o)
+  m = slurp(ENVIRON["FLOOR_NEW"], w)
   if (n != m) {
     for (i = 1; i <= n && i <= m && o[i] == w[i]; i++) ;
     refuse(i, "line count changed (old " n " lines, new " m ")")
   }
-  if (term["old"] != term["new"]) refuse(n, "the final newline was added or removed")
+  if (old_nl != new_nl) refuse(n, "the final newline was added or removed")
 
   start = locate(o, n, "old")
   for (stop = start; stop <= n && o[stop] ~ /^\|/; stop++) ;
@@ -191,7 +194,7 @@ BEGIN {
   # same table even if one of those checks is ever loosened.
   if (locate(w, m, "new") != start) refuse(start, "the new file has its table header on another line")
 
-  print docname ": " changed_cells " runner cell(s) changed, " changed_lines " table line(s) differ; nothing else does"
+  print "ok\t" docname ": " changed_cells " runner cell(s) changed, " changed_lines " table line(s) differ; nothing else does"
   exit 0
 }
 '
@@ -222,36 +225,49 @@ function main() {
     fi
   done
 
-  # gawk, not any awk: RT, which carries the final newline, is
-  # gawk-only, and without it two files differing only there would
-  # compare equal.
-  require_tool gawk
+  require_tool awk
+  require_tool tail
+  require_tool wc
 
   local out
   out="$(make_temp)"
   # shellcheck disable=SC2064 # expanded now on purpose: the path is fixed once created
   trap "rm --force -- '${out}'" EXIT
 
+  # 1 when the file's last byte is a newline, 0 otherwise (an empty file
+  # included).
+  local old_nl new_nl
+  old_nl="$(tail --bytes=1 -- "${OLD_FILE}" | wc --lines)"
+  new_nl="$(tail --bytes=1 -- "${NEW_FILE}" | wc --lines)"
+
   local rc=0
   FLOOR_OLD="${OLD_FILE}" FLOOR_NEW="${NEW_FILE}" LC_ALL=C \
-    gawk -v mode="${mode}" -v header="${header}" -v docname="${DOC_PATH}" "${FLOOR_AWK}" >"${out}" || rc=$?
+    awk -v mode="${mode}" -v header="${header}" -v docname="${DOC_PATH}" \
+    -v old_nl="${old_nl}" -v new_nl="${new_nl}" "${FLOOR_AWK}" >"${out}" || rc=$?
 
-  local msg
+  # Only a verdict whose tag matches the exit status counts; an awk that
+  # died, or printed anything else, reads as could-not-check.
+  local msg tag text
   msg="$(<"${out}")"
-  case "${rc}" in
-  0)
-    if [[ -z ${msg} ]]; then
-      log_err "${DOC_PATH}: the comparer printed no verdict"
-      exit 2
-    fi
-    log_info "${msg}"
+  tag="${msg%%$'\t'*}"
+  text="${msg#*$'\t'}"
+  if [[ ${msg} == *$'\n'* ]]; then
+    tag='multi-line'
+  fi
+  case "${rc}:${tag}" in
+  0:ok)
+    log_info "${text}"
     ;;
-  1)
-    log_err "${msg:-${DOC_PATH}: refused}"
+  1:refuse)
+    log_err "${text}"
     exit 1
     ;;
+  2:cannot)
+    log_err "${text}"
+    exit 2
+    ;;
   *)
-    log_err "${msg:-could not compare the two copies of ${DOC_PATH} (gawk exit ${rc})}"
+    log_err "could not compare the two copies of ${DOC_PATH} (awk exit ${rc})"
     exit 2
     ;;
   esac

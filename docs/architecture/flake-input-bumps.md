@@ -661,8 +661,10 @@ once. Padding is free so a wider label can re-pad the whole table.
 
 It exits 1 on a refusal, naming the first offending line, and 2 when it
 cannot compare: wrong arguments, an unknown doc path, a file it
-cannot read, or no `gawk` on PATH (it needs gawk's record terminator to
-compare final newlines). It shares no code with `scripts/refresh-runner-labels.sh`,
+cannot read, a missing tool, or an awk that fails or prints no verdict.
+It is POSIX awk plus coreutils, so it runs on the runner image's own
+`awk` (mawk on `ubuntu-latest`) as well as gawk; the harness runs every
+scenario under both. It shares no code with `scripts/refresh-runner-labels.sh`,
 the generator whose output it checks, so a fault in the generator
 cannot loosen the floor. `tests/check-runner-doc-diff.test.sh` feeds it
 the generator's own re-padded output for a wider label as well as each
