@@ -26,7 +26,11 @@
 #     compares equal once its padding is trimmed, except the runner
 #     column (Runner in ci.md, CI tested in nix.md) of a body row;
 #   - a runner cell that changed is one backticked label (ci.md) or
-#     `yes (` + a backticked label + `)` (nix.md), on both sides.
+#     `yes (` + a backticked label + `)` (nix.md), on both sides, where a
+#     label is a letter or digit followed by letters, digits, `.`, `_`
+#     and `-`, the runs-on label charset. The docs site renders pages
+#     through mkdocs-macros before Markdown, so a cell admitting `{`,
+#     `%` or a space could carry template code into the Pages build.
 # Trimmed comparison is what lets the generator re-pad the whole table
 # when a wider label lands. A table line holding a control-A byte is
 # refused: the cell split stands that byte in for an escaped pipe, so a
@@ -46,7 +50,8 @@
 #   0  only runner cells (and table padding) differ
 #   1  refused: stderr names the first offending line and the reason
 #   2  could not check: wrong argument count, an unknown doc path, a file
-#      that is not a readable regular file, or a read failure
+#      that is not a readable regular file, no gawk on PATH, or a read
+#      failure
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -138,12 +143,9 @@ function locate(lines, n, side,   i, k, c, fence, found, at, same) {
   return at
 }
 function shaped(cell) {
-  return mode == "ci" ? cell ~ /^`[^`]+`$/ : cell ~ /^yes \(`[^`]+`\)$/
+  return mode == "ci" ? cell ~ /^`[A-Za-z0-9][A-Za-z0-9._-]*`$/ : cell ~ /^yes \(`[A-Za-z0-9][A-Za-z0-9._-]*`\)$/
 }
 BEGIN {
-  # RT, which carries the final newline, is gawk-only; without it two
-  # files differing only there would compare equal.
-  if (PROCINFO["version"] == "") cannot("this check needs gawk")
   hn = split(header, want, "|")
   col = mode == "ci" ? 2 : 3
   shape = mode == "ci" ? "one backticked label" : "yes (<backticked label>)"
@@ -220,7 +222,10 @@ function main() {
     fi
   done
 
-  require_tool awk
+  # gawk, not any awk: RT, which carries the final newline, is
+  # gawk-only, and without it two files differing only there would
+  # compare equal.
+  require_tool gawk
 
   local out
   out="$(make_temp)"
@@ -229,7 +234,7 @@ function main() {
 
   local rc=0
   FLOOR_OLD="${OLD_FILE}" FLOOR_NEW="${NEW_FILE}" LC_ALL=C \
-    awk -v mode="${mode}" -v header="${header}" -v docname="${DOC_PATH}" "${FLOOR_AWK}" >"${out}" || rc=$?
+    gawk -v mode="${mode}" -v header="${header}" -v docname="${DOC_PATH}" "${FLOOR_AWK}" >"${out}" || rc=$?
 
   local msg
   msg="$(<"${out}")"
@@ -246,7 +251,7 @@ function main() {
     exit 1
     ;;
   *)
-    log_err "${msg:-could not compare the two copies of ${DOC_PATH} (awk exit ${rc})}"
+    log_err "${msg:-could not compare the two copies of ${DOC_PATH} (gawk exit ${rc})}"
     exit 2
     ;;
   esac

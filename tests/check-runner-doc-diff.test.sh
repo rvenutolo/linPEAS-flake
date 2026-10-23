@@ -199,6 +199,26 @@ function main() {
     "${NIX_PATH}:${nix_arm_line}: the new runner cell is not yes (" \
     "${NIX_PATH}" "${dir}/old.md" "${dir}/new.md"
 
+  # runner-cell-template-refused: the site renders pages through
+  # mkdocs-macros, so a template in a label-shaped cell would run in the
+  # Pages build; the label charset keeps it out. It edits the x86_64 row
+  # so its refusal names a different line from nix-runner-shape-refused.
+  local nix_x86_line
+  nix_x86_line="$(line_of "${LIVE_NIX_DOC}" "^\\| ${tick}x86_64-linux${tick} ")"
+  dir="$(new_case runner-cell-template-refused "${LIVE_NIX_DOC}")"
+  sed --in-place "${nix_x86_line}s/yes (${tick}${x86_label//./\\.}${tick})/yes (${tick}{{ PAYLOAD_RAN }}${tick})/" \
+    "${dir}/new.md"
+  expect 'runner-cell-template-refused' "${dir}" 1 \
+    "${NIX_PATH}:${nix_x86_line}: the new runner cell is not yes (<backticked label>)" \
+    "${NIX_PATH}" "${dir}/old.md" "${dir}/new.md"
+
+  # runner-cell-space-refused: a space is outside the label charset.
+  dir="$(new_case runner-cell-space-refused "${LIVE_CI_DOC}")"
+  sed --in-place "${arm_line}s/${tick}${arm_label//./\\.}${tick}/${tick}PAYLOAD RAN${tick}/" "${dir}/new.md"
+  expect 'runner-cell-space-refused' "${dir}" 1 \
+    "${CI_PATH}:${arm_line}: the new runner cell is not one backticked label" \
+    "${CI_PATH}" "${dir}/old.md" "${dir}/new.md"
+
   # separator-refused: an alignment colon in the separator row.
   dir="$(new_case separator-refused "${LIVE_CI_DOC}")"
   sed --in-place "$((ci_header + 1))s/^| -/| :/" "${dir}/new.md"
@@ -262,6 +282,25 @@ function main() {
   dir="$(new_case wrong-arg-count "${LIVE_CI_DOC}")"
   expect 'wrong-arg-count' "${dir}" 2 'usage: check-runner-doc-diff.sh <doc-path> <old-file> <new-file>' \
     "${CI_PATH}" "${dir}/old.md"
+
+  # no-gawk: a PATH holding every tool the script runs except gawk.
+  dir="$(new_case no-gawk "${LIVE_CI_DOC}")"
+  mkdir -- "${dir}/bin"
+  local tool
+  for tool in bash date mktemp rm; do
+    ln --symbolic -- "$(command -v "${tool}")" "${dir}/bin/${tool}"
+  done
+  local rc=0
+  PATH="${dir}/bin" "${SCRIPT}" "${CI_PATH}" "${dir}/old.md" "${dir}/new.md" \
+    >"${dir}/run.out" 2>"${dir}/run.err" || rc=$?
+  printf 'harness-assert-outcome: exit=%d\n' "${rc}" >"${dir}/run.outcome"
+  harness_assert_record 'no-gawk' 'missing required tool: gawk' "${dir}/run.outcome" "${dir}/run.out" "${dir}/run.err"
+  if [[ ${rc} -eq 2 ]] && grep --fixed-strings --quiet -- 'missing required tool: gawk' "${dir}/run.err"; then
+    pass 'no-gawk: exits 2 naming the missing tool'
+  else
+    fail "no-gawk: exit ${rc}, want 2 and stderr naming gawk"
+    sed 's/^/    /' -- "${dir}/run.err" >&2
+  fi
 
   harness_assert_verify || failures=$((failures + 1))
 
