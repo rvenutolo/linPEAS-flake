@@ -10,10 +10,16 @@ name: ci-watchdog
 # place and increments its `run_attempt`, so the API already holds the counter.
 # A new commit produces a new run at attempt 1, which resets the budget.
 #
-# Every failure is re-run, without classifying it as transient. A signature
-# list would rot, and it cannot work here anyway: `connection refused` is both
-# the CDN-blip signature and the harden-runner egress-block signature, and the
-# latter is a permanent configuration bug.
+# scripts/classify-ci-run.sh --policy bot-pr decides, per run, whether to
+# retry, escalate or skip; it is the single source of truth for which
+# failures count. Under that policy every failed or timed-out job counts,
+# without a signature list, which would rot: `connection refused` is both
+# the CDN-blip signature and the harden-runner egress-block signature, and
+# the latter is a permanent configuration bug. A job that exceeds its
+# timeout is recorded as `cancelled`, not `timed_out`, so the classifier
+# recognizes it by its annotation and counts it. A cancel superseded by a
+# newer run, or any other cancel, is ignored: re-running it would resurrect
+# a run for a replaced commit.
 #
 # On exhausting the bound, one issue is opened per stuck PR, deduped by title.
 # A watchdog that gives up silently recreates the bug it exists to fix.
@@ -46,6 +52,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       actions: write # reRunWorkflowFailedJobs
+      checks: read # job annotations that classify a cancel as a timeout
       contents: read
       issues: write # escalation on exhausting the retry bound
       pull-requests: read # enumerate bot PRs and their auto-merge state
@@ -62,12 +69,13 @@ jobs:
       - name: re-run failed jobs on stuck bot PRs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          MAX_ATTEMPTS: "3"
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           # A GitHub 5xx on any request otherwise faults the whole sweep.
-          # This retry is per-HTTP-request and is unrelated to MAX_ATTEMPTS,
-          # which bounds workflow-run re-runs.
+          # This retry is per-HTTP-request and is unrelated to the attempt
+          # cap, which bounds workflow-run re-runs.
           #
           # The exempt list is the action's default plus 409. The input
           # replaces the default wholesale, so every code must be restated:
@@ -81,8 +89,112 @@ jobs:
           retries: "3"
           retry-exempt-status-codes: 400,401,403,404,409,422
           script: |
-            const maxAttempts = Number(process.env.MAX_ATTEMPTS);
+            const { execFileSync } = require('child_process');
             const { owner, repo } = context.repo;
+            const scripts = `${process.env.GITHUB_WORKSPACE}/scripts`;
+            const execOpts = { encoding: 'utf8', timeout: 180000 };
+            const maxAttempts = Number(
+              execFileSync(`${scripts}/classify-ci-run.sh`, ['--print-max-attempts'], execOpts),
+            );
+
+            // Opens, or comments on, the one issue for `title`. `detail` is
+            // the markdown that names what failed, `observation` the stable
+            // string of everything this sweep saw: a report that repeats the
+            // last observation is not posted. Dedupe is by exact title, so
+            // each stuck subject gets one issue.
+            async function escalate({ title, detail, observation }) {
+              // The observation is carried in an HTML comment because the
+              // marker has to survive in the issue and read as nothing to a
+              // human: the alternative, re-deriving it by parsing the prose
+              // back out of a previous comment, breaks the moment the prose
+              // is reworded.
+              const marker = `<!-- ci-watchdog-observation: ${observation} -->`;
+              const body =
+                `The retry watchdog exhausted the ${maxAttempts}-attempt ` +
+                `budget (the original run plus ${maxAttempts - 1} re-runs) and ` +
+                `the jobs failed every time. This is no longer a transient — ` +
+                `treat it as a real failure.\n\n` +
+                `${detail}\n\n` +
+                `Filed by the \`ci-watchdog\` workflow.\n\n` +
+                `What to do: ` +
+                `https://github.com/${owner}/${repo}/blob/main/docs/runbooks/ci-watchdog.md` +
+                `\n\n${marker}`;
+
+              const open = await github.paginate(github.rest.issues.listForRepo, {
+                owner,
+                repo,
+                state: 'open',
+                labels: 'ci-watchdog',
+                per_page: 100,
+              });
+              const existing = open.find((i) => i.title === title);
+
+              if (existing) {
+                // The open issue is already the signal that this subject is
+                // stuck. A tick that observed exactly what the last report
+                // did adds nothing, and this workflow ticks on a schedule
+                // for as long as it stays red — so commenting
+                // unconditionally buries the reports that DO carry news
+                // under an unbounded run of identical ones.
+                //
+                // The comparison is against the LAST marker on the issue,
+                // body included: the body carries the first observation, and
+                // each later comment carries the one that displaced it. A
+                // report the watchdog has already made and then moved past
+                // must be able to recur — a PR that gets pushed to, fails
+                // differently, and is then reverted is genuinely news twice.
+                const comments = await github.paginate(
+                  github.rest.issues.listComments,
+                  { owner, repo, issue_number: existing.number, per_page: 100 },
+                );
+                const reports = [existing.body ?? '', ...comments.map((c) => c.body ?? '')]
+                  .filter((b) => b.includes('<!-- ci-watchdog-observation: '));
+                const last = reports[reports.length - 1];
+                if (last !== undefined && last.includes(marker)) {
+                  core.notice(
+                    `${title}: issue #${existing.number} already reports ` +
+                      `this observation; not commenting.`,
+                  );
+                  return;
+                }
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: existing.number,
+                  body:
+                    `Still exhausted, and this check observed something the ` +
+                    `last report did not.\n\n${detail}\n\n${marker}`,
+                });
+                core.notice(`${title}: appended to issue #${existing.number}`);
+                return;
+              }
+
+              // createLabel 422s when the label already exists; swallow only that.
+              // Any other status rethrows to the caller, which fails this
+              // subject without stopping the sweep.
+              try {
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name: 'ci-watchdog',
+                  color: 'b60205',
+                  description: 'Auto-merge bot PR stuck after exhausting CI retries',
+                });
+              } catch (err) {
+                if (err.status !== 422) {
+                  throw err;
+                }
+              }
+
+              const created = await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+                labels: ['ci-watchdog'],
+              });
+              core.notice(`${title}: opened issue #${created.data.number}`);
+            }
 
             const prs = await github.paginate(github.rest.pulls.list, {
               owner,
@@ -120,149 +232,85 @@ jobs:
                   continue;
                 }
 
-                // `cancelled` is excluded: it is nearly always a
-                // concurrency-group cancel superseded by a newer run, so
-                // re-running it would resurrect a run for a replaced commit.
-                const failed = runs.filter(
-                  (r) => r.conclusion === 'failure' || r.conclusion === 'timed_out',
+                // Candidates are every run that did not succeed. The
+                // classifier, not the conclusion, decides which count: a
+                // timeout is recorded as `cancelled`, while a cancel
+                // superseded by a newer run must not be resurrected.
+                const candidates = runs.filter(
+                  (r) =>
+                    r.conclusion === 'failure' ||
+                    r.conclusion === 'timed_out' ||
+                    r.conclusion === 'cancelled',
                 );
-                if (failed.length === 0) {
-                  continue;
-                }
 
-                const retryable = failed.filter((r) => r.run_attempt < maxAttempts);
-                const exhausted = failed.filter((r) => r.run_attempt >= maxAttempts);
-
-                for (const run of retryable) {
-                  core.notice(
-                    `PR #${pr.number}: re-running ${run.name} ` +
-                      `(attempt ${run.run_attempt}/${maxAttempts})`,
+                const exhausted = [];
+                for (const run of candidates) {
+                  const runJson = execFileSync(
+                    `${scripts}/fetch-ci-run.sh`,
+                    [String(run.id)],
+                    execOpts,
                   );
-                  await github.rest.actions.reRunWorkflowFailedJobs({
-                    owner,
-                    repo,
-                    run_id: run.id,
+                  const [verdict, ...lines] = execFileSync(
+                    `${scripts}/classify-ci-run.sh`,
+                    ['--policy', 'bot-pr'],
+                    { ...execOpts, input: runJson },
+                  )
+                    .split('\n')
+                    .filter((l) => l !== '');
+                  const jobLines = lines.map((l) => {
+                    const [job, cls, reason] = l.split('\t');
+                    return `  - \`${job}\`: ${cls} (${reason})`;
                   });
+
+                  if (verdict === 'retry') {
+                    core.notice(
+                      `PR #${pr.number}: re-running ${run.name} ` +
+                        `(attempt ${run.run_attempt}/${maxAttempts})\n` +
+                        jobLines.join('\n'),
+                    );
+                    await github.rest.actions.reRunWorkflowFailedJobs({
+                      owner,
+                      repo,
+                      run_id: run.id,
+                    });
+                  } else if (verdict === 'exhausted') {
+                    exhausted.push({ run, jobLines });
+                  } else if (verdict !== 'ignore') {
+                    throw new Error(
+                      `classify-ci-run.sh returned unexpected verdict ` +
+                        `\`${verdict}\` for run ${run.id}`,
+                    );
+                  }
                 }
 
                 if (exhausted.length === 0) {
                   continue;
                 }
 
-                // Escalate. Dedupe by exact title so each stuck PR gets one
-                // issue; a second exhaustion comments only when it observed
-                // something new.
-                const title = `ci-watchdog: PR #${pr.number} exhausted retries`;
-                const detail = exhausted
+                const runDetail = exhausted
                   .map(
-                    (r) =>
-                      `- \`${r.name}\` — attempt ${r.run_attempt}, ` +
-                      `conclusion \`${r.conclusion}\` — ${r.html_url}`,
+                    ({ run: r, jobLines }) =>
+                      [
+                        `- \`${r.name}\` — attempt ${r.run_attempt}, ` +
+                          `conclusion \`${r.conclusion}\` — ${r.html_url}`,
+                        ...jobLines.map((l) => `  ${l}`),
+                      ].join('\n'),
                   )
                   .join('\n');
-                // Everything this sweep actually observed about the PR,
-                // rendered as one stable string. Run ids are sorted so the
-                // order the API happened to page them in is not part of the
-                // identity. Carried in an HTML comment because the marker has
-                // to survive in the issue and read as nothing to a human:
-                // the alternative, re-deriving the observation by parsing the
-                // prose back out of a previous comment, breaks the moment the
-                // prose is reworded.
-                const observation = [
-                  pr.head.sha,
-                  ...exhausted
-                    .map((r) => `${r.id}:${r.run_attempt}:${r.conclusion}`)
-                    .sort(),
-                ].join(' ');
-                const marker = `<!-- ci-watchdog-observation: ${observation} -->`;
-                const body =
-                  `The retry watchdog exhausted this PR's ${maxAttempts}-attempt ` +
-                  `budget (the original run plus ${maxAttempts - 1} re-runs) and ` +
-                  `the jobs failed every time. This is no longer a transient — ` +
-                  `treat it as a real failure.\n\n` +
-                  `PR: ${pr.html_url}\nHead commit: \`${pr.head.sha}\`\n\n` +
-                  `Exhausted runs:\n\n${detail}\n\n` +
-                  `Filed by the \`ci-watchdog\` workflow.\n\n` +
-                  `What to do: ` +
-                  `https://github.com/${owner}/${repo}/blob/main/docs/runbooks/ci-watchdog.md` +
-                  `\n\n${marker}`;
-
-                const open = await github.paginate(github.rest.issues.listForRepo, {
-                  owner,
-                  repo,
-                  state: 'open',
-                  labels: 'ci-watchdog',
-                  per_page: 100,
+                // Run ids are sorted so the order the API happened to page
+                // them in is not part of the identity.
+                await escalate({
+                  title: `ci-watchdog: PR #${pr.number} exhausted retries`,
+                  detail:
+                    `PR: ${pr.html_url}\nHead commit: \`${pr.head.sha}\`\n\n` +
+                    `Exhausted runs:\n\n${runDetail}`,
+                  observation: [
+                    pr.head.sha,
+                    ...exhausted
+                      .map(({ run: r }) => `${r.id}:${r.run_attempt}:${r.conclusion}`)
+                      .sort(),
+                  ].join(' '),
                 });
-                const existing = open.find((i) => i.title === title);
-
-                if (existing) {
-                  // The open issue is already the signal that this PR is
-                  // stuck. A tick that observed exactly what the last report
-                  // did adds nothing, and this workflow ticks on a schedule
-                  // for as long as the PR stays red — so commenting
-                  // unconditionally buries the reports that DO carry news
-                  // under an unbounded run of identical ones.
-                  //
-                  // The comparison is against the LAST marker on the issue,
-                  // body included: the body carries the first observation, and
-                  // each later comment carries the one that displaced it. A
-                  // report the watchdog has already made and then moved past
-                  // must be able to recur — a PR that gets pushed to, fails
-                  // differently, and is then reverted is genuinely news twice.
-                  const comments = await github.paginate(
-                    github.rest.issues.listComments,
-                    { owner, repo, issue_number: existing.number, per_page: 100 },
-                  );
-                  const reports = [existing.body ?? '', ...comments.map((c) => c.body ?? '')]
-                    .filter((b) => b.includes('<!-- ci-watchdog-observation: '));
-                  const last = reports[reports.length - 1];
-                  if (last !== undefined && last.includes(marker)) {
-                    core.notice(
-                      `PR #${pr.number}: issue #${existing.number} already reports ` +
-                        `this observation; not commenting.`,
-                    );
-                    continue;
-                  }
-                  await github.rest.issues.createComment({
-                    owner,
-                    repo,
-                    issue_number: existing.number,
-                    body:
-                      `Still exhausted, and this check observed something the ` +
-                      `last report did not.\n\n` +
-                      `Head commit: \`${pr.head.sha}\`\n\n` +
-                      `Exhausted runs:\n\n${detail}\n\n${marker}`,
-                  });
-                  core.notice(`PR #${pr.number}: appended to issue #${existing.number}`);
-                  continue;
-                }
-
-                // createLabel 422s when the label already exists; swallow only that.
-                // Any other status rethrows to the per-PR catch, which fails this PR
-                // without stopping the sweep.
-                try {
-                  await github.rest.issues.createLabel({
-                    owner,
-                    repo,
-                    name: 'ci-watchdog',
-                    color: 'b60205',
-                    description: 'Auto-merge bot PR stuck after exhausting CI retries',
-                  });
-                } catch (err) {
-                  if (err.status !== 422) {
-                    throw err;
-                  }
-                }
-
-                const created = await github.rest.issues.create({
-                  owner,
-                  repo,
-                  title,
-                  body,
-                  labels: ['ci-watchdog'],
-                });
-                core.notice(`PR #${pr.number}: opened issue #${created.data.number}`);
               } catch (err) {
                 // The status and the stack are the whole diagnostic: this path has no
                 // test coverage and cannot be provoked on demand, so the job log is the

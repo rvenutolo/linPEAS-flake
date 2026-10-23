@@ -5,10 +5,19 @@
 `ci-watchdog` runs on a cron schedule
 (see [CI — cron schedule](../architecture/ci.md#cron-schedule)). It finds
 open bot-authored pull requests that have auto-merge enabled and a completed
-run on their current head commit that concluded `failure` or `timed_out`, and
-re-runs the failed jobs. A PR with any run still in progress is deferred to the
-next tick, and `cancelled` runs are never re-run — they are nearly always
-concurrency-group cancels superseded by a newer run.
+run on their current head commit that concluded `failure`, `timed_out` or
+`cancelled`, and asks `scripts/classify-ci-run.sh --policy bot-pr` what to do
+with each. That script is the single source of truth for which failures
+count; the verdict is `retry` (re-run the failed jobs), `exhausted`
+(escalate) or `ignore` (skip). A PR with any run still in progress is
+deferred to the next tick.
+
+A job that exceeds its timeout is recorded by GitHub as `cancelled`, not
+`timed_out`, so the classifier recognizes it by the job's annotation and
+counts it like any other failure. A `cancelled` run whose jobs were
+cancelled by a newer run in the same concurrency group, or for any other
+reason, is ignored: re-running it would resurrect a run for a replaced
+commit.
 
 Each run gets at most 3 attempts. `reRunWorkflowFailedJobs` re-runs a run in
 place and increments its attempt counter, so the bound needs no stored
@@ -37,11 +46,18 @@ and no error is swallowed. The one swallowed status is `createLabel`'s
 422, which means the escalation label already exists and is not an error
 at all.
 
-The watchdog re-runs **any** failure, without trying to classify it as
-transient. Classification would need a hand-maintained list of failure
-signatures, and such lists rot silently. It also could not work here:
-`connection refused` is both the signature of a CDN blip and the signature
-of a harden-runner egress block, which is a permanent configuration bug.
+Under the `bot-pr` policy every counted failure is retried, without a
+hand-maintained list of transient signatures; such lists rot silently. It
+could not work here anyway: `connection refused` is both the signature of a
+CDN blip and the signature of a harden-runner egress block, which is a
+permanent configuration bug. The classifier does still tag every counted
+failure with a class and a reason, and the watchdog lists those tags in the
+re-run notice and in the escalation issue.
+
+The watchdog fetches each candidate run through `scripts/fetch-ci-run.sh`,
+which reads job annotations and so needs `checks: read` beside the
+`actions: write` the re-run holds. A fetch or classifier failure counts as an
+error against that PR, handled like any other per-PR error below.
 
 ## Why it exists
 
