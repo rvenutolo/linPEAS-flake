@@ -1000,14 +1000,14 @@ even when the pre-commit hook is bypassed.
 
 ## Generated-document ownership
 
-Twelve regions are written by a `refresh-*.sh` generator and must not be
+Fourteen regions are written by a `refresh-*.sh` generator and must not be
 hand-edited — one per `@generates` / `@generates-block` declaration those
 generators carry, which `grep -h '^# @generates' scripts/refresh-*.sh` lists
 (`README.md` carries two of them). Two are whole files:
 [`docs/reference/test-harnesses.md`](../reference/test-harnesses.md) and
 [`docs/security/enforcement-matrix.md`](../security/enforcement-matrix.md),
-whose generators emit the heading and every line around the table. The other
-ten are marked-off blocks inside a hand-written page:
+whose generators emit the heading and every line around the table. Ten are
+marked-off blocks inside a hand-written page:
 
 1. the flake-show block above;
 1. the scripts-reference block in
@@ -1025,11 +1025,17 @@ ten are marked-off blocks inside a hand-written page:
     [`auto-update.md`](../architecture/auto-update.md);
 1. the ephemeral-refs-gap block above.
 
-`refresh-just-recipes.sh` owns two of those, which is why eleven generators
-produce twelve regions. This list splits by what the generator emits; the
-annotations split by size-label ownership, where a page whose block is the
-whole of its content is `@generates` even though it splices into a fixed
-header — see [labeling.md](labeling.md#ignore-list-parity) for the
+The last two are table columns inside a hand-written page, which
+`refresh-runner-labels.sh` finds by the table's header row rather than by
+markers, so the rest of each table stays hand-written: the Runner column of the
+functional-gates table in [`ci.md`](../architecture/ci.md) and the CI tested
+column of the platform-support table in [`nix.md`](../install/nix.md).
+
+`refresh-just-recipes.sh` and `refresh-runner-labels.sh` each own two of those,
+which is why twelve generators produce fourteen regions. This list splits by
+what the generator emits; the annotations split by size-label ownership, where
+a page whose block is the whole of its content is `@generates` even though it
+splices into a fixed header — see [labeling.md](labeling.md#ignore-list-parity) for the
 annotation convention. Prose outside a block is ordinary hand-written
 documentation and is
 edited normally.
@@ -1039,10 +1045,10 @@ trips: the hooks exit 0 under `NIX_BUILD_TOP`, so they run on the commit path
 rather than inside `nix flake check`. Each also has a
 `tests/refresh-*.test.sh` harness in the required `doc-freshness` context, but
 most of those regenerate before asserting `--check`, which tests the generator
-rather than the committed file; `refresh-flake-show`, `refresh-pin-parity` and
-`refresh-ephemeral-refs-gap` are the three that `--check` the tree as
-committed. A block hand-edited past the hooks — through the web UI, or with
-`--no-verify` — is therefore caught by the next regeneration, not by CI.
+rather than the committed file; `refresh-flake-show`, `refresh-pin-parity`,
+`refresh-ephemeral-refs-gap` and `refresh-runner-labels` are the four that
+`--check` the tree as committed. A block hand-edited past the hooks — through
+the web UI, or with `--no-verify` — is therefore caught by the next regeneration, not by CI.
 
 Fixing content inside one of these regions means editing its generator — or,
 for the enforcement matrix, the `enforcer:` / `ci:` / `hook:` annotations in

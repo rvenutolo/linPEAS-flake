@@ -2153,6 +2153,17 @@ in the flake.
 
 - `--check` — exit 1 if the doc would change; exit 2 if the doc is missing; do not mutate the working tree
 
+### scripts/refresh-runner-labels.sh
+
+Rewrite the runner labels in the functional-gates table of
+docs/architecture/ci.md and the platform-support table of
+docs/install/nix.md from the runs-on: of the jobs in
+.github/workflows/ci.yml.
+
+**Options:**
+
+- `--check` — exit 1 if either doc would change; exit 2 if an input file is missing, if a table's header row is missing or appears more than once, if a row is malformed or names a job ci.yml lacks or a system no job feeds, if a table job's runs-on is not one plain runner label, if the jobs feeding one system disagree on their runner, if ci.yml holds a job key the job list cannot carry (see scripts/lib/job-keys.sh), or if a tool fails to read the inputs
+
 ### scripts/refresh-scripts-reference.sh
 
 Regenerate the scripts-reference managed block in

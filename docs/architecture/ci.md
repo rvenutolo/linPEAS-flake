@@ -11,8 +11,8 @@ is in the next section.
 ```mermaid
 flowchart LR
   pr["PR / push to main"]
-  flakecheck["flake-check<br/>(ubuntu-latest)"]
-  build["build-linpeas<br/>(ubuntu-latest)"]
+  flakecheck["flake-check"]
+  build["build-linpeas"]
   smoke["smoke-test"]
   buildarm["build-linpeas-arm64"]
   smokearm["smoke-test-arm64"]
