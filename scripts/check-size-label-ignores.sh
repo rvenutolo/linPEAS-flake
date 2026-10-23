@@ -25,10 +25,11 @@
 #   @generates <path>        this script owns that file's content for
 #                            size-label purposes; the path MUST be on
 #                            IGNORED.
-#   @generates-block <path>  this script splices a block into a file that
-#                            is otherwise hand-authored; the path MUST
-#                            NOT be on IGNORED, because the churn around
-#                            the block is authored change.
+#   @generates-block <path>  this script writes part of a file that is
+#                            otherwise hand-authored (a marked block or a
+#                            table column); the path MUST NOT be on
+#                            IGNORED, because the churn around the
+#                            generated part is authored change.
 #
 # Only the header block counts, on the same terminator the annotation
 # parser uses — the first line that is neither a comment nor blank — so a
