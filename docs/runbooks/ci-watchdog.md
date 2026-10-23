@@ -8,7 +8,9 @@
 retried minutes after it happens and the cron is the fallback. A
 `workflow_run` completion that concluded `success` or `skipped` leaves
 nothing to retry, so the job's `if:` skips it, which keeps the sweep's API
-requests down; such a no-op run gets a concurrency group of its own, so it
+requests down. It also skips a completion whose head is in another
+repository (a fork PR's CI), so a fork cannot start a sweep that holds
+`actions: write` and `issues: write`. Such a no-op run gets a concurrency group of its own, so it
 cannot cancel a real sweep waiting in the `ci-watchdog` group. The cron and
 `workflow_dispatch` always sweep. Each run is
 one sweep in two loops, and each loop asks `scripts/classify-ci-run.sh` what

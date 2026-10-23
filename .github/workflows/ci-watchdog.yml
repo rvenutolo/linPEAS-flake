@@ -68,16 +68,19 @@ name: ci-watchdog
 # The `workflow_run` trigger starts a sweep minutes after any other
 # workflow completes without succeeding, re-runs included: a completion
 # that concluded `success` or `skipped` leaves nothing to retry, so the
-# job skips it, which keeps the request volume down. The cron is the
-# fallback, and it and `workflow_dispatch` always sweep. On a
-# `workflow_run` event the watchdog runs this file from the default branch with the default branch checked out
-# and never checks out or runs code from the triggering run, so the
-# privilege-escalation pattern zizmor's dangerous-triggers audit warns
-# about is not present (see zizmor.yml). Its `workflows:` list names every
-# other workflow, asserted by tests/ci-watchdog-coverage.test.sh. The
-# `concurrency` group collapses a burst of completions to one pending
-# sweep, which is enough because every sweep covers everything.
-
+# job skips it, which keeps the request volume down. So does a
+# completion of a run whose head is in another repository (a fork PR's
+# CI): it must not start a sweep holding `actions: write` and
+# `issues: write`, and nothing the sweep retries comes from a fork. The
+# cron is the fallback, and it and `workflow_dispatch` always sweep. On
+# a `workflow_run` event the watchdog runs this file from the default
+# branch with the default branch checked out and never checks out or
+# runs code from the triggering run, so the privilege-escalation pattern
+# zizmor's dangerous-triggers audit warns about is not present (see
+# zizmor.yml). Its `workflows:` list names every other workflow,
+# asserted by tests/ci-watchdog-coverage.test.sh. The `concurrency`
+# group collapses a burst of completions to one pending sweep, which is
+# enough because every sweep covers everything.
 #
 # Runbook: docs/runbooks/ci-watchdog.md
 
@@ -117,13 +120,15 @@ on:
 
 permissions: {}
 
-# A `workflow_run` completion that concluded `success` or `skipped` needs
-# no sweep, so the job's `if:` skips it. Such a run still joins its
-# concurrency group before the `if:` is read, and a run queued in a group
-# cancels the one already pending there, so a skipped no-op would cancel
-# a pending real sweep. The no-op runs therefore get a group of their own.
+# A `workflow_run` completion that concluded `success` or `skipped`, or
+# whose head is in another repository, needs no sweep, so the job's `if:`
+# skips it. Such a run still joins its concurrency group before the `if:`
+# is read, and a run queued in a group cancels the one already pending
+# there, so a skipped no-op would cancel a pending real sweep. The no-op
+# runs therefore get a group of their own. The `workflow_run` conditions
+# here are the exact complement of the ones in the `retry` job's `if:`.
 concurrency:
-  group: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'skipped') && format('ci-watchdog-noop-{0}', github.run_id) || 'ci-watchdog' }}
+  group: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'skipped' || github.event.workflow_run.head_repository.full_name != github.repository) && format('ci-watchdog-noop-{0}', github.run_id) || 'ci-watchdog' }}
   cancel-in-progress: false
 
 jobs:
@@ -132,7 +137,8 @@ jobs:
       github.repository == 'rvenutolo/linPEAS-flake' &&
       (github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion != 'success' &&
-      github.event.workflow_run.conclusion != 'skipped'))
+      github.event.workflow_run.conclusion != 'skipped' &&
+      github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
