@@ -122,15 +122,18 @@ This means:
 ## Release-time verification retries<a name="release-time-verification-retries"></a>
 
 The `verify` job of `release-on-bump.yml` checks each artifact moments
-after it is published, and Docker Hub's referrers index can lag a push by
-a minute or two, so a signature or attestation that is present can still
+after it is published. Docker Hub's referrers index can lag a push by a
+minute or two, so a signature or attestation that is present can still
 read as missing. Three of its steps therefore run each check through
 `scripts/retry-command.sh`, up to 5 attempts 30 seconds apart:
 
 - `verify per-arch attestations`, for each of the four per-arch digests;
 - `cosign verify per-arch + multi-arch images (keyless)`, for each of
     the four per-arch and two index digests;
-- `verify pin file attestation`, for `linpeas-pin.json`.
+- `verify pin file attestation`, for `linpeas-pin.json`. This check reads
+    the GitHub attestation API rather than the Docker Hub referrers index,
+    so its retry covers a transient API error or a lag before a newly
+    created attestation is readable there.
 
 The last attempt's output is shown unchanged, and a check that still
 fails after it fails the job. The weekly `verify-latest-release.yml` does

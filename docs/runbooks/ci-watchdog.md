@@ -10,12 +10,12 @@ retried minutes after it happens and the cron is the fallback. A
 nothing to retry, so the job's `if:` skips it, which keeps the sweep's API
 requests down. It also skips a completion whose head is in another
 repository (a fork PR's CI), so a fork cannot start a sweep that holds
-`actions: write` and `issues: write`. Such a no-op run gets a concurrency group of its own, so it
-cannot cancel a real sweep waiting in the `ci-watchdog` group. The cron and
-`workflow_dispatch` always sweep. Each run is
-one sweep in two loops, and each loop asks `scripts/classify-ci-run.sh` what
-to do with every candidate run. That script is the single source of truth
-for which failures count.
+`actions: write` and `issues: write`. Such a no-op run gets a
+concurrency group of its own, so it cannot cancel a real sweep waiting in
+the `ci-watchdog` group. The cron and `workflow_dispatch` always sweep.
+Each run is one sweep in two loops, and each loop asks
+`scripts/classify-ci-run.sh` what to do with every candidate run. That
+script is the single source of truth for which failures count.
 
 The **bot-PR loop** finds open bot-authored pull requests that have
 auto-merge enabled and a completed run on their current head commit that
@@ -31,8 +31,8 @@ created in the last 72 hours, and `scripts/select-automated-runs.sh` picks
 the candidates from them. A candidate's latest attempt must have finished
 (its `updated_at`) in the last 24 hours, so the first sweep after a deploy
 does not retry old history, while a run created before that window whose
-re-run finished inside it is still retried or filed. It drops the watchdog's own runs,
-which the classifier would only report, so a failing watchdog does not
+re-run finished inside it is still retried or filed. It drops the
+watchdog's own runs, which the classifier would only report, so a failing watchdog does not
 fetch its own failed runs on every sweep. For `push` and `schedule` it
 keeps only the newest run of each workflow per event: a newer run, finished
 or still in progress, replaced the older ones. Every `workflow_run` run is a
@@ -247,8 +247,9 @@ tells you which of three things happened:
     already re-run). Read the log's stack trace directly; the per-item
     guidance below does not apply. Enumerating the automated runs is
     different: its failure is caught and reported as the item
-    `automated-run enumeration`, and the bot-PR loop's work stands. If the run holds no `retry` log at
-    all, the job never started and there is no stack trace to read — see
+    `automated-run enumeration`, and the bot-PR loop's work stands. If the
+    run holds no `retry` log at all, the job never started and there is no
+    stack trace to read — see
     [Cancelled-job attribution](../architecture/ci.md#cancelled-job-attribution).
 - **`Sweep halted by rate limit; ...`.** The sweep hit a rate limit partway
     through and stopped rather than keep spending an exhausted budget. The

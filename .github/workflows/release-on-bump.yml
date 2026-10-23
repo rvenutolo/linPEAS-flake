@@ -1235,8 +1235,14 @@ jobs:
       && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # checks/statuses/pull-requests read serve the one `gh pr view` that reads
+    # a PR's check rollup with the job token (see the mint step below); the
+    # App token is minted without checks or statuses read.
     permissions:
+      checks: read
       contents: read
+      pull-requests: read
+      statuses: read
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
@@ -1271,7 +1277,9 @@ jobs:
           # (contents:write) plus open/auto-merge the changelog PR
           # (pull-requests:write). protect-main bypass_actors == [] so
           # direct-to-main commits are blocked; PR + auto-merge is the
-          # only path that satisfies the pull_request rule.
+          # only path that satisfies the pull_request rule. The token cannot
+          # read a PR's check rollup (checks and statuses read are not
+          # granted), so the deadline hand-off reads it with the job token.
           permission-contents: write
           permission-pull-requests: write
 
@@ -1326,6 +1334,7 @@ jobs:
           BUMP_APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
+          ROLLUP_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.release.outputs.version }}
         run: |
           set -Eeuo pipefail
@@ -1487,7 +1496,10 @@ jobs:
           # not behind main or conflicting, and a failed check on its head to
           # re-run (scripts/changelog-pr-handoff.sh decides). Any other open
           # PR fails the step, so notify files rather than leave a PR open
-          # that nothing will ever re-run or report.
+          # that nothing will ever re-run or report. The hand-off read is the
+          # only call made with the job token (ROLLUP_TOKEN): statusCheckRollup
+          # needs checks and statuses read, which the App token lacks. A
+          # failed read fails the step under `set -Eeuo pipefail`.
           # `gh pr view` by number still resolves after --delete-branch.
           pr_number="$(gh pr view "${pr_ref}" --json number --jq .number)"
           gh pr merge "${pr_number}" --auto --merge --delete-branch
@@ -1503,7 +1515,7 @@ jobs:
               exit 1
             fi
             if (($(date +%s) > deadline)); then
-              decision="$(gh pr view "${pr_number}" --json autoMergeRequest,mergeStateStatus,statusCheckRollup |
+              decision="$(GH_TOKEN="${ROLLUP_TOKEN}" gh pr view "${pr_number}" --json autoMergeRequest,mergeStateStatus,statusCheckRollup |
                 scripts/changelog-pr-handoff.sh)"
               if [[ "${decision}" == handoff ]]; then
                 printf '::warning::changelog PR #%s not merged after 35m; a check failed with auto-merge armed, handing to ci-watchdog\n' "${pr_number}"
