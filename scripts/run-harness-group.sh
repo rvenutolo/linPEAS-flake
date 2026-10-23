@@ -97,6 +97,7 @@ readonly -a HARNESSES=(
   'apply-patch-tag-pin-rewrite|apply-patch-tag-pin-rewrite.test.sh|'
   'actionlint-shellcheck-active|check-actionlint-shellcheck-active.test.sh|'
   'actionlint-pyflakes-active|check-actionlint-pyflakes-active.test.sh|'
+  'actionlint-runner-labels-needed|check-actionlint-runner-labels-needed.test.sh|'
   'cron-table|check-cron-table.test.sh|'
   'patch-tag-pins|check-patch-tag-pins.test.sh|'
   'scorecard-threshold|check-scorecard-threshold.test.sh|'

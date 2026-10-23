@@ -49,6 +49,33 @@ never ran says nothing about the integration, so it must not borrow
 the failure code — that sends a maintainer after a wiring regression
 that has not happened.
 
+### scripts/check-actionlint-runner-labels-needed.sh
+
+Canary: assert every runner label allowlisted in
+`.github/actionlint.yaml` is still one actionlint rejects on its own.
+Lints a generated one-job workflow per label with an empty config, so
+the repo allowlist is out of play; a label actionlint no longer flags
+as unknown is a dead allowlist entry, and the canary names it for
+removal.
+
+If this script fails, actionlint has learned a hosted runner label
+this repo allowlists. Remove that label from `.github/actionlint.yaml`
+(and the file once it lists none, together with this canary). See
+docs/development/linting.md#runner-label-allowlist.
+
+Env overrides (test-only):
+
+```text
+  ACTIONLINT_CONFIG_OVERRIDE — alternate config path
+```
+
+Exits 0 when every allowlisted label is still needed, 1 when the
+canary fires (actionlint accepts an allowlisted label unaided), 2 when
+the canary could not run at all: actionlint or yq is absent from PATH,
+the config is missing, unparsable or lists no label, or actionlint
+itself failed. A canary that never ran says nothing about the
+allowlist, so it must not borrow the failure code.
+
 ### scripts/check-actionlint-shellcheck-active.sh
 
 Canary: assert actionlint's embedded shellcheck
@@ -2486,14 +2513,15 @@ Exit codes:
 ```text
   0 — scan clean
   1 — findings present, the scanner ran and errored (image pull
-      failure, scanner internal error), or the command line is
+      failure, scanner internal error), a suppressed runner label is
+      no longer flagged (`stale-suppression`), or the command line is
       unusable. A finding is told from a scanner error by the
       `has-finding` line printed to stdout (`has-finding=true|false`)
       — the same contract the CI workflow exposes via
       `$GITHUB_OUTPUT` — and by the `classification=` field beside it.
   2 — the scan could not proceed: `docker` is absent, `--sarif` was
-      given while `jq` is absent, or a per-file SARIF temp file could
-      not be created. The two tool guards report before any workflow
+      given while `jq` is absent, or a per-file SARIF temp file or the
+      runner-label probe directory could not be created. The two tool guards report before any workflow
       file is read and print the `infra-failure` classification
       themselves; the temp-file failure reports itself, and can land
       after part of the directory has already been scanned. Either
@@ -2530,6 +2558,14 @@ Suppressions (CLI flags — `--config-file` is documented but
       covers the renovate-flake-lock-refresh workflow's
       `actions/checkout` with `ref:` set to a bot-controlled
       branch — the ref source is internal, not attacker-supplied.
+  RUNNER_LABEL_SUPPRESSIONS : a GitHub-hosted runner label the
+      `runner-label` rule does not know yet is reported as "non default
+      and might be a self-hosted runner". Each listed label adds an
+      `--ignore` alternative for exactly that message. After the scan,
+      each one is probed alone with the rule enabled; a label octoscan
+      no longer flags is a dead suppression and fails the run with the
+      `stale-suppression` classification. See
+      docs/development/linting.md#runner-label-allowlist.
 ```
 
 Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep

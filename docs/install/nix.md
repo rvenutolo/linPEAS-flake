@@ -70,7 +70,7 @@ The flake declares packages for both Linux systems via flake-parts' `perSystem` 
 | System          | Flake builds | CI tested                |
 | --------------- | ------------ | ------------------------ |
 | `x86_64-linux`  | yes          | yes (`ubuntu-latest`)    |
-| `aarch64-linux` | yes          | yes (`ubuntu-24.04-arm`) |
+| `aarch64-linux` | yes          | yes (`ubuntu-26.04-arm`) |
 
 Both `linpeas-image` and `site` are gated on a Linux stdenv — the image because containers run a Linux kernel regardless of host OS — so adding a non-Linux system to the `systems` list in `flake.nix` would not publish them there.
 

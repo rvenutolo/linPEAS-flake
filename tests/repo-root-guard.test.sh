@@ -59,6 +59,7 @@ function fail() {
 readonly -a ROWS=(
   'bump-linpeas.sh|'
   'check-actionlint-pyflakes-active.sh|'
+  'check-actionlint-runner-labels-needed.sh|'
   'check-actionlint-shellcheck-active.sh|'
   'check-bump-script-integrity.sh|'
   'check-changelog-fresh.sh|'

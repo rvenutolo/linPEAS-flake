@@ -85,8 +85,9 @@ jobs:
           # Script prints `has-finding=true|false` to stdout exactly
           # once and writes the SARIF report to the path passed via
           # `--sarif`. Capture stdout to forward `has-finding` to
-          # GITHUB_OUTPUT; rc=0 clean, rc=1 = findings present OR the
-          # scanner ran and errored, rc=2 = the scan could not proceed
+          # GITHUB_OUTPUT; rc=0 clean, rc=1 = findings present, the
+          # scanner ran and errored, or a runner-label suppression is
+          # stale, rc=2 = the scan could not proceed
           # (docker or jq absent, or a per-file temp file could not be
           # created); notify jobs branch on has-finding. The captured
           # text is printed to the step log too, because the
@@ -200,7 +201,11 @@ jobs:
             scanner error no SARIF was uploaded — the script drops a
             partial one. If the log's `classification=` line reads
             `infra-failure (findings recorded but incomplete)`, real
-            findings exist beside an unanalyzed file — triage both.
+            findings exist beside an unanalyzed file — triage both. If
+            it reads `stale-suppression`, the scan was clean but
+            octoscan now accepts a runner label listed in
+            `RUNNER_LABEL_SUPPRESSIONS` (scripts/octoscan-scan.sh);
+            remove the label named in the log.
 
             - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 

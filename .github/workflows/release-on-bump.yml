@@ -767,7 +767,7 @@ jobs:
   image-arm64:
     needs: [release, preflight]
     if: (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || (inputs.backfill-tag != '' && needs.preflight.outputs.image-mode == 'full')) && github.repository == 'rvenutolo/linPEAS-flake'
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 30
     permissions:
       contents: write # gh release upload (sbom asset)

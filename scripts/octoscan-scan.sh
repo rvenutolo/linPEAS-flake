@@ -14,14 +14,15 @@
 # Exit codes:
 #   0 — scan clean
 #   1 — findings present, the scanner ran and errored (image pull
-#       failure, scanner internal error), or the command line is
+#       failure, scanner internal error), a suppressed runner label is
+#       no longer flagged (`stale-suppression`), or the command line is
 #       unusable. A finding is told from a scanner error by the
 #       `has-finding` line printed to stdout (`has-finding=true|false`)
 #       — the same contract the CI workflow exposes via
 #       `$GITHUB_OUTPUT` — and by the `classification=` field beside it.
 #   2 — the scan could not proceed: `docker` is absent, `--sarif` was
-#       given while `jq` is absent, or a per-file SARIF temp file could
-#       not be created. The two tool guards report before any workflow
+#       given while `jq` is absent, or a per-file SARIF temp file or the
+#       runner-label probe directory could not be created. The two tool guards report before any workflow
 #       file is read and print the `infra-failure` classification
 #       themselves; the temp-file failure reports itself, and can land
 #       after part of the directory has already been scanned. Either
@@ -55,6 +56,14 @@
 #       covers the renovate-flake-lock-refresh workflow's
 #       `actions/checkout` with `ref:` set to a bot-controlled
 #       branch — the ref source is internal, not attacker-supplied.
+#   RUNNER_LABEL_SUPPRESSIONS : a GitHub-hosted runner label the
+#       `runner-label` rule does not know yet is reported as "non default
+#       and might be a self-hosted runner". Each listed label adds an
+#       `--ignore` alternative for exactly that message. After the scan,
+#       each one is probed alone with the rule enabled; a label octoscan
+#       no longer flags is a dead suppression and fails the run with the
+#       `stale-suppression` classification. See
+#       docs/development/linting.md#runner-label-allowlist.
 #
 # Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
 # (renovate.json customManager scoped to this file).
@@ -75,6 +84,13 @@ readonly OCTOSCAN_DIGEST OCTOSCAN_VERSION
 
 readonly DISABLE_RULES="local-action,dangerous-write"
 readonly IGNORE_PATTERN='(needs|steps)\.\*\*\.outputs\.\*\*|actions/checkout. with a custom ref'
+readonly -a RUNNER_LABEL_SUPPRESSIONS=(ubuntu-26.04-arm)
+
+scan_ignore="${IGNORE_PATTERN}"
+for label in "${RUNNER_LABEL_SUPPRESSIONS[@]}"; do
+  scan_ignore+="|label \"${label//./\\.}\" is non default"
+done
+readonly SCAN_IGNORE="${scan_ignore}"
 
 sarif_out=""
 while [[ $# -gt 0 ]]; do
@@ -148,10 +164,14 @@ if [[ ${#workflows[@]} -eq 0 ]]; then
 fi
 
 per_file_sarifs=()
+probe_dir=""
 # shellcheck disable=SC2329 # Invoked via `trap ... EXIT`.
 cleanup() {
   if ((${#per_file_sarifs[@]} > 0)); then
     rm -f -- "${per_file_sarifs[@]}"
+  fi
+  if [[ -n ${probe_dir} ]]; then
+    rm -rf -- "${probe_dir}"
   fi
 }
 trap cleanup EXIT
@@ -170,7 +190,7 @@ for wf in "${workflows[@]}"; do
       "ghcr.io/synacktiv/octoscan@${OCTOSCAN_DIGEST}" \
       scan "/src/${rel}" \
       --disable-rules "${DISABLE_RULES}" \
-      --ignore "${IGNORE_PATTERN}" \
+      --ignore "${SCAN_IGNORE}" \
       --format sarif \
       >"${tmp_sarif}" 2>/dev/null || file_rc=$?
   else
@@ -179,7 +199,7 @@ for wf in "${workflows[@]}"; do
       "ghcr.io/synacktiv/octoscan@${OCTOSCAN_DIGEST}" \
       scan "/src/${rel}" \
       --disable-rules "${DISABLE_RULES}" \
-      --ignore "${IGNORE_PATTERN}" || file_rc=$?
+      --ignore "${SCAN_IGNORE}" || file_rc=$?
   fi
   # octoscan per-file exit codes: 0 clean, 2 finding, anything else (1, …) a
   # scanner error — the file was never analyzed. Tally each outcome
@@ -195,6 +215,40 @@ for wf in "${workflows[@]}"; do
   esac
 done
 
+# Probe each suppressed runner label alone, with only the rule it silences
+# enabled and no --ignore, so the scan's own suppression cannot hide the
+# answer: rc 2 means octoscan still flags the label and the suppression is
+# needed, rc 0 means it no longer does. Any other rc is a scanner error on
+# the probe, routed like a per-file error.
+stale_labels=()
+probe_failed=0
+probe_dir="$(make_temp --directory)"
+# The container's user is not the runner's, and mktemp creates the directory
+# owner-only.
+chmod 0755 -- "${probe_dir}"
+for label in "${RUNNER_LABEL_SUPPRESSIONS[@]}"; do
+  printf 'on: push\npermissions: {}\njobs:\n  probe:\n    runs-on: %s\n    steps:\n      - run: "true"\n' \
+    "${label}" >"${probe_dir}/probe.yml"
+  chmod 0644 -- "${probe_dir}/probe.yml"
+  probe_rc=0
+  docker run --rm \
+    -v "${probe_dir}:/src:ro" \
+    "ghcr.io/synacktiv/octoscan@${OCTOSCAN_DIGEST}" \
+    scan /src/probe.yml \
+    --enable-rules runner-label >/dev/null 2>&1 || probe_rc=$?
+  case "${probe_rc}" in
+  0)
+    stale_labels+=("${label}")
+    printf 'octoscan now accepts runner label "%s"; remove it from RUNNER_LABEL_SUPPRESSIONS\n' \
+      "${label}" >&2
+    ;;
+  2) ;;
+  *)
+    probe_failed=1
+    printf 'octoscan could not probe runner label "%s" (exit %d)\n' "${label}" "${probe_rc}" >&2
+    ;;
+  esac
+done
 merge_failed=0
 if [[ -n ${sarif_out} && ${n_error} -eq 0 ]]; then
   # Aggregate only when no file errored, so a file that never analyzed cannot
@@ -224,7 +278,7 @@ printf -v scanned 'scanned %d workflow file(s): %d clean, %d with findings, %d e
 # Error outranks finding: a file that never analyzed is an infra failure even
 # when another file produced a finding, so it routes to the infra-failure path
 # (has-finding=false, exit 1) and is re-examined rather than reported clean.
-if ((n_error > 0 || merge_failed)); then
+if ((n_error > 0 || merge_failed || probe_failed)); then
   # Truncated/partial SARIF is worse than missing SARIF; drop it so downstream
   # consumers (CI upload-sarif) skip cleanly instead of uploading garbage.
   [[ -n ${sarif_out} ]] && rm -f -- "${sarif_out}"
@@ -241,6 +295,13 @@ if ((n_error > 0 || merge_failed)); then
 elif ((n_finding > 0)); then
   printf 'has-finding=true\n'
   print_summary "${scanned}" 'findings'
+  exit 1
+elif ((${#stale_labels[@]} > 0)); then
+  # A dead suppression is upkeep, not a finding against a workflow, and the
+  # scan itself completed; it fails the run so the entry is removed rather
+  # than left to silence a label nothing flags.
+  printf 'has-finding=false\n'
+  print_summary "${scanned}" 'stale-suppression'
   exit 1
 else
   printf 'has-finding=false\n'
