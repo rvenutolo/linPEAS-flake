@@ -1792,6 +1792,13 @@ block under `.github/workflows/*.yml` (or `.yaml`) and
 `.github/actions/**/action.yml` (or `.yaml`) starts with
 `set -Eeuo pipefail` as its first non-blank, non-comment line.
 
+### scripts/check-runner-doc-diff.sh
+
+Content floor for a bot push of a runner-label doc: exit 0
+only when a new copy of docs/architecture/ci.md or docs/install/nix.md
+differs from the old one in nothing but the runner cells of its table
+and the padding inside that table.
+
 ### scripts/check-scorecard-threshold.sh
 
 Reads OSSF Scorecard JSON on stdin; exits 1 if any

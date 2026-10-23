@@ -640,6 +640,29 @@ a `ci` completion that is not a Renovate flake bump stays silent.
 Not in required-checks. Lockfile refresh on a PR cannot block the
 PR's own merge gate (chicken-and-egg).
 
+### Runner-doc content floor
+
+`docs/architecture/ci.md` and `docs/install/nix.md` are hand-written
+pages whose runner cells are generated, so a bot push of either must not
+carry any other change. `scripts/check-runner-doc-diff.sh <doc-path> <old-file> <new-file>` is that floor. It exits 0 only when the two
+copies have the same line count and final newline, every line outside
+the doc's runner table is byte-identical, and inside the table every
+cell matches once its padding is trimmed except a body row's runner
+cell (`Runner` in `ci.md`, `CI tested` in `nix.md`). A runner cell that
+changed must be one backticked label in `ci.md`, or `yes (` plus a
+backticked label plus `)` in `nix.md`, on both sides. The table is the
+one whose header row is `| Job | Runner | What it tests |` or
+`| System | Flake builds | CI tested |`, outside fenced code, appearing
+once. Padding is free so a wider label can re-pad the whole table.
+
+It exits 1 on a refusal, naming the first offending line, and 2 when it
+cannot compare: wrong arguments, an unknown doc path, or a file it
+cannot read. It shares no code with `scripts/refresh-runner-labels.sh`,
+the generator whose output it checks, so a fault in the generator
+cannot loosen the floor. `tests/check-runner-doc-diff.test.sh` feeds it
+the generator's own re-padded output for a wider label as well as each
+refusal shape.
+
 ## Lock-derived docs travel with the lock
 
 Several docs in this repo are generated from evaluated flake state, so a
