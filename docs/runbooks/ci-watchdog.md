@@ -14,10 +14,11 @@ deferred to the next tick.
 
 A job that exceeds its timeout is recorded by GitHub as `cancelled`, not
 `timed_out`, so the classifier recognizes it by the job's annotation and
-counts it like any other failure. A `cancelled` run whose jobs were
-cancelled by a newer run in the same concurrency group, or for any other
-reason, is ignored: re-running it would resurrect a run for a replaced
-commit.
+counts it like any other failure. A `cancelled` run is otherwise ignored,
+for one of two reasons. A cancel by a newer run in the same concurrency
+group is superseded: re-running it would resurrect a run for a replaced
+commit. Any other cancel (manual, or a job that never got a runner) carries
+no timeout evidence, so there is nothing to count.
 
 Each run gets at most 3 attempts. `reRunWorkflowFailedJobs` re-runs a run in
 place and increments its attempt counter, so the bound needs no stored
@@ -39,7 +40,9 @@ An error that survives that retry is confined to the PR it happened on.
 The sweep processes every remaining PR and then fails the job, naming
 the PRs that errored. The one exception is a rate limit: continuing to
 request against an exhausted budget can make it worse, so the sweep
-halts instead and fails the job naming both the PRs that errored and the
+halts instead (on an Octokit 403 carrying rate-limit headers, or on a
+`gh api` failure in `scripts/fetch-ci-run.sh` whose stderr names a rate
+limit with `HTTP 403` or `HTTP 429`) and fails the job naming both the PRs that errored and the
 PRs it left untried (how to read that "not attempted" list is covered
 under the rate-limit entry below). Either way, no PR is starved silently
 and no error is swallowed. The one swallowed status is `createLabel`'s
@@ -127,7 +130,11 @@ tells you which of three things happened:
     errors, they are untried, and the list is every open PR behind the
     halt point before the bot-author and auto-merge filters, so most
     entries are usually PRs the sweep would have skipped without touching
-    anyway. The next scheduled run picks them up.
+    anyway. The next scheduled run picks them up. Both signals trigger it:
+    a 403 on an Octokit call whose response carries `x-ratelimit-remaining: 0`
+    or `retry-after`, and a `Command failed` error from
+    `scripts/fetch-ci-run.sh` whose `gh:` stderr line names a rate limit and
+    ends `(HTTP 403)` or `(HTTP 429)`.
 - **`Sweep completed; N PR(s) errored: ...`.** Every open PR was attempted.
     The named PRs errored while being processed; everything else succeeded or
     had nothing to do.
@@ -166,7 +173,8 @@ why. Work from those:
     block against the call in the stack. A 403 whose response carries
     neither `x-ratelimit-remaining: 0` nor `retry-after` is not classified
     as a rate limit, so a header-less secondary limit can also land
-    here. If the message is instead
+    here (a `gh api` failure is judged by its stderr message instead; see
+    the `Command failed` entry below). If the message is instead
     `Sweep halted by rate limit`, the errored PR's 403 is the rate limit that
     triggered the halt; the PRs in its "not attempted" list get no
     `core.error` line at all because the sweep never reached them — nothing
@@ -178,9 +186,18 @@ why. Work from those:
     age out, and once it does, every sweep errors on it forever. The watchdog
     cannot fix this itself; the PR needs a fresh commit to produce a new run,
     or should be closed.
-1. A `5xx` that reached this log already exhausted the step's own request
-    retries, so it is a sustained GitHub incident rather than a blip. Check
-    the GitHub status page.
+1. A `5xx` from a GitHub API call made by the workflow script itself
+    already exhausted the step's own request retries, so it is a sustained
+    GitHub incident rather than a blip. Check the GitHub status page. A
+    `5xx` from `gh api` inside `scripts/fetch-ci-run.sh` has had no retry at
+    all; it surfaces as status 1 in the next entry, and the next tick tries
+    again.
+1. An error logged as `PR #N: <status> Error: Command failed: ...` came from
+    `scripts/fetch-ci-run.sh` or `scripts/classify-ci-run.sh`, not from an
+    API call the script made itself. Status 1 is an API failure: read the
+    `gh:` line of stderr that follows. Status 2 is a bad argument or a
+    response or input that is not the expected shape. `no status` with
+    `Command failed` is the 180-second timeout.
 
 A PR that errors on **every** sweep is a real bug, not a transient. It is
 also the case worth acting on quickly: while it is failing it is not being

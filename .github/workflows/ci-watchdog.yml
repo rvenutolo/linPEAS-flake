@@ -18,8 +18,9 @@ name: ci-watchdog
 # the latter is a permanent configuration bug. A job that exceeds its
 # timeout is recorded as `cancelled`, not `timed_out`, so the classifier
 # recognizes it by its annotation and counts it. A cancel superseded by a
-# newer run, or any other cancel, is ignored: re-running it would resurrect
-# a run for a replaced commit.
+# newer run is ignored because re-running it would resurrect a run for a
+# replaced commit. Any other cancel (manual, or a job that never got a
+# runner) is ignored because it carries no timeout evidence to count.
 #
 # On exhausting the bound, one issue is opened per stuck PR, deduped by title.
 # A watchdog that gives up silently recreates the bug it exists to fix.
@@ -322,19 +323,27 @@ jobs:
                 );
                 failures.push(pr.number);
 
-                // A 403 with `x-ratelimit-remaining: 0` or a `retry-after`
-                // header is a primary or secondary rate limit, not a
-                // permissions gap. Continuing to request against an
-                // exhausted budget can extend a secondary limit's block, so
-                // halt rather than let the sweep burn through every
-                // remaining PR. Halting silently would recreate the
-                // starvation bug this catch exists to prevent, so name every
-                // PR the halt leaves untried.
+                // A rate limit is not a permissions gap, and continuing to
+                // request against an exhausted budget can extend a secondary
+                // limit's block, so halt rather than let the sweep burn
+                // through every remaining PR. Halting silently would
+                // recreate the starvation bug this catch exists to prevent,
+                // so name every PR the halt leaves untried. Two paths carry
+                // the signal. An Octokit error is a 403 whose response has
+                // `x-ratelimit-remaining: 0` or a `retry-after` header. A
+                // fetch-ci-run.sh error comes from `gh api` inside a child
+                // process, so it has no response headers: its stderr ends
+                // `gh: <message> (HTTP 403)` or `(HTTP 429)`, and the message
+                // names the rate limit.
                 const headers = err.response?.headers;
-                const isRateLimit =
+                const isOctokitRateLimit =
                   err.status === 403 &&
                   (headers?.['x-ratelimit-remaining'] === '0' ||
                     headers?.['retry-after'] !== undefined);
+                const stderr = String(err.stderr ?? '');
+                const isGhRateLimit =
+                  /rate limit/i.test(stderr) && /\(HTTP (403|429)\)/.test(stderr);
+                const isRateLimit = isOctokitRateLimit || isGhRateLimit;
                 if (isRateLimit) {
                   notAttempted = prs.slice(i + 1).map((p) => p.number);
                   break;
