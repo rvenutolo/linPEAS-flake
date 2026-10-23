@@ -25,8 +25,9 @@ name: ci-watchdog
 # reported on its first attempt instead of being retried into silence.
 # That policy is also the predicate the notify composite applies before
 # it holds an issue off for a retry, so the two cannot disagree; it
-# excludes release-on-bump.yml, whose re-runs are not idempotent (the
-# classifier's header says why). A job that exceeds its timeout is
+# excludes release-on-bump.yml, whose re-runs are not idempotent, and
+# this workflow, which never re-runs itself (the classifier's header says
+# why). A job that exceeds its timeout is
 # recorded as `cancelled`, not `timed_out`, so the classifier recognizes
 # it by its annotation and counts it. A cancel superseded by a newer run
 # is ignored because re-running it would resurrect a run for a replaced
@@ -49,7 +50,11 @@ name: ci-watchdog
 #
 # On exhausting the bound, one issue is opened per stuck PR or per
 # workflow and event, deduped by title. A watchdog that gives up silently
-# recreates the bug it exists to fix.
+# recreates the bug it exists to fix, and so does one that fails
+# silently: the `notify` job files a `ci-watchdog-failure` issue through
+# the notify-workflow-result composite when the `retry` job fails, on
+# the first failure, because the classifier never retries this
+# workflow's own runs.
 #
 # An error against one PR or run is caught and confined to it: the sweep
 # still processes every remaining item, and the job fails at the end
@@ -608,3 +613,54 @@ jobs:
                 `Sweep completed; ${failures.length} item(s) errored: ` + failures.join(', '),
               );
             }
+
+  # A sweep that fails leaves every failure the notify composite held off
+  # for a retry neither retried nor filed, and a red watchdog run is
+  # otherwise the only sign. The classifier never retries this workflow's
+  # own runs, so this files on the first failed sweep. A skipped `retry`
+  # (a no-op `workflow_run` completion, or a fork) has nothing to report
+  # or close, so the job is skipped with it rather than start a runner.
+  notify:
+    name: notify
+    needs: retry
+    if: always() && needs.retry.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      checks: read
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
+        with:
+          result: ${{ needs.retry.result }}
+          label: ci-watchdog-failure
+          title: "ci-watchdog: the retry sweep itself failed"
+          body: |
+            The `ci-watchdog` workflow's own `retry` job failed, so this sweep
+            did not finish retrying or filing.
+
+            - Trigger: `${{ github.event_name }}`
+            - `retry` conclusion: `${{ needs.retry.result }}`
+
+            Failures that a workflow's notify job held off for a retry may be
+            waiting: until a sweep succeeds they are neither re-run nor filed.
+            Bot PRs stuck on a transient failure stay stuck too.
+
+            What to do: the "When the watchdog itself fails" section of
+            https://github.com/rvenutolo/linPEAS-flake/blob/main/docs/runbooks/ci-watchdog.md
+
+            The next successful sweep auto-closes this issue.
+          label-description: ci-watchdog sweep failed; held-off CI failures may be waiting unretried
+          github-token: ${{ secrets.GITHUB_TOKEN }}

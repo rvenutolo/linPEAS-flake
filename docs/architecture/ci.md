@@ -261,8 +261,9 @@ classifies it with `scripts/classify-ci-run.sh --policy automated`, the
 predicate the watchdog's automated loop applies before it re-runs a
 `push` run on `main`, a `schedule` run or a `workflow_run` run (see the
 [CI retry watchdog runbook](../runbooks/ci-watchdog.md)). That policy
-never retries `release-on-bump`, whose re-runs are not idempotent, so its
-notify job files on the first failure. The verdict
+never retries `release-on-bump`, whose re-runs are not idempotent, or
+`ci-watchdog`, which never re-runs itself, so their notify jobs file on
+the first failure. The verdict
 `retry` means every counted job failed for infrastructure reasons and the
 attempt cap is not spent, so the composite prints a notice naming the
 attempt and the classified jobs and files nothing; the re-run reaches the

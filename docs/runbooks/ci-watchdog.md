@@ -29,7 +29,9 @@ created in the last 72 hours, and `scripts/select-automated-runs.sh` picks
 the candidates from them. A candidate's latest attempt must have finished
 (its `updated_at`) in the last 24 hours, so the first sweep after a deploy
 does not retry old history, while a run created before that window whose
-re-run finished inside it is still retried or filed. It drops the watchdog's own runs. For `push` and `schedule` it
+re-run finished inside it is still retried or filed. It drops the watchdog's own runs,
+which the classifier would only report, so a failing watchdog does not
+fetch its own failed runs on every sweep. For `push` and `schedule` it
 keeps only the newest run of each workflow per event: a newer run, finished
 or still in progress, replaced the older ones. Every `workflow_run` run is a
 candidate on its own, because each is chained to a different upstream run.
@@ -203,6 +205,29 @@ Actions tab.
 The issue is deduped by title and commented on only when a later sweep
 sees a different exhausted run or attempt, exactly as for the bot-PR
 issue above.
+
+## When the watchdog itself fails
+
+A `ci-watchdog: the retry sweep itself failed` issue, labelled
+`ci-watchdog-failure`, means a sweep's `retry` job failed or was
+cancelled. The watchdog's own `notify` job files it through the
+`notify-workflow-result` composite. The classifier reports the
+watchdog's own runs without retrying them (it lists
+`.github/workflows/ci-watchdog.yml` beside `release-on-bump.yml` in
+`AUTOMATED_EXCLUDED_PATHS`), so the issue is filed on the first failed
+sweep rather than held off for a retry nobody would run. The `notify`
+job is skipped when `retry` is skipped, as on a no-op `workflow_run`
+completion, and the next successful sweep closes the issue.
+
+While sweeps fail, every failure another workflow's notify job held off
+for a retry is neither re-run nor filed, and bot PRs stuck on a transient
+failure stay stuck. Read the failed `retry` log as the next section
+describes, fix the cause, and then run a sweep by hand (see
+[Forcing a run](#forcing-a-run)). That sweep picks up a held-off
+failure whose latest attempt finished in the last 24 hours; an older one
+it does not, so check
+the Actions tab for red automated runs from the outage and re-run them
+with `gh run rerun <run-id> --failed`.
 
 ## When the watchdog's `retry` job goes red
 

@@ -29,7 +29,11 @@
 # image, manifest and verify job and finishes green with no images
 # published, and an image job lost after its docker.io push re-pushes
 # over the orphan tag that docs/runbooks/dockerhub-recovery.md deletes
-# first. Its own notify job and that runbook are the recovery path.
+# first. Its own notify job and that runbook are the recovery path. A
+# run of `.github/workflows/ci-watchdog.yml` reports without retrying as
+# well: the watchdog never re-runs itself, so a held-off failure of its
+# own would wait on a retry that never comes, and its notify job files
+# on the first failure instead.
 #
 # A job that fails before its own work starts (runner setup, checkout,
 # the setup-nix action) is transient. A failed step after those is real,
@@ -54,6 +58,7 @@ readonly MAX_ATTEMPTS=3
 # Workflow files whose runs the `automated` policy never retries; the
 # header says why.
 readonly AUTOMATED_EXCLUDED_PATHS=(
+  '.github/workflows/ci-watchdog.yml'
   '.github/workflows/release-on-bump.yml'
 )
 

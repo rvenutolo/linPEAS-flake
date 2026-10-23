@@ -155,6 +155,9 @@ classify "post-step-real" report "lint${T}real${T}step:Post Run actions/checkout
 # unaffected, which pins the exclusion to the one policy that names it.
 classify "release-on-bump-automated" report "lint${T}transient${T}setup-step:Run ./.github/actions/setup-nix" "$(fx release-on-bump-setup-step)" --policy automated
 classify "release-on-bump-bot-pr" retry "lint${T}transient${T}setup-step:Run ./.github/actions/setup-nix" "$(fx release-on-bump-setup-step)" --policy bot-pr
+# The watchdog never retries its own runs, so its notify job files on the
+# first failure; a timeout that would retry anywhere else reports here.
+classify "ci-watchdog-automated" report "retry${T}transient${T}timeout" "$(fx ci-watchdog-timeout)" --policy automated
 classify "runner-lost-over-real-step" retry "lint${T}transient${T}runner-lost" "$(fx runner-lost-over-real-step)" --policy automated
 
 # --- operational errors ----------------------------------------------
