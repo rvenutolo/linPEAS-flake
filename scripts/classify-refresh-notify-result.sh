@@ -7,8 +7,8 @@
 # `should_refresh` and `unmapped` outputs, print `failure` when a
 # refresh was attempted and did not land (or could not be attempted),
 # `success` when one landed or was already in place, and `skipped` for
-# the steady state where the `ci` completion was not a Renovate flake
-# bump. Pure and side-effect free so the decision is unit-testable
+# the steady state where the `ci` completion was not a Renovate PR
+# needing a refresh. Pure and side-effect free so the decision is unit-testable
 # without a workflow run.
 
 # The whole decision lives here, in one place, because splitting it
@@ -103,8 +103,8 @@ if [[ ${UNMAPPED} == 'true' ]]; then
 fi
 
 if [[ ${SHOULD_REFRESH} != 'true' ]]; then
-  # The steady state: this `ci` completion was not a Renovate flake
-  # bump. Both downstream jobs are gated on `should_refresh`, so either
+  # The steady state: this `ci` completion was not a Renovate PR
+  # needing a refresh. Both downstream jobs are gated on `should_refresh`, so either
   # having run means the gate and this verdict disagree.
   if [[ ${COMPUTE} != 'skipped' || ${PUSH} != 'skipped' ]]; then
     printf 'refresh jobs ran for a completion classified as no-refresh\n' >&2
@@ -115,9 +115,11 @@ if [[ ${SHOULD_REFRESH} != 'true' ]]; then
   exit 0
 fi
 
-# A refresh was attempted. `push-refresh` is skipped when
-# `compute-refresh` produced no diff, which is the loop-breaker's
-# steady state and a success.
+# A refresh was attempted: a lock refresh, a runner-label refresh, or
+# both. `push-refresh` is skipped when `compute-refresh` produced no
+# diff, which is the loop-breaker's steady state and a success. It is
+# also the common case of a runner-label refresh, which runs on every
+# Renovate PR touching a workflow and finds a runner change on few.
 if [[ ${COMPUTE} == 'success' ]] &&
   { [[ ${PUSH} == 'success' ]] || [[ ${PUSH} == 'skipped' ]]; }; then
   printf 'success\n'

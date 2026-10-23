@@ -182,8 +182,9 @@ PR, via the failed check.
     ID. Used by `update-linpeas.yml`, `update-flake-lock.yml`,
     `renovate-flake-lock-refresh.yml`, and `release-on-bump.yml` to open
     and auto-merge bump and changelog PRs — and, in
-    `renovate-flake-lock-refresh.yml`, to commit the refreshed `flake.lock`
-    onto an existing Renovate PR branch rather than open one.
+    `renovate-flake-lock-refresh.yml`, to commit the refreshed `flake.lock`,
+    its derived docs and the regenerated runner-label docs onto an
+    existing Renovate PR branch rather than open one.
     The App is installed only on this repository with
     `Contents: Read and write` and `Pull requests: Read and write`
     permissions. Installation

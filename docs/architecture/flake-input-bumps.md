@@ -78,6 +78,11 @@ GitHub reports moved out of step with
 under the `renovate-flake-lock-refresh-failure` label; pursue the manual
 steps below in the meantime.
 
+The same workflow also refreshes the runner labels that
+`docs/architecture/ci.md` and `docs/install/nix.md` name, on any Renovate
+PR that touches a workflow; [Runner-label bumps](#runner-label-bumps)
+covers that path and the steps it leaves to a person.
+
 ## Why a runbook
 
 `renovate.json` defines custom-regex managers that bump the URL fragment
@@ -584,14 +589,36 @@ block carries no filter). The `identify` job gates on ALL of:
     (`head_repository.full_name == github.repository`): a
     fork-hardening gate, since a later job in the workflow holds an
     App installation token.
-- PR diff touches `flake.nix`.
-- PR title contains a known dep name (`cachix/git-hooks.nix` →
+- PR diff touches `flake.nix`, a `.github/workflows/` file, or both.
+    The changed-file list decides which refreshes run, and a PR that
+    touches neither is skipped. `gh pr view --json files` lists at most
+    100 files; a PR past that whose workflow touch falls outside them
+    gets no runner refresh, and the required `doc-freshness` check then
+    stays red on it.
+
+Which refreshes run, past those gates:
+
+- **Lock refresh**, when the PR touches `flake.nix`. The PR title must
+    contain a known dep name (`cachix/git-hooks.nix` →
     `pre-commit-hooks` input; `NixOS/nixpkgs` → `nixpkgs` input). The
     classifier also maps `NixOS/nixpkgs-unstable` → `nixpkgs-unstable`
     and matches it before stable, because the stable string is a
     substring of the unstable title. No manager emits that title now,
     and the arm stays for exactly that reason: dropping it would route
-    an unstable title to the stable arm.
+    an unstable title to the stable arm. A title that maps to no input
+    is reported and nothing is refreshed, even when the PR also touches
+    a workflow: the PR needs a person either way.
+- **Runner-label refresh**, when the PR touches a `.github/workflows/`
+    file. The title plays no part: runner bumps land on grouped branches
+    such as `renovate/major-github-actions` under titles like
+    `chore(deps): update dependency ubuntu to v26`, which name no flake
+    input. `compute-refresh` runs the generators in
+    `WORKFLOW_DERIVED_GENERATORS` (`scripts/refresh-runner-labels.sh`).
+    Every weekly grouped github-actions PR takes this path, and most
+    change no runner label, so the usual outcome is no diff and no push.
+
+A PR that needs both gets both in the one `compute-refresh` job, and
+`push-refresh` commits every changed path in one loop.
 
 Adding a new auto-refreshable input requires three coordinated
 edits in the same PR: (1) extend the `case` arms in
@@ -609,13 +636,18 @@ Credential split mirrors `update-flake-lock.yml`:
     `permissions: contents: read`. Neither references the App key.
     Untrusted Nix-evaluating actions confined
     to `compute-refresh`.
-- `push-refresh` job: holds `BUMP_APP_PRIVATE_KEY` only. Commits
-    refreshed `flake.lock` to PR branch via REST `PUT /contents` →
-    web-flow signed by GitHub. No `git push`.
+- `push-refresh` job: holds `BUMP_APP_PRIVATE_KEY` only. Commits the
+    changed committable paths to the PR branch via REST `PUT /contents`
+    → web-flow signed by GitHub. No `git push`. Its checkout is the
+    default branch (this workflow's own ref, `persist-credentials:   false`), never the Renovate head, and it runs no code from the PR
+    branch: the one script it runs, the runner-doc content floor, comes
+    from that checkout. The artifact is downloaded into its own
+    directory, so a path missing from it aborts the job instead of being
+    read from the default branch's copy.
 
 Loop-breaker: `compute-refresh`'s diff step sets `changed=false` when
-`nix flake update` produces no diff, which skips `push-refresh`
-outright. Inside `push-refresh` a second, per-path guard compares each
+no path in `COMMITTABLE_PATHS` differs from the checkout after both
+refreshes, which skips `push-refresh` outright. Inside `push-refresh` a second, per-path guard compares each
 committable path's `git hash-object` against its blob SHA on the
 branch and skips the ones already current; zero commits is a clean
 exit, not a failure. Protects against the ci → refresh → ci cycle.
@@ -635,7 +667,9 @@ failing `flake-check` instead. A combination the job graph cannot
 produce classifies as `failure` too: an issue naming a drifted workflow
 beats the silence. `tests/classify-refresh-notify-result.test.sh` holds
 the matrix, including both ends of it — a failed `identify` reports, and
-a `ci` completion that is not a Renovate flake bump stays silent.
+a `ci` completion that is not a Renovate PR needing a refresh stays
+silent, and a runner-label refresh that finds no diff closes rather
+than files.
 
 Not in required-checks. Lockfile refresh on a PR cannot block the
 PR's own merge gate (chicken-and-egg).
@@ -670,6 +704,51 @@ cannot loosen the floor. `tests/check-runner-doc-diff.test.sh` feeds it
 the generator's own re-padded output for a wider label as well as each
 refusal shape.
 
+`push-refresh` runs the floor from its default-branch checkout, before
+any commit. For each runner doc that differs from the PR branch it
+fetches the branch's copy from the same contents URL that yields the
+blob SHA (raw media type), confirms that copy hashes to that SHA so the
+floor judges the blob the `PUT` will replace, and runs the floor against
+it. Any non-zero exit aborts the job before the first `PUT`, so a
+refusal pushes nothing, not even the lock. Before that, the
+artifact sanity check requires each runner doc to hold its table's
+header row (the lock docs keep their BEGIN/END marker check), and the
+commit pass refuses a changed path whose refresh did not run: a runner
+doc on a PR that touches no workflow, or the lock or a lock doc when no
+input was refreshed. A runner-doc commit reads
+`chore(ci): refresh runner labels in <doc>`.
+
+### Runner-label bumps
+
+A Renovate PR that moves a `runs-on:` label in `ci.yml` gets the
+regenerated `docs/architecture/ci.md` and `docs/install/nix.md` as
+App-signed bot commits on its own branch, one per doc. Two things on
+that path stay with a person.
+
+**A label the linters do not know yet.** actionlint and octoscan each
+hard-code the hosted runner labels they accept, and a new image label
+(a runner major bump) can reach Renovate before either tool learns it.
+The PR then fails the linters, and the bot does not fix it: it never
+writes scanner suppressions. Add the label to each tool's allowlist on
+the PR branch as
+[Runner-label allowlist](../development/linting.md#runner-label-allowlist)
+describes.
+
+**A branch that falls BEHIND.** Renovate does not rebase a branch that
+carries a commit from another author, and auto-merge does not update a
+BEHIND branch, so a PR with a bot commit can wait on `main` moving
+ahead of it. The lock path has the same exposure. Update the branch
+locally, keeping signatures:
+
+1. `git fetch origin && git rebase origin/main` on the PR branch.
+1. `git log --format='%G?' origin/main..HEAD` must print only `G`.
+1. `git push --force-with-lease=<branch>:<old-sha>`, where `<old-sha>`
+    is the branch head before the rebase.
+
+Never use GitHub's "Update with rebase" button or
+`gh pr update-branch --rebase`: GitHub rewrites the commits unsigned,
+and `required_signatures` then blocks the merge.
+
 ## Lock-derived docs travel with the lock
 
 Several docs in this repo are generated from evaluated flake state, so a
@@ -681,27 +760,32 @@ Every workflow that writes a lock therefore regenerates that set
 alongside it and commits each changed file as its own signed commit.
 Two workflows do: `update-flake-lock.yml`, which opens the weekly bump
 PR, and `renovate-flake-lock-refresh.yml`, which refreshes the lock on a
-Renovate flake-input PR. Each declares the set in two workflow-level
-`env` lists: `LOCK_DERIVED_GENERATORS` names the generators it runs, and
+Renovate flake-input PR. Each declares the set in workflow-level `env`
+lists: `LOCK_DERIVED_GENERATORS` names the generators it runs, and
 `COMMITTABLE_PATHS` bounds what the credentialed job is allowed to
 commit — the compute job holds no write credential, so that list, not the
-artifact it uploads, is the trust boundary.
+artifact it uploads, is the trust boundary. A workflow that also
+regenerates docs derived from `.github/workflows/ci.yml` names those
+generators in a third list, `WORKFLOW_DERIVED_GENERATORS`;
+`renovate-flake-lock-refresh.yml` is the one that does.
 
-The second list is not written by hand against the first. Every
+`COMMITTABLE_PATHS` is not written by hand against the generator lists. Every
 generator already declares what it writes in its own comment header —
 `@generates <path>` for a file it owns outright and
 `@generates-block <path>` for a region it splices into a hand-authored
-file — and the committable set is exactly `flake.lock` plus those
-declared outputs. Both annotation kinds count: the split between whole
+file — and the committable set is exactly `flake.lock` plus the outputs
+declared by the generators in `LOCK_DERIVED_GENERATORS` and
+`WORKFLOW_DERIVED_GENERATORS`. Both annotation kinds count: the split between whole
 file and spliced block is a judgment about who owns the surrounding
 prose, not about who writes the bytes. `flake.lock` is on the list
 because the workflow writes it directly rather than through a
 generator.
 
-`scripts/check-lock-derived-docs.sh` asserts the two stay in agreement
-with the hooks that declare the dependency. It discovers its subjects
+`scripts/check-lock-derived-docs.sh` asserts the lists stay in agreement
+with each other and with the hooks that declare the dependency. It discovers its subjects
 rather than naming them: every workflow carrying a lock update in a `run`
-block must declare both lists, every freshness hook whose `files` regex
+block must declare `LOCK_DERIVED_GENERATORS` and `COMMITTABLE_PATHS`,
+every freshness hook whose `files` regex
 names `flake.lock` must have its generator in that workflow's
 `LOCK_DERIVED_GENERATORS`, and every entry there must be backed by such a
 hook. A hook that names `flake.lock` a trigger while naming no generator

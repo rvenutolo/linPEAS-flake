@@ -1,31 +1,45 @@
 name: renovate-flake-lock-refresh
 
-# Auto-refreshes `flake.lock` on Renovate PRs that bump a flake input
-# URL fragment (currently `cachix/git-hooks.nix` SHA and the
-# `NixOS/nixpkgs` branch name). Renovate's hosted SaaS cannot run
-# `nix flake update <name>` itself (no Nix on the
-# runner, no `postUpgradeTasks` allowlist), so Renovate ships a PR with
-# `flake.nix` ahead of `flake.lock`. CI's `flake-check` job fails on
-# that PR until a maintainer runs the lock-refresh by hand, per the
-# `docs/architecture/flake-input-bumps.md` runbook.
+# Completes two kinds of Renovate PR that hosted Renovate cannot finish
+# itself. Renovate's hosted SaaS cannot run commands (no Nix on the
+# runner, no `postUpgradeTasks` allowlist), so:
+#
+#   - A flake-input bump (currently the `cachix/git-hooks.nix` SHA and
+#     the `NixOS/nixpkgs` branch name) ships with `flake.nix` ahead of
+#     `flake.lock`, and CI's `flake-check` job fails until the lock is
+#     refreshed with `nix flake update <name>`.
+#   - A workflow bump can change a job's `runs-on:` label, which the
+#     runner cells of `docs/architecture/ci.md` and `docs/install/nix.md`
+#     name; the required `doc-freshness` check fails until
+#     `scripts/refresh-runner-labels.sh` rewrites them.
+#
+# The manual fallback for both is the
+# `docs/architecture/flake-input-bumps.md` runbook. A PR can need both
+# refreshes; they run in the one `compute-refresh` job and land through
+# the one push loop.
 #
 # This workflow closes that gap automatically:
 #
 #   1. `identify` — fires off the `ci` workflow's completion on a
 #      `renovate/*` branch; finds the matching open PR, verifies its
 #      author is the Renovate App via
-#      `scripts/classify-renovate-pr-author.sh`, confirms it touches
-#      `flake.nix`, and maps the PR title to a flake input name.
+#      `scripts/classify-renovate-pr-author.sh`, and reads its changed
+#      files. A `flake.nix` touch maps the PR title to a flake input
+#      name; a `.github/workflows/` touch selects the runner-label
+#      refresh.
 #   2. `compute-refresh` — checks out the PR branch, runs
-#      `nix flake update <name>`, regenerates the docs that lock
-#      derives, asserts nothing outside `COMMITTABLE_PATHS` was
+#      `nix flake update <name>` and regenerates the docs that lock
+#      derives (flake path), runs `scripts/refresh-runner-labels.sh`
+#      (runner path), asserts nothing outside `COMMITTABLE_PATHS` was
 #      written, and uploads the result as a job-scoped artifact.
 #      No write credentials.
-#   3. `push-refresh` — downloads the artifact, mints an App
-#      installation token (`linpeas-flake-bumper` GitHub App), and
-#      commits each changed committable path to the PR branch via
-#      REST `PUT /contents`. GitHub web-flow-signs the commits because
-#      the request is authenticated by an App installation token, so
+#   3. `push-refresh` — downloads the artifact, checks each runner doc
+#      against its branch copy with `scripts/check-runner-doc-diff.sh`
+#      from the default branch, mints an App installation token
+#      (`linpeas-flake-bumper` GitHub App), and commits each changed
+#      committable path to the PR branch via REST `PUT /contents`.
+#      GitHub web-flow-signs the commits because the request is
+#      authenticated by an App installation token, so
 #      `required_signatures` on `protect-main` is satisfied if the PR
 #      later merges.
 #   4. `notify` — runs whenever `identify` ran, asks
@@ -37,8 +51,11 @@ name: renovate-flake-lock-refresh
 #
 # Loop-breaker: when this workflow's commit lands on the PR branch,
 # `ci` re-runs, which re-triggers this workflow. The second pass'
-# `compute-refresh` produces no diff (lockfile already in sync) and
-# the `push-refresh` job is skipped via `needs.compute-refresh.outputs.changed`.
+# `compute-refresh` produces no diff (lockfile and runner docs already
+# in sync) and the `push-refresh` job is skipped via
+# `needs.compute-refresh.outputs.changed`. The runner path runs on every
+# Renovate PR that touches a workflow, and most of those change no
+# runner label, so the same no-diff skip is its common case.
 #
 # Renovate rebase safety: Renovate considers a branch "modified
 # externally" when any commit on it carries a git-author that differs
@@ -48,8 +65,9 @@ name: renovate-flake-lock-refresh
 # away.
 #
 # Credential split: mirrors `update-flake-lock.yml`. `compute-refresh`
-# runs untrusted Nix-evaluating actions with `contents: read` and no
-# App-key reference. `push-refresh` holds the App private key only.
+# runs untrusted Nix-evaluating actions and the branch's own generators
+# with `contents: read` and no App-key reference. `push-refresh` holds
+# the App private key only, and runs no code from the PR branch.
 
 on:
   workflow_run:
@@ -67,6 +85,15 @@ env:
   LOCK_DERIVED_GENERATORS: |
     scripts/refresh-flake-show.sh
     scripts/refresh-treefmt-config.sh
+  # Generators whose docs derive from .github/workflows/ci.yml rather
+  # than from the lock. scripts/check-lock-derived-docs.sh binds their
+  # declared outputs into COMMITTABLE_PATHS too, and requires each to be
+  # run by a freshness hook that names ci.yml. push-refresh commits a
+  # runner doc only past its content floor and refuses a changed path
+  # it has no floor class for, so a new entry here also needs a class
+  # there.
+  WORKFLOW_DERIVED_GENERATORS: |
+    scripts/refresh-runner-labels.sh
   # Every path push-refresh is allowed to commit. compute-refresh holds
   # no write credential, so this list — not the artifact it uploads — is
   # what bounds the file set a refresh can land on the PR branch.
@@ -74,6 +101,8 @@ env:
     flake.lock
     docs/reference/flake-outputs.md
     docs/reference/treefmt-config.md
+    docs/architecture/ci.md
+    docs/install/nix.md
 
 concurrency:
   # Branch-scoped: unrelated Renovate PRs can refresh in parallel,
@@ -107,6 +136,7 @@ jobs:
       pr_number: ${{ steps.detect.outputs.pr_number }}
       head_branch: ${{ steps.detect.outputs.head_branch }}
       input_name: ${{ steps.detect.outputs.input_name }}
+      runner_docs: ${{ steps.detect.outputs.runner_docs }}
       unmapped: ${{ steps.detect.outputs.unmapped }}
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
@@ -126,7 +156,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: identify Renovate PR + bumped input
+      - name: identify Renovate PR + refreshes it needs
         id: detect
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -183,11 +213,22 @@ jobs:
             exit "${author_rc}"
           fi
 
-          # PR must touch flake.nix; otherwise nothing for us to refresh.
+          # `--json files` lists at most the first 100 changed files. A
+          # Renovate PR is far under that, grouped github-actions PRs
+          # included. A larger one could hide a workflow touch, and then
+          # no runner refresh runs and the required `doc-freshness` check
+          # stays red on the PR: a stall, never a wrong push.
+          runner_docs=$(printf '%s' "${pr_json}" \
+            | jq -r 'any(.files[].path; startswith(".github/workflows/"))')
           touches_flake=$(printf '%s' "${pr_json}" \
-            | jq -r '[.files[].path] | index("flake.nix")')
-          if [[ "${touches_flake}" == "null" ]]; then
-            printf 'PR does not touch flake.nix; skip\n'
+            | jq -r 'any(.files[].path; . == "flake.nix")')
+          if [[ "${runner_docs}" != 'true' && "${runner_docs}" != 'false' ]] ||
+            [[ "${touches_flake}" != 'true' && "${touches_flake}" != 'false' ]]; then
+            printf 'could not read the changed-file list of PR #%s\n' "${pr_number}" >&2
+            exit 2
+          fi
+          if [[ "${touches_flake}" == 'false' && "${runner_docs}" == 'false' ]]; then
+            printf 'PR touches neither flake.nix nor a workflow; skip\n'
             printf 'should_refresh=false\n' >> "${GITHUB_OUTPUT}"
             exit 0
           fi
@@ -201,37 +242,48 @@ jobs:
           #
           # Exit 3 is "no flake input maps to this title", which is
           # distinct from a broken invocation (exit 2). Every PR that
-          # reaches this point is a Renovate PR that edits flake.nix, so
-          # each one should map; one that does not means the title shape
-          # moved again, and that is reported rather than skipped.
-          title=$(printf '%s' "${pr_json}" | jq -r '.title')
-          classify_rc=0
-          input_name=$(./scripts/classify-renovate-flake-input.sh "${title}") ||
-            classify_rc=$?
-          if [[ ${classify_rc} -eq 3 ]]; then
-            printf 'title %q maps to no flake input, but the PR edits flake.nix\n' \
-              "${title}"
-            {
-              printf 'should_refresh=false\n'
-              printf 'unmapped=true\n'
-              printf 'pr_number=%s\n' "${pr_number}"
-              printf 'head_branch=%s\n' "${HEAD_BRANCH}"
-            } >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
-          if [[ ${classify_rc} -ne 0 ]]; then
-            printf 'classify-renovate-flake-input failed (exit %d)\n' \
-              "${classify_rc}" >&2
-            exit "${classify_rc}"
+          # reaches the classifier is a Renovate PR that edits flake.nix,
+          # so each one should map; one that does not means the title
+          # shape moved again, and that is reported rather than skipped.
+          # It is reported without any refresh even when the PR also
+          # touches a workflow: the PR needs a person either way, and the
+          # report is the signal.
+          #
+          # A runner-only PR skips the classifier: its title (for example
+          # `chore(deps): update dependency ubuntu to v26`) names no flake
+          # input, and `input_name` stays empty.
+          input_name=''
+          if [[ "${touches_flake}" == 'true' ]]; then
+            title=$(printf '%s' "${pr_json}" | jq -r '.title')
+            classify_rc=0
+            input_name=$(./scripts/classify-renovate-flake-input.sh "${title}") ||
+              classify_rc=$?
+            if [[ ${classify_rc} -eq 3 ]]; then
+              printf 'title %q maps to no flake input, but the PR edits flake.nix\n' \
+                "${title}"
+              {
+                printf 'should_refresh=false\n'
+                printf 'unmapped=true\n'
+                printf 'pr_number=%s\n' "${pr_number}"
+                printf 'head_branch=%s\n' "${HEAD_BRANCH}"
+              } >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+            if [[ ${classify_rc} -ne 0 ]]; then
+              printf 'classify-renovate-flake-input failed (exit %d)\n' \
+                "${classify_rc}" >&2
+              exit "${classify_rc}"
+            fi
           fi
 
-          printf 'will refresh %s on PR #%s (%s)\n' \
-            "${input_name}" "${pr_number}" "${HEAD_BRANCH}"
+          printf 'will refresh on PR #%s (%s): input %q, runner docs %s\n' \
+            "${pr_number}" "${HEAD_BRANCH}" "${input_name}" "${runner_docs}"
           {
             printf 'should_refresh=true\n'
             printf 'pr_number=%s\n' "${pr_number}"
             printf 'head_branch=%s\n' "${HEAD_BRANCH}"
             printf 'input_name=%s\n' "${input_name}"
+            printf 'runner_docs=%s\n' "${runner_docs}"
           } >> "${GITHUB_OUTPUT}"
 
   compute-refresh:
@@ -276,27 +328,26 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: refresh flake.lock for the bumped input
+        id: lock
+        if: needs.identify.outputs.input_name != ''
         env:
           INPUT_NAME: ${{ needs.identify.outputs.input_name }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          cp flake.lock flake.lock.before
+          cp flake.lock "${RUNNER_TEMP}/flake.lock.before"
           # --commit-lock-file=false is unsupported on nix 2.34.x; plain
           # update writes flake.lock in place, which is what we want.
           nix flake update "${INPUT_NAME}"
-      - name: detect change
-        id: diff
-        run: |
-          set -Eeuo pipefail
-          IFS=$'\n\t'
-          if cmp --silent flake.lock flake.lock.before; then
+          if cmp --silent flake.lock "${RUNNER_TEMP}/flake.lock.before"; then
             printf 'changed=false\n' >> "${GITHUB_OUTPUT}"
           else
             printf 'changed=true\n' >> "${GITHUB_OUTPUT}"
           fi
+      # An unchanged lock leaves the lock-derived docs as they were, so
+      # they are regenerated only when the lock moved.
       - name: regenerate lock-derived docs
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.lock.outputs.changed == 'true'
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -305,8 +356,46 @@ jobs:
             printf 'running %s\n' "${gen}"
             nix develop --command bash "${gen}"
           done <<< "${LOCK_DERIVED_GENERATORS}"
+      # Runs on every Renovate PR that touches a workflow, whether or not
+      # a runner label moved; an unchanged label leaves both docs
+      # byte-identical. The generators come from the PR branch, like
+      # everything else in this job, so push-refresh does not trust their
+      # output: it holds each runner doc to scripts/check-runner-doc-diff.sh
+      # from the default branch before committing it.
+      - name: regenerate workflow-derived docs
+        if: needs.identify.outputs.runner_docs == 'true'
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          while IFS= read -r gen; do
+            [[ -n "${gen}" ]] || continue
+            printf 'running %s\n' "${gen}"
+            nix develop --command bash "${gen}"
+          done <<< "${WORKFLOW_DERIVED_GENERATORS}"
+      - name: detect change
+        id: diff
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          paths=()
+          while IFS= read -r path; do
+            [[ -n "${path}" ]] && paths+=("${path}")
+          done <<< "${COMMITTABLE_PATHS}"
+          # 1 is "differs"; anything above it is git failing, which must
+          # not read as either answer.
+          rc=0
+          git diff --quiet -- "${paths[@]}" || rc=$?
+          case "${rc}" in
+            0) printf 'changed=false\n' >> "${GITHUB_OUTPUT}" ;;
+            1) printf 'changed=true\n' >> "${GITHUB_OUTPUT}" ;;
+            *)
+              printf 'git diff failed (exit %d)\n' "${rc}" >&2
+              exit "${rc}"
+              ;;
+          esac
+      # Runs whether or not a committable path changed: a write outside
+      # the set is a fault even when the set itself came out unchanged.
       - name: assert writes stay inside the committable set
-        if: steps.diff.outputs.changed == 'true'
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -329,15 +418,15 @@ jobs:
             fi
           done < "${changed}"
           exit "${status}"
-      - name: upload refreshed lock
+      # Every committable path exists in a checkout, so the artifact
+      # always holds all of them, changed or not, and a missing one is an
+      # error. push-refresh's per-path hash check skips the unchanged.
+      - name: upload refreshed files
         if: steps.diff.outputs.changed == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: flake-lock-refreshed
-          path: |
-            flake.lock
-            docs/reference/flake-outputs.md
-            docs/reference/treefmt-config.md
+          path: ${{ env.COMMITTABLE_PATHS }}
           retention-days: 1
           if-no-files-found: error
 
@@ -358,24 +447,42 @@ jobs:
             api.github.com:443
             github.com:443
             objects.githubusercontent.com:443
+      # Checks out this workflow's own ref — the default branch — and NOT
+      # the Renovate branch, for scripts/check-runner-doc-diff.sh below.
+      # That floor polices output from the PR branch's generators while
+      # this job holds a write token, so it has to come from trusted
+      # content; resolving it from the head under test would let a branch
+      # choose the rule that judges it. Placed before the App-token step
+      # so no PR-derived content shares a step with the token before the
+      # floor has run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Into its own directory, not over the checkout: a path the artifact
+      # lacked would otherwise be read from the default branch's copy and
+      # pushed to the PR branch.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: flake-lock-refreshed
+          path: refreshed
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: app-token
         with:
           client-id: ${{ vars.BUMP_APP_CLIENT_ID }}
           private-key: ${{ secrets.BUMP_APP_PRIVATE_KEY }}
           # Least-privilege scope: token only needs to write file contents
-          # (PUT /contents for flake.lock on the Renovate PR branch).
-          # No other installation scopes are needed.
+          # (PUT /contents for flake.lock and derived docs on the Renovate
+          # PR branch). No other installation scopes are needed.
           permission-contents: write
       - name: sanity-check artifact
+        working-directory: refreshed
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
           # Defense-in-depth vs a compromised compute-refresh emitting
-          # garbage in place of valid Nix lockfile JSON.
+          # garbage in place of valid Nix lockfile JSON. The artifact
+          # always carries flake.lock, refreshed or not, so this always
+          # runs.
           jq -e '.nodes | type == "object"' flake.lock >/dev/null
           # A generated doc that arrives without its managed-block markers
           # is garbage from a broken generator. Reject it before anything
@@ -391,64 +498,147 @@ jobs:
               exit 1
             fi
           done
+          # The runner docs carry no markers; each must still hold the
+          # header row its generator locates the table by. The content
+          # floor in the commit step is the real check; this one fails
+          # fast on a doc whose table is gone.
+          ws='[[:space:]]*'
+          ci_header="^\\|${ws}Job${ws}\\|${ws}Runner${ws}\\|${ws}What it tests${ws}\\|${ws}\$"
+          nix_header="^\\|${ws}System${ws}\\|${ws}Flake builds${ws}\\|${ws}CI tested${ws}\\|${ws}\$"
+          if ! grep --quiet --extended-regexp -- "${ci_header}" docs/architecture/ci.md; then
+            printf 'docs/architecture/ci.md has no functional-gates header row - aborting\n' >&2
+            exit 1
+          fi
+          if ! grep --quiet --extended-regexp -- "${nix_header}" docs/install/nix.md; then
+            printf 'docs/install/nix.md has no platform-support header row - aborting\n' >&2
+            exit 1
+          fi
       - name: commit refreshed lock and derived docs to PR branch
+        working-directory: refreshed
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
           HEAD_BRANCH: ${{ needs.identify.outputs.head_branch }}
           INPUT_NAME: ${{ needs.identify.outputs.input_name }}
+          RUNNER_DOCS: ${{ needs.identify.outputs.runner_docs }}
+          FLOOR: ${{ github.workspace }}/scripts/check-runner-doc-diff.sh
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
           api_header="X-GitHub-Api-Version: 2022-11-28"
+          old_dir="$(mktemp --directory)"
+          trap 'rm --recursive --force -- "${old_dir}"' EXIT
 
-          # One signed commit per changed committable path, authenticated
-          # as the linpeas-flake-bumper App so GitHub web-flow-signs each
-          # one. Each PUT names the file's current blob SHA on the PR
-          # branch. This job has no checkout, so the base SHA comes from
-          # the contents API rather than from a local ref. flake.lock goes
-          # first, so a partial failure leaves the lock without its docs —
-          # which the freshness gate then reports — rather than docs
-          # describing an absent lock.
-          committed=0
+          # Two passes, so a refused path aborts the job before ANY PUT,
+          # not only before its own: a half-pushed refresh is the worse
+          # outcome. Pass one decides each committable path; pass two
+          # commits the ones that changed.
+          #
+          # Each path is first compared with its blob SHA on the PR
+          # branch. Loop-breaker idempotency: when the branch already
+          # carries byte-identical content, committing again would churn
+          # against the second ci pass. This job's checkout is the default
+          # branch, so the branch SHA comes from the contents API rather
+          # than from a local ref.
+          #
+          # A path that changed must belong to a refresh that ran: the
+          # lock and its derived docs to a mapped input, a runner doc to
+          # a workflow touch. A change outside that is a fault in
+          # compute-refresh or a branch that moved under it, and pushing
+          # it would revert the branch, so it aborts. A runner doc must
+          # also pass scripts/check-runner-doc-diff.sh against the
+          # branch's copy: only its runner cells may differ.
+          to_commit=()
+          to_sha=()
           while IFS= read -r path; do
             [[ -n "${path}" ]] || continue
             if [[ ! -f "${path}" ]]; then
-              printf 'skipping %s: not in artifact\n' "${path}"
-              continue
+              printf '%s is missing from the artifact - aborting\n' "${path}" >&2
+              exit 1
             fi
             branch_sha="$(gh api \
               --header "${api_header}" \
               "repos/${REPO}/contents/${path}?ref=${HEAD_BRANCH}" \
               --jq .sha)"
-            # Loop-breaker idempotency: when the branch already carries
-            # byte-identical content, committing again would churn against
-            # the second ci pass.
             if [[ "$(git hash-object -- "${path}")" == "${branch_sha}" ]]; then
               printf 'skipping %s: already current on %s\n' "${path}" "${HEAD_BRANCH}"
               continue
             fi
-            msg="chore(flake): update ${path} for ${INPUT_NAME} lock refresh"
-            if [[ "${path}" == 'flake.lock' ]]; then
-              msg="chore(flake): refresh flake.lock for ${INPUT_NAME}"
-            fi
+            case "${path}" in
+              docs/architecture/ci.md | docs/install/nix.md)
+                if [[ "${RUNNER_DOCS}" != 'true' ]]; then
+                  printf '%s differs, but this PR touches no workflow - aborting\n' "${path}" >&2
+                  exit 1
+                fi
+                old="${old_dir}/${path//\//_}"
+                gh api \
+                  --header "${api_header}" \
+                  --header 'Accept: application/vnd.github.raw' \
+                  "repos/${REPO}/contents/${path}?ref=${HEAD_BRANCH}" > "${old}"
+                # Binds the copy the floor judges to the SHA the PUT will
+                # name: a branch that moved between the two reads aborts
+                # here instead of being judged against one blob and
+                # committed over another.
+                if [[ "$(git hash-object -- "${old}")" != "${branch_sha}" ]]; then
+                  printf '%s changed on %s while it was read - aborting\n' \
+                    "${path}" "${HEAD_BRANCH}" >&2
+                  exit 1
+                fi
+                floor_rc=0
+                "${FLOOR}" "${path}" "${old}" "${path}" || floor_rc=$?
+                if [[ ${floor_rc} -ne 0 ]]; then
+                  printf 'content floor refused %s (exit %d) - aborting before any commit\n' \
+                    "${path}" "${floor_rc}" >&2
+                  exit 1
+                fi
+                ;;
+              flake.lock | docs/reference/flake-outputs.md | docs/reference/treefmt-config.md)
+                if [[ -z "${INPUT_NAME}" ]]; then
+                  printf '%s differs, but no flake input was refreshed - aborting\n' "${path}" >&2
+                  exit 1
+                fi
+                ;;
+              *)
+                printf '%s differs and has no floor class here - aborting\n' "${path}" >&2
+                exit 1
+                ;;
+            esac
+            to_commit+=("${path}")
+            to_sha+=("${branch_sha}")
+          done <<< "${COMMITTABLE_PATHS}"
+
+          # One signed commit per changed path, authenticated as the
+          # linpeas-flake-bumper App so GitHub web-flow-signs each one.
+          # Each PUT names the blob SHA pass one read, so a branch that
+          # moved since is a rejected PUT, not an overwrite. flake.lock
+          # goes first, so a partial failure leaves the lock without its
+          # docs — which the freshness gate then reports — rather than
+          # docs describing an absent lock.
+          for i in "${!to_commit[@]}"; do
+            path="${to_commit[i]}"
+            case "${path}" in
+              flake.lock) msg="chore(flake): refresh flake.lock for ${INPUT_NAME}" ;;
+              docs/architecture/ci.md | docs/install/nix.md)
+                msg="chore(ci): refresh runner labels in ${path}"
+                ;;
+              *) msg="chore(flake): update ${path} for ${INPUT_NAME} lock refresh" ;;
+            esac
             content_b64="$(base64 --wrap=0 "${path}")"
             gh api --method PUT \
               --header "${api_header}" \
               "repos/${REPO}/contents/${path}" \
               --field message="${msg}" \
               --field content="${content_b64}" \
-              --field sha="${branch_sha}" \
+              --field sha="${to_sha[i]}" \
               --field branch="${HEAD_BRANCH}" >/dev/null
             printf 'committed %s to %s\n' "${path}" "${HEAD_BRANCH}"
-            committed=$((committed + 1))
-          done <<< "${COMMITTABLE_PATHS}"
+          done
 
           # Zero commits is the steady state of the second ci pass and of a
           # concurrent run that already pushed, so it is a clean exit rather
           # than the abort the weekly bumper uses — that one has proven its
           # lock differs from the base branch before it reaches this point.
-          if ((committed == 0)); then
+          if ((${#to_commit[@]} == 0)); then
             printf 'nothing to commit: %s already carries the refreshed lock and docs\n' \
               "${HEAD_BRANCH}"
           fi
@@ -522,6 +712,7 @@ jobs:
 
             - PR: ${{ needs.identify.outputs.pr_number && format('#{0}', needs.identify.outputs.pr_number) || '(unknown — identify set no outputs)' }}
             - Input: `${{ needs.identify.outputs.input_name || '(none)' }}`
+            - Runner-label refresh: `${{ needs.identify.outputs.runner_docs || '(unknown)' }}`
             - identify: `${{ needs.identify.result }}`
             - compute-refresh: `${{ needs.compute-refresh.result }}`
             - push-refresh: `${{ needs.push-refresh.result }}`
@@ -530,6 +721,7 @@ jobs:
             steps 1-4 (checkout PR, `nix flake update <name>`, `nix fmt`,
             regenerate the docs named in this workflow's
             `LOCK_DERIVED_GENERATORS`), committing the regenerated docs
-            alongside the lock.
+            alongside the lock, or run `scripts/refresh-runner-labels.sh`
+            for a runner-label refresh.
           label-description: renovate-flake-lock-refresh workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}

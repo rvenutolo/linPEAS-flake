@@ -2364,8 +2364,8 @@ and `push-refresh` job results followed by `identify`'s
 `should_refresh` and `unmapped` outputs, print `failure` when a
 refresh was attempted and did not land (or could not be attempted),
 `success` when one landed or was already in place, and `skipped` for
-the steady state where the `ci` completion was not a Renovate flake
-bump. Pure and side-effect free so the decision is unit-testable
+the steady state where the `ci` completion was not a Renovate PR
+needing a refresh. Pure and side-effect free so the decision is unit-testable
 without a workflow run.
 
 ### scripts/classify-renovate-flake-input.sh

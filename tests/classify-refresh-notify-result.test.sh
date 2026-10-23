@@ -11,9 +11,9 @@
 # stage whose failure is least likely to be noticed, because the
 # workflow runs in reaction to someone else's PR and nobody is watching
 # the Actions tab when it goes red. A `ci` completion that is not a
-# Renovate flake bump must stay silent: it is the steady state for
-# nearly every run, and an issue per run would bury the failures this
-# workflow is built to report. A classifier that cannot tell those two
+# Renovate PR needing a refresh must stay silent: it is the steady
+# state for nearly every run, and an issue per run would bury the
+# failures this workflow is built to report. A classifier that cannot tell those two
 # apart is worse than none.
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -65,9 +65,10 @@ classify "identify cancelled reports" failure \
   cancelled skipped skipped '' ''
 
 # --- the silence that has to hold ----------------------------------
-# `identify` exits 0 with should_refresh=false for a PR with no open
-# PR, a non-Renovate author, or no `flake.nix` in its file list. Those
-# are the ordinary `ci` completions on a `renovate/*` branch.
+# `identify` exits 0 with should_refresh=false for a branch with no
+# open PR, or a PR whose file list holds neither `flake.nix` nor a
+# `.github/workflows/` file. Those are the ordinary `ci` completions on
+# a `renovate/*` branch.
 classify "non-flake Renovate PR stays silent" skipped \
   success skipped skipped false ''
 classify "unset should_refresh stays silent" skipped \
@@ -87,6 +88,19 @@ classify "push-refresh failure reports" failure \
   success success failure true ''
 classify "compute-refresh cancelled reports" failure \
   success cancelled skipped true ''
+
+# --- a runner-label refresh ----------------------------------------
+# A Renovate PR that touches a workflow refreshes the runner-label docs
+# even when no flake input maps, so `input_name` is empty and
+# `unmapped` is unset. The weekly grouped github-actions PR changes no
+# runner label, so compute-refresh finds no diff and push-refresh is
+# skipped: a clean no-op, which must close rather than file an issue.
+classify "runner-only-no-diff" success \
+  success success skipped true ''
+classify "runner-only refresh pushed" success \
+  success success success true ''
+classify "runner-only push-refresh failure reports" failure \
+  success success failure true ''
 
 # --- a title that maps to no input ---------------------------------
 # Reachable only after the author and `flake.nix` gates both pass, so a
