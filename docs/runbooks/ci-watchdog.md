@@ -25,9 +25,11 @@ progress is deferred to the next sweep.
 The **automated loop** covers the runs the repo starts itself: `push` runs
 on `main`, `schedule` runs, and `workflow_run`-triggered runs (for example
 `dockerhub-sync` and `renovate-flake-lock-refresh`). It lists those runs
-created in the last 24 hours, so the first sweep after a deploy does not
-retry old history, and `scripts/select-automated-runs.sh` picks the
-candidates. It drops the watchdog's own runs. For `push` and `schedule` it
+created in the last 72 hours, and `scripts/select-automated-runs.sh` picks
+the candidates from them. A candidate's latest attempt must have finished
+(its `updated_at`) in the last 24 hours, so the first sweep after a deploy
+does not retry old history, while a run created before that window whose
+re-run finished inside it is still retried or filed. It drops the watchdog's own runs. For `push` and `schedule` it
 keeps only the newest run of each workflow per event: a newer run, finished
 or still in progress, replaced the older ones. Every `workflow_run` run is a
 candidate on its own, because each is chained to a different upstream run.
@@ -287,7 +289,7 @@ why. Work from those:
     age out, and once it does, every sweep errors on it forever. The watchdog
     cannot fix this itself; the PR needs a fresh commit to produce a new run,
     or should be closed. The automated loop never meets this, because it
-    looks back only 24 hours.
+    lists runs created in the last 72 hours only.
 1. A `5xx` from a GitHub API call made by the workflow script itself
     already exhausted the step's own request retries, so it is a sustained
     GitHub incident rather than a blip. Check the GitHub status page. A

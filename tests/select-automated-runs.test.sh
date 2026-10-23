@@ -11,7 +11,9 @@
 # The rows that matter most: a newer `skipped` run never hides an older
 # failure, and `workflow_run` runs are each candidates on their own,
 # because a workflow gated off on most triggers would otherwise bury
-# every real failure under its skipped runs.
+# every real failure under its skipped runs; and the lookback is read
+# from `updated_at`, so a run created before it whose latest attempt
+# finished inside it stays a candidate.
 set -Eeuo pipefail
 IFS=$'\n\t'
 
@@ -30,15 +32,16 @@ failures=0
 # @arg $1 id  @arg $2 workflow_id  @arg $3 event  @arg $4 created_at
 # @arg $5 status  @arg $6 conclusion (`null` for none)
 # @arg $7 head_branch (default main)  @arg $8 path (default wf<workflow_id>)
+# @arg $9 updated_at (default created_at)
 function run() {
   local -r id="$1" wf="$2" event="$3" created="$4" status="$5" conclusion="$6"
-  local -r branch="${7:-main}" path="${8:-.github/workflows/wf$2.yml}"
+  local -r branch="${7:-main}" path="${8:-.github/workflows/wf$2.yml}" updated="${9:-$4}"
   local concl_json='null'
   if [[ ${conclusion} != 'null' ]]; then
     concl_json="\"${conclusion}\""
   fi
-  printf '{"id":%s,"workflow_id":%s,"event":"%s","created_at":"%s","status":"%s","conclusion":%s,"head_branch":"%s","path":"%s"}' \
-    "${id}" "${wf}" "${event}" "${created}" "${status}" "${concl_json}" "${branch}" "${path}"
+  printf '{"id":%s,"workflow_id":%s,"event":"%s","created_at":"%s","updated_at":"%s","status":"%s","conclusion":%s,"head_branch":"%s","path":"%s"}' \
+    "${id}" "${wf}" "${event}" "${created}" "${updated}" "${status}" "${concl_json}" "${branch}" "${path}"
 }
 
 # @arg $1 description  @arg $2 expected ids, comma-separated ('' for none)
@@ -49,7 +52,7 @@ function expect_ids() {
   local input="${TMP_DIR}/${desc// /-}.json" out rc=0
   local IFS=','
   printf '[%s]' "$*" >"${input}"
-  out="$(bash "${SCRIPT}" <"${input}" 2>&1)" || rc=$?
+  out="$(bash "${SCRIPT}" --updated-since "${SINCE}" <"${input}" 2>&1)" || rc=$?
   local got
   got="$(printf '%s' "${out}" | tr '\n' ',')"
   got="${got%,}"
@@ -77,7 +80,10 @@ function expect_exit() {
   printf 'OK   %s (exit %d)\n' "${desc}" "${rc}"
 }
 
-readonly T1='2026-01-01T01:00:00Z' T2='2026-01-01T02:00:00Z' T3='2026-01-01T03:00:00Z'
+# SINCE is the lookback cutoff every expect_ids row passes; T0 is before
+# it, T1 to T3 after it.
+readonly SINCE='2026-01-01T00:30:00Z'
+readonly T0='2025-12-30T00:00:00Z' T1='2026-01-01T01:00:00Z' T2='2026-01-01T02:00:00Z' T3='2026-01-01T03:00:00Z'
 
 # --- push and schedule: the newest run of a workflow per event --------
 expect_ids "newest failed push is a candidate" 1 \
@@ -116,6 +122,17 @@ expect_ids "two workflow_run failures are both candidates" 15,16 \
 expect_ids "in-progress workflow_run run is not a candidate" '' \
   "$(run 17 6 workflow_run "${T1}" in_progress null renovate/a)"
 
+# --- lookback: the latest attempt's finish, not the run's creation -----
+expect_ids "created before the lookback, updated inside it, is a candidate" 30 \
+  "$(run 30 13 schedule "${T0}" completed failure main '' "${T2}")"
+expect_ids "updated before the lookback is dropped" '' \
+  "$(run 31 14 schedule "${T0}" completed failure main '' "${T0}")"
+expect_ids "updated exactly at the cutoff is a candidate" 32 \
+  "$(run 32 15 workflow_run "${T0}" completed failure renovate/a '' "${SINCE}")"
+expect_ids "a newer run outside the lookback still replaces an older one" '' \
+  "$(run 34 16 push "${T0}" completed success main '' "${T0}")" \
+  "$(run 35 16 push '2025-12-29T00:00:00Z' completed failure main '' "${T1}")"
+
 # --- out of scope ------------------------------------------------------
 expect_ids "push off main is not covered" '' \
   "$(run 20 7 push "${T1}" completed failure feature)"
@@ -135,10 +152,14 @@ expect_ids "an empty list has no candidates" ''
 
 # --- operational errors -------------------------------------------------
 # A malformed payload is a could-not-run, never an empty selection.
-expect_exit "malformed JSON payload" 2 'not json'
-expect_exit "a payload that is an object, not an array" 2 '{}'
-expect_exit "a payload run missing workflow_id" 2 '[{"id":1,"event":"push","path":"p","head_branch":"main","created_at":"x","status":"completed","conclusion":"failure"}]'
-expect_exit "an argument" 2 '[]' --extra
+expect_exit "malformed JSON payload" 2 'not json' --updated-since "${SINCE}"
+expect_exit "a payload that is an object, not an array" 2 '{}' --updated-since "${SINCE}"
+expect_exit "a payload run missing workflow_id" 2 '[{"id":1,"event":"push","path":"p","head_branch":"main","created_at":"x","updated_at":"2026-01-01T01:00:00Z","status":"completed","conclusion":"failure"}]' --updated-since "${SINCE}"
+expect_exit "a payload run missing updated_at" 2 '[{"id":1,"workflow_id":1,"event":"push","path":"p","head_branch":"main","created_at":"x","status":"completed","conclusion":"failure"}]' --updated-since "${SINCE}"
+expect_exit "a payload run whose updated_at carries milliseconds" 2 '[{"id":1,"workflow_id":1,"event":"push","path":"p","head_branch":"main","created_at":"x","updated_at":"2026-01-01T01:00:00.000Z","status":"completed","conclusion":"failure"}]' --updated-since "${SINCE}"
+expect_exit "no --updated-since" 2 '[]'
+expect_exit "an --updated-since with milliseconds" 2 '[]' --updated-since '2026-01-01T00:30:00.000Z'
+expect_exit "an extra argument" 2 '[]' --updated-since "${SINCE}" --extra
 
 if [[ ${failures} -ne 0 ]]; then
   printf '\nselect-automated-runs: FAILURES\n' >&2

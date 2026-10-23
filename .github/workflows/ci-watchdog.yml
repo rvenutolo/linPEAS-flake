@@ -33,11 +33,14 @@ name: ci-watchdog
 # commit. Any other cancel (manual, or a job that never got a runner) is
 # ignored because it carries no timeout evidence to count.
 #
-# The automated sweep considers runs created in the last 24 hours: the
-# newest push or schedule run of each workflow per event, and every
-# `workflow_run` run, never counting a `skipped` run as a replacement
-# (scripts/select-automated-runs.sh applies these rules). It skips this workflow's own runs and any run the bot-PR sweep already
-# acted on in the same tick. On exhausting the bound it opens an issue
+# The automated sweep considers runs whose latest attempt finished in the
+# last 24 hours (listed by creation over 72 hours, so a re-run that
+# finished inside the lookback is seen): the newest push or schedule run
+# of each workflow per event, and every `workflow_run` run, never
+# counting a `skipped` run as a replacement
+# (scripts/select-automated-runs.sh applies these rules). It skips this
+# workflow's own runs and any run the bot-PR sweep already acted on in
+# the same tick. On exhausting the bound it opens an issue
 # only for a workflow that does not call the notify-workflow-result
 # composite; every other workflow files its own through that composite,
 # and a second filer would mean two issues for one failure. A workflow
@@ -444,11 +447,14 @@ jobs:
             // `workflow_run` chains. classify-ci-run.sh --policy automated is the
             // eligibility predicate, and the notify composite applies the same one
             // before it holds off, so every run notify holds off on is one this
-            // loop retries. Candidates are runs created in the last 24 hours, so the
-            // first sweep after a deploy does not retry old history;
-            // scripts/select-automated-runs.sh applies the rest of the rules (the
-            // newest-run rule for push and schedule, `workflow_run` runs each on
-            // their own, `skipped` runs never replacing anything).
+            // loop retries. Candidates are runs whose latest attempt finished in
+            // the last 24 hours, so the first sweep after a deploy does not retry
+            // old history. Runs are listed by creation over 72 hours, so a run
+            // created before the lookback whose re-run finished inside it is
+            // still listed; scripts/select-automated-runs.sh applies the lookback
+            // to `updated_at` and the rest of the rules (the newest-run rule for
+            // push and schedule, `workflow_run` runs each on their own, `skipped`
+            // runs never replacing anything).
 
             const runLabel = (r) => `run ${r.id} (${r.name}, ${r.event})`;
 
@@ -489,7 +495,12 @@ jobs:
             if (notAttempted === null) {
               let items = [];
               try {
-                const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+                // The selector compares instants as `YYYY-MM-DDTHH:MM:SSZ`
+                // strings, the shape the API returns, so the milliseconds
+                // `toISOString` adds are dropped.
+                const isoSeconds = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+                const listedSince = isoSeconds(Date.now() - 72 * 60 * 60 * 1000);
+                const updatedSince = isoSeconds(Date.now() - 24 * 60 * 60 * 1000);
                 // One query per event, because the endpoint caps a filtered query
                 // at 1,000 results and pull_request runs would otherwise fill it.
                 // No `status` filter: a newer push or schedule run still in progress
@@ -505,7 +516,7 @@ jobs:
                   const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
                     owner,
                     repo,
-                    created: `>=${since}`,
+                    created: `>=${listedSince}`,
                     per_page: 100,
                     ...query,
                   });
@@ -520,12 +531,13 @@ jobs:
                   event: r.event,
                   head_branch: r.head_branch,
                   created_at: r.created_at,
+                  updated_at: r.updated_at,
                   status: r.status,
                   conclusion: r.conclusion,
                 }));
                 // The selector prints ids in ascending order, so the order of the
                 // halt and summary messages is stable.
-                items = execFileSync(`${scripts}/select-automated-runs.sh`, [], {
+                items = execFileSync(`${scripts}/select-automated-runs.sh`, ['--updated-since', updatedSince], {
                   ...execOpts,
                   input: JSON.stringify(selection),
                 })

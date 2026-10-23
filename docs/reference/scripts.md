@@ -2553,16 +2553,25 @@ on config error.
 
 Pick the runs the CI watchdog's automated sweep
 classifies. Reads a JSON array of workflow runs on stdin (each with
-id, workflow_id, path, event, head_branch, created_at, status and
-conclusion, as `listWorkflowRunsForRepo` returns them) and prints the
-id of every candidate, one per line, in ascending order. The caller
-bounds the array to the lookback window; this script applies the
-rest of the eligibility rules, so they are testable without a run.
+id, workflow_id, path, event, head_branch, created_at, updated_at,
+status and conclusion, as `listWorkflowRunsForRepo` returns them) and
+prints the id of every candidate, one per line, in ascending order.
+The caller lists runs created over a span longer than the lookback,
+so a run created before the lookback whose latest attempt finished
+inside it is still listed; this script applies every eligibility
+rule, the lookback included, so they are testable without a run.
 
 Rules. Only `push` runs on `main`, `schedule` runs and `workflow_run`
 runs are considered, and never the watchdog's own
-(`.github/workflows/ci-watchdog.yml`). A candidate is completed and
-concluded `failure`, `cancelled` or `timed_out`. A `push` or
+(`.github/workflows/ci-watchdog.yml`). The classifier already reports
+those without retrying; dropping them here as well keeps a failing
+watchdog from fetching its own failed runs on every sweep, which adds
+requests exactly when a rate limit may be what is failing it. A
+candidate is completed, concluded `failure`, `cancelled` or
+`timed_out`, and has an `updated_at` at or after the `--updated-since`
+instant: `updated_at` is when its latest attempt finished, so the
+lookback measures the attempt the notify composite held off on, not
+the run's first attempt. A `push` or
 `schedule` run is a candidate only when it is the newest run of its
 workflow for its event, by `created_at`: a newer run, finished or
 still in progress, replaced it. A `workflow_run` run is a candidate
@@ -2576,7 +2585,7 @@ failure with no retry and no issue.
 Usage:
 
 ```text
-  select-automated-runs.sh < runs.json
+  select-automated-runs.sh --updated-since <YYYY-MM-DDTHH:MM:SSZ> < runs.json
 ```
 
 Exit codes:
