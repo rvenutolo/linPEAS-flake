@@ -131,7 +131,7 @@ jobs:
   # aarch64-linux required jobs ---------------------------------------
 
   build-linpeas-arm64:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 25
     permissions:
       contents: read
@@ -169,7 +169,7 @@ jobs:
 
   smoke-test-arm64:
     needs: build-linpeas-arm64
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 15
     permissions:
       contents: read
@@ -335,7 +335,7 @@ jobs:
           fi
 
   image-smoke-arm64:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 25
     permissions:
       contents: read
