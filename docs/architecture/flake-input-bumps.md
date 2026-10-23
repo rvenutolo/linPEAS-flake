@@ -641,9 +641,14 @@ Credential split mirrors `update-flake-lock.yml`:
     → web-flow signed by GitHub. No `git push`. Its checkout is the
     default branch (this workflow's own ref, `persist-credentials:   false`), never the Renovate head, and it runs no code from the PR
     branch: the one script it runs, the runner-doc content floor, comes
-    from that checkout. The artifact is downloaded into its own
-    directory, so a path missing from it aborts the job instead of being
-    read from the default branch's copy.
+    from that checkout. The artifact is downloaded into the runner's temp
+    directory, outside the checkout. A path missing from it then aborts
+    the job instead of being read from the default branch's copy, and the
+    trusted floor never relies on the artifact extractor refusing an entry
+    named `../`. A guard step before the commit step goes further: it fails
+    the job unless the checkout is exactly as checked out, with no changed
+    tracked file and no untracked or ignored file anywhere in it, and
+    unless the artifact directory resolves outside it.
 
 Loop-breaker: `compute-refresh`'s diff step sets `changed=false` when
 no path in `COMMITTABLE_PATHS` differs from the checkout after both

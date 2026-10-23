@@ -458,13 +458,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Into its own directory, not over the checkout: a path the artifact
-      # lacked would otherwise be read from the default branch's copy and
-      # pushed to the PR branch.
+      # Into the runner's temp directory, outside the checkout. Over the
+      # checkout, a path the artifact lacked would be read from the default
+      # branch's copy and pushed to the PR branch. Inside it, the trusted
+      # floor would sit one `../` away from an archive that PR-branch code
+      # built: compute-refresh runs that code before its upload step, so
+      # the archive's entry names are untrusted, and the floor's integrity
+      # would rest on the extractor never writing outside its target.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: flake-lock-refreshed
-          path: refreshed
+          path: ${{ runner.temp }}/refreshed
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: app-token
         with:
@@ -475,7 +479,7 @@ jobs:
           # PR branch). No other installation scopes are needed.
           permission-contents: write
       - name: sanity-check artifact
-        working-directory: refreshed
+        working-directory: ${{ runner.temp }}/refreshed
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -513,8 +517,40 @@ jobs:
             printf 'docs/install/nix.md has no platform-support header row - aborting\n' >&2
             exit 1
           fi
+      # The commit step runs scripts/check-runner-doc-diff.sh, and the
+      # scripts/lib/ files it sources, from the checkout while holding the
+      # write token. The artifact extraction above is the one step that
+      # handled untrusted content after the checkout, so this proves it
+      # left the checkout as checked out: no tracked file changed, and no
+      # untracked or ignored file appeared anywhere in it. It also proves
+      # the artifact directory really is outside the checkout, rather
+      # than trusting the runner's layout.
+      - name: assert the trusted checkout is pristine
+        env:
+          REFRESHED_DIR: ${{ runner.temp }}/refreshed
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          workspace="$(realpath -- "${GITHUB_WORKSPACE}")"
+          refreshed="$(realpath -- "${REFRESHED_DIR}")"
+          if [[ "${refreshed}/" == "${workspace}/"* ]]; then
+            printf 'artifact directory %s is inside the checkout - aborting\n' "${refreshed}" >&2
+            exit 1
+          fi
+          rc=0
+          git -C "${workspace}" diff --quiet HEAD -- || rc=$?
+          if [[ ${rc} -ne 0 ]]; then
+            printf 'tracked files in the checkout changed (git diff exit %d) - aborting\n' "${rc}" >&2
+            exit 1
+          fi
+          stray="$(git -C "${workspace}" status --porcelain --untracked-files=all --ignored)"
+          if [[ -n "${stray}" ]]; then
+            printf 'the checkout holds files it was not checked out with - aborting:\n%s\n' \
+              "${stray}" >&2
+            exit 1
+          fi
       - name: commit refreshed lock and derived docs to PR branch
-        working-directory: refreshed
+        working-directory: ${{ runner.temp }}/refreshed
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
