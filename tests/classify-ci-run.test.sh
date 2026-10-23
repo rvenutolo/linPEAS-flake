@@ -150,6 +150,11 @@ classify "setup-run-harden" retry "lint${T}transient${T}setup-step:Run step-secu
 classify "setup-checkout" retry "lint${T}transient${T}setup-step:Run actions/checkout@89abcdef0123456789abcdef0123456789abcdef" "$(fx setup-checkout)" --policy automated
 classify "setup-app-token" retry "lint${T}transient${T}setup-step:Run actions/create-github-app-token@0123456789abcdef0123456789abcdef01234567" "$(fx setup-app-token)" --policy automated
 classify "post-step-real" report "lint${T}real${T}step:Post Run actions/checkout@89abcdef0123456789abcdef0123456789abcdef" "$(fx post-step-real)" --policy automated
+# A release-on-bump re-run is not idempotent, so the automated policy
+# reports its transient instead of retrying it; the bot-pr policy is
+# unaffected, which pins the exclusion to the one policy that names it.
+classify "release-on-bump-automated" report "lint${T}transient${T}setup-step:Run ./.github/actions/setup-nix" "$(fx release-on-bump-setup-step)" --policy automated
+classify "release-on-bump-bot-pr" retry "lint${T}transient${T}setup-step:Run ./.github/actions/setup-nix" "$(fx release-on-bump-setup-step)" --policy bot-pr
 classify "runner-lost-over-real-step" retry "lint${T}transient${T}runner-lost" "$(fx runner-lost-over-real-step)" --policy automated
 
 # --- operational errors ----------------------------------------------

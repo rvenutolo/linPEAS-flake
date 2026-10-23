@@ -137,6 +137,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/_script_docs.test.sh`                   | `scripts/_script_docs.awk`                  | `tests/fixtures/refresh-scripts-reference`   |
 | `tests/apply-patch-tag-pin-rewrite.test.sh`    | `scripts/apply-patch-tag-pin-rewrite.sh`    | `tests/fixtures/apply-patch-tag-pin-rewrite` |
 | `tests/bump-linpeas.test.sh`                   | `scripts/bump-linpeas.sh`                   | `tests/fixtures/bump-linpeas`                |
+| `tests/ci-watchdog-coverage.test.sh`           | `.github/workflows/ci-watchdog.yml`         | —                                            |
 | `tests/classify-backfill-image-mode.test.sh`   | `scripts/classify-backfill-image-mode.sh`   | —                                            |
 | `tests/classify-ci-run.test.sh`                | `scripts/classify-ci-run.sh`                | `tests/fixtures/classify-ci-run`             |
 | `tests/classify-refresh-notify-result.test.sh` | `scripts/classify-refresh-notify-result.sh` | —                                            |

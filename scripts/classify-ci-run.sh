@@ -22,7 +22,14 @@
 # push to main) and only when every counted job is transient, so a real
 # regression is reported on the first attempt rather than retried.
 # Other events report without retrying: a person started them and can
-# rerun them.
+# rerun them. A run of `.github/workflows/release-on-bump.yml` also
+# reports without retrying under `automated`, because re-running its
+# failed jobs is not idempotent: a `release` job lost after it created
+# the GitHub release re-runs into `tag-exists=true`, which skips every
+# image, manifest and verify job and finishes green with no images
+# published, and an image job lost after its docker.io push re-pushes
+# over the orphan tag that docs/runbooks/dockerhub-recovery.md deletes
+# first. Its own notify job and that runbook are the recovery path.
 #
 # A job that fails before its own work starts (runner setup, checkout,
 # the setup-nix action) is transient. A failed step after those is real,
@@ -43,6 +50,12 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/log.sh"
 
 readonly MAX_ATTEMPTS=3
+
+# Workflow files whose runs the `automated` policy never retries; the
+# header says why.
+readonly AUTOMATED_EXCLUDED_PATHS=(
+  '.github/workflows/release-on-bump.yml'
+)
 
 # A failed step whose name starts with one of these ran before the job's
 # own work, so the failure is the platform's, not the repo's.
@@ -148,6 +161,7 @@ fi
 event="$(printf '%s' "${RUN_JSON}" | jq --raw-output '.event')"
 head_branch="$(printf '%s' "${RUN_JSON}" | jq --raw-output '.head_branch')"
 run_attempt="$(printf '%s' "${RUN_JSON}" | jq --raw-output '.run_attempt')"
+run_path="$(printf '%s' "${RUN_JSON}" | jq --raw-output '.path // ""')"
 
 verdict='ignore'
 if ((transient + real > 0)); then
@@ -158,6 +172,9 @@ if ((transient + real > 0)); then
     push) [[ ${head_branch} == 'main' ]] || eligible=false ;;
     *) eligible=false ;;
     esac
+    for excluded in "${AUTOMATED_EXCLUDED_PATHS[@]}"; do
+      [[ ${run_path} != "${excluded}" ]] || eligible=false
+    done
   fi
   if [[ ${eligible} == 'false' ]] || { [[ ${POLICY} == 'automated' ]] && ((real > 0)); }; then
     verdict='report'

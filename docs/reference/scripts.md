@@ -2232,7 +2232,14 @@ retries only runs the repo triggers itself (schedule, workflow_run,
 push to main) and only when every counted job is transient, so a real
 regression is reported on the first attempt rather than retried.
 Other events report without retrying: a person started them and can
-rerun them.
+rerun them. A run of `.github/workflows/release-on-bump.yml` also
+reports without retrying under `automated`, because re-running its
+failed jobs is not idempotent: a `release` job lost after it created
+the GitHub release re-runs into `tag-exists=true`, which skips every
+image, manifest and verify job and finishes green with no images
+published, and an image job lost after its docker.io push re-pushes
+over the orphan tag that docs/runbooks/dockerhub-recovery.md deletes
+first. Its own notify job and that runbook are the recovery path.
 
 A job that fails before its own work starts (runner setup, checkout,
 the setup-nix action) is transient. A failed step after those is real,

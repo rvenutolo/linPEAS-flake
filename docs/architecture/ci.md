@@ -165,11 +165,11 @@ All third-party actions are SHA-pinned, with `# vX.Y[.Z]` patch-tag comments exc
 
 ## Cron schedule
 
-Every fixed-time schedule fits the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). One schedule runs outside those windows: `ci-watchdog` is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead. The monthly `docs-audit-reminder` sits at the very tail of the daily window (10:00 on the 1st) and clear of every daily cron in it, so a once-a-month reminder never competes with the bump pipeline for attention.
+Every fixed-time schedule fits the maintainer's monitoring windows: daily crons run 08:00–10:00 UTC, weekly crons run Friday 05:00–07:00 UTC (both year-round inside the intended US-Eastern early-morning windows regardless of DST). One schedule runs outside those windows: `ci-watchdog` is a backstop that must fire around the clock, not a monitoring-window report, so it runs on a continuous 30-minute cadence instead; it also runs on the `workflow_run` completion of every other workflow, and the cron is the fallback for a completion that trigger misses. The monthly `docs-audit-reminder` sits at the very tail of the daily window (10:00 on the 1st) and clear of every daily cron in it, so a once-a-month reminder never competes with the bump pipeline for attention.
 
 | Workflow                     | Cron            | UTC          | Purpose                                                                                                                                                                                      |
 | ---------------------------- | --------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ci-watchdog`                | `20,50 * * * *` | every 30 min | Re-run failed jobs on stuck auto-merge bot PRs, bounded to 3 attempts                                                                                                                        |
+| `ci-watchdog`                | `20,50 * * * *` | every 30 min | Re-run failed jobs on stuck auto-merge bot PRs and transient failures of automated runs, bounded to 3 attempts                                                                               |
 | `actions-cache-prune`        | `0 8 * * *`     | 08:00 daily  | Bound the lifetime of any Actions-cache entry a third-party action creates (nothing in-repo writes one)                                                                                      |
 | `update-linpeas`             | `5 8 * * *`     | 08:05 daily  | Check upstream peass-ng for new release; open auto-merge bump PR                                                                                                                             |
 | `stale-pin-check`            | `0 9 * * *`     | 09:00 daily  | Auto-file issue when the pin has sat behind upstream past the staleness threshold                                                                                                            |
@@ -258,7 +258,11 @@ The composite holds off on a transient cancel or failure that the CI
 watchdog is about to re-run. When its `result` is `failure` or
 `cancelled`, it fetches its own run with `scripts/fetch-ci-run.sh` and
 classifies it with `scripts/classify-ci-run.sh --policy automated`, the
-predicate the watchdog applies before it re-runs a run. The verdict
+predicate the watchdog's automated loop applies before it re-runs a
+`push` run on `main`, a `schedule` run or a `workflow_run` run (see the
+[CI retry watchdog runbook](../runbooks/ci-watchdog.md)). That policy
+never retries `release-on-bump`, whose re-runs are not idempotent, so its
+notify job files on the first failure. The verdict
 `retry` means every counted job failed for infrastructure reasons and the
 attempt cap is not spent, so the composite prints a notice naming the
 attempt and the classified jobs and files nothing; the re-run reaches the
