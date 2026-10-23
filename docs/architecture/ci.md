@@ -254,6 +254,22 @@ full step timings, nothing expired and the empty one never started. The
 log archive answers the same way — download it and list its entries
 rather than reading one job's absence from it as expiry.
 
+The composite holds off on a transient cancel or failure that the CI
+watchdog is about to re-run. When its `result` is `failure` or
+`cancelled`, it fetches its own run with `scripts/fetch-ci-run.sh` and
+classifies it with `scripts/classify-ci-run.sh --policy automated`, the
+predicate the watchdog applies before it re-runs a run. The verdict
+`retry` means every counted job failed for infrastructure reasons and the
+attempt cap is not spent, so the composite prints a notice naming the
+attempt and the classified jobs and files nothing; the re-run reaches the
+composite again and files if it fails again. Any other verdict files as
+before, so a run that exhausts its attempts, or that has a failed step of
+its own work, still gets its issue, and a cancelled run is filed later
+rather than never. A fetch or classifier error also files, with a
+workflow warning: a broken classifier must never silence an issue. The
+fetch needs `actions: read` and `checks: read` on every job that calls the
+composite.
+
 A never-scheduled cancel is also unpageable from inside the run. The
 `notify` job that would file the issue needs the runner that was
 unavailable, so a scarcity window wide enough to cancel one job
