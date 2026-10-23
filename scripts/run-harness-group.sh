@@ -63,6 +63,7 @@ readonly -a HARNESSES=(
   'classify-ci-run|classify-ci-run.test.sh|'
   'fetch-ci-run|fetch-ci-run.test.sh|'
   'ci-watchdog-coverage|ci-watchdog-coverage.test.sh|'
+  'select-automated-runs|select-automated-runs.test.sh|'
   'lib-log|lib-log.test.sh|'
   'lib-enumerate|lib-enumerate.test.sh|'
   'lib-repo|lib-repo.test.sh|'

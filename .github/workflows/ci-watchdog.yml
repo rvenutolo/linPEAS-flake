@@ -33,13 +33,16 @@ name: ci-watchdog
 # commit. Any other cancel (manual, or a job that never got a runner) is
 # ignored because it carries no timeout evidence to count.
 #
-# The automated sweep considers only the newest run of each workflow for
-# each event created in the last 24 hours, skips this workflow's own
-# runs, and skips a run the bot-PR sweep already acted on in the same
-# tick. On exhausting the bound it opens an issue only for a workflow
-# with no `issues` write scope in .github/permission-scopes.yml; every
-# other workflow files its own through its notify job, and a second
-# filer would mean two issues for one failure.
+# The automated sweep considers runs created in the last 24 hours: the
+# newest push or schedule run of each workflow per event, and every
+# `workflow_run` run, never counting a `skipped` run as a replacement
+# (scripts/select-automated-runs.sh applies these rules). It skips this workflow's own runs and any run the bot-PR sweep already
+# acted on in the same tick. On exhausting the bound it opens an issue
+# only for a workflow that does not call the notify-workflow-result
+# composite; every other workflow files its own through that composite,
+# and a second filer would mean two issues for one failure. A workflow
+# file it cannot read counts as calling no notify, so the failure is
+# filed rather than lost.
 #
 # On exhausting the bound, one issue is opened per stuck PR or per
 # workflow and event, deduped by title. A watchdog that gives up silently
@@ -55,14 +58,18 @@ name: ci-watchdog
 # untried in both instead of silently starving them.
 #
 # The `workflow_run` trigger starts a sweep minutes after any other
-# workflow completes, re-runs included; the cron is the fallback. It runs
-# this file from the default branch with the default branch checked out
+# workflow completes without succeeding, re-runs included: a completion
+# that concluded `success` or `skipped` leaves nothing to retry, so the
+# job skips it, which keeps the request volume down. The cron is the
+# fallback, and it and `workflow_dispatch` always sweep. On a
+# `workflow_run` event the watchdog runs this file from the default branch with the default branch checked out
 # and never checks out or runs code from the triggering run, so the
 # privilege-escalation pattern zizmor's dangerous-triggers audit warns
 # about is not present (see zizmor.yml). Its `workflows:` list names every
 # other workflow, asserted by tests/ci-watchdog-coverage.test.sh. The
 # `concurrency` group collapses a burst of completions to one pending
 # sweep, which is enough because every sweep covers everything.
+
 #
 # Runbook: docs/runbooks/ci-watchdog.md
 
@@ -102,13 +109,22 @@ on:
 
 permissions: {}
 
+# A `workflow_run` completion that concluded `success` or `skipped` needs
+# no sweep, so the job's `if:` skips it. Such a run still joins its
+# concurrency group before the `if:` is read, and a run queued in a group
+# cancels the one already pending there, so a skipped no-op would cancel
+# a pending real sweep. The no-op runs therefore get a group of their own.
 concurrency:
-  group: ci-watchdog
+  group: ${{ github.event_name == 'workflow_run' && (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'skipped') && format('ci-watchdog-noop-{0}', github.run_id) || 'ci-watchdog' }}
   cancel-in-progress: false
 
 jobs:
   retry:
-    if: github.repository == 'rvenutolo/linPEAS-flake'
+    if: >-
+      github.repository == 'rvenutolo/linPEAS-flake' &&
+      (github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion != 'success' &&
+      github.event.workflow_run.conclusion != 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -428,50 +444,63 @@ jobs:
             // `workflow_run` chains. classify-ci-run.sh --policy automated is the
             // eligibility predicate, and the notify composite applies the same one
             // before it holds off, so every run notify holds off on is one this
-            // loop retries. Only the newest run of each workflow for each event
-            // created in the last 24 hours is a candidate: a newer run replaced
-            // the older ones, and the lookback keeps the first sweep after a
-            // deploy from retrying old history.
+            // loop retries. Candidates are runs created in the last 24 hours, so the
+            // first sweep after a deploy does not retry old history;
+            // scripts/select-automated-runs.sh applies the rest of the rules (the
+            // newest-run rule for push and schedule, `workflow_run` runs each on
+            // their own, `skipped` runs never replacing anything).
 
             const runLabel = (r) => `run ${r.id} (${r.name}, ${r.event})`;
 
-            let permissionScopes = null;
-            // Whether any job of the workflow file has an `issues` write scope in
-            // .github/permission-scopes.yml. Such a workflow files its own
-            // failures, through the notify composite on its final attempt, and a
-            // second filer would open a second issue for one failure.
-            function workflowFilesOwnIssues(path) {
-              if (permissionScopes === null) {
-                permissionScopes = JSON.parse(
-                  execFileSync(
+            const notifyCallers = new Map();
+            // Whether the workflow file calls the notify-workflow-result composite,
+            // by its local path or by its pinned self-reference (pages.yml).
+            // Such a workflow files its own issue on the final attempt, and a second
+            // filer would mean two issues for one failure. A file that cannot be
+            // read counts as calling no notify, so the watchdog files: a broken
+            // check must never leave an exhausted run with no issue at all.
+            function workflowCallsNotify(path) {
+              if (!notifyCallers.has(path)) {
+                let calls = false;
+                try {
+                  const count = execFileSync(
                     'yq',
                     [
-                      '--output-format=json',
-                      '.',
-                      `${process.env.GITHUB_WORKSPACE}/.github/permission-scopes.yml`,
+                      '[.jobs[].steps[]? | select((.uses // "") | test("^([.]/|rvenutolo/linPEAS-flake/)[.]github/actions/notify-workflow-result(@|$)"))] | length',
+                      `${process.env.GITHUB_WORKSPACE}/${path}`,
                     ],
                     execOpts,
-                  ),
-                );
+                  ).trim();
+                  if (!/^[0-9]+$/.test(count)) {
+                    throw new Error(`yq printed ${JSON.stringify(count)}, not a count`);
+                  }
+                  calls = Number(count) > 0;
+                } catch (err) {
+                  core.warning(
+                    `${path}: could not tell whether it calls the notify composite ` +
+                      `(${err.message}); treating it as not, so the watchdog files.`,
+                  );
+                }
+                notifyCallers.set(path, calls);
               }
-              const jobs = permissionScopes[path.split('/').pop()] ?? {};
-              return Object.values(jobs).some((scopes) => Array.isArray(scopes) && scopes.includes('issues'));
+              return notifyCallers.get(path);
             }
 
             if (notAttempted === null) {
-              const items = [];
+              let items = [];
               try {
                 const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
                 // One query per event, because the endpoint caps a filtered query
                 // at 1,000 results and pull_request runs would otherwise fill it.
-                // No `status` filter: a newer run still in progress must count as
-                // the newest, so the older one it replaced is not retried.
+                // No `status` filter: a newer push or schedule run still in progress
+                // must count as the newest, so the older one it replaced is not
+                // retried.
                 const queries = [
                   { event: 'push', branch: 'main' },
                   { event: 'schedule' },
                   { event: 'workflow_run' },
                 ];
-                const newest = new Map();
+                const byId = new Map();
                 for (const query of queries) {
                   const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
                     owner,
@@ -481,35 +510,33 @@ jobs:
                     ...query,
                   });
                   for (const run of runs) {
-                    if (run.path === '.github/workflows/ci-watchdog.yml') {
-                      continue;
-                    }
-                    if (run.event === 'push' && run.head_branch !== 'main') {
-                      continue;
-                    }
-                    const key = `${run.workflow_id}:${run.event}`;
-                    const seen = newest.get(key);
-                    if (seen === undefined || Date.parse(run.created_at) > Date.parse(seen.created_at)) {
-                      newest.set(key, run);
-                    }
+                    byId.set(run.id, run);
                   }
                 }
-                for (const run of newest.values()) {
-                  if (
-                    run.status === 'completed' &&
-                    (run.conclusion === 'failure' ||
-                      run.conclusion === 'cancelled' ||
-                      run.conclusion === 'timed_out') &&
-                    !handledRunIds.has(run.id)
-                  ) {
-                    items.push(run);
-                  }
-                }
-                // Sorted so the order of the halt and summary messages is stable.
-                items.sort((a, b) => a.id - b.id);
+                const selection = [...byId.values()].map((r) => ({
+                  id: r.id,
+                  workflow_id: r.workflow_id,
+                  path: r.path,
+                  event: r.event,
+                  head_branch: r.head_branch,
+                  created_at: r.created_at,
+                  status: r.status,
+                  conclusion: r.conclusion,
+                }));
+                // The selector prints ids in ascending order, so the order of the
+                // halt and summary messages is stable.
+                items = execFileSync(`${scripts}/select-automated-runs.sh`, [], {
+                  ...execOpts,
+                  input: JSON.stringify(selection),
+                })
+                  .split('\n')
+                  .filter((l) => l !== '')
+                  .map((id) => byId.get(Number(id)))
+                  .filter((run) => !handledRunIds.has(run.id));
               } catch (err) {
                 // Enumeration failing leaves nothing to confine the error to, so
                 // it is recorded against the sweep as a whole.
+                items = [];
                 if (recordError('automated-run enumeration', err)) {
                   notAttempted = ['every automated run (enumeration halted)'];
                 }
@@ -527,7 +554,7 @@ jobs:
                     );
                     await github.rest.actions.reRunWorkflowFailedJobs({ owner, repo, run_id: run.id });
                   } else if (verdict === 'exhausted') {
-                    if (workflowFilesOwnIssues(run.path)) {
+                    if (workflowCallsNotify(run.path)) {
                       core.notice(
                         `${runLabel(run)}: exhausted retries; ${run.path} files its own ` +
                           `issue through its notify job, so the watchdog does not.`,

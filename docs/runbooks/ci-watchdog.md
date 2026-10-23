@@ -5,7 +5,12 @@
 `ci-watchdog` runs on a cron schedule
 (see [CI — cron schedule](../architecture/ci.md#cron-schedule)) and on the
 `workflow_run` completion of every other workflow, so a failure is usually
-retried minutes after it happens and the cron is the fallback. Each run is
+retried minutes after it happens and the cron is the fallback. A
+`workflow_run` completion that concluded `success` or `skipped` leaves
+nothing to retry, so the job's `if:` skips it, which keeps the sweep's API
+requests down; such a no-op run gets a concurrency group of its own, so it
+cannot cancel a real sweep waiting in the `ci-watchdog` group. The cron and
+`workflow_dispatch` always sweep. Each run is
 one sweep in two loops, and each loop asks `scripts/classify-ci-run.sh` what
 to do with every candidate run. That script is the single source of truth
 for which failures count.
@@ -20,10 +25,15 @@ progress is deferred to the next sweep.
 The **automated loop** covers the runs the repo starts itself: `push` runs
 on `main`, `schedule` runs, and `workflow_run`-triggered runs (for example
 `dockerhub-sync` and `renovate-flake-lock-refresh`). It lists those runs
-created in the last 24 hours, drops the watchdog's own, and keeps only the
-newest run of each workflow for each event: a newer run, finished or still
-in progress, replaced the older ones, and the lookback keeps the first sweep
-after a deploy from retrying old history. A kept run that concluded
+created in the last 24 hours, so the first sweep after a deploy does not
+retry old history, and `scripts/select-automated-runs.sh` picks the
+candidates. It drops the watchdog's own runs. For `push` and `schedule` it
+keeps only the newest run of each workflow per event: a newer run, finished
+or still in progress, replaced the older ones. Every `workflow_run` run is a
+candidate on its own, because each is chained to a different upstream run.
+A `skipped` run never replaces anything: `renovate-flake-lock-refresh`, for
+one, concludes `skipped` on nearly every `ci` completion, and counting that
+as a newer run would hide the failure before it. A candidate that concluded
 `failure`, `cancelled` or `timed_out` is classified with
 `--policy automated`, which retries only when every counted job is
 transient — it failed in a setup step before the job's own work, lost its
@@ -166,15 +176,17 @@ marker survives.
 The automated loop re-ran the newest `<event>` run of `<workflow>` until
 its 3-attempt budget was spent, and every attempt failed only for
 transient-shaped reasons (setup step, lost runner, timeout). The watchdog
-files this issue only for a workflow none of whose jobs holds an `issues`
-write scope in `.github/permission-scopes.yml` — `ci` on `push`,
-`gitleaks`, `trufflehog`, `actions-cache-prune` and the like. A workflow
-with one files its own issue through its notify job on the final attempt,
-and the watchdog only prints a notice, so one failure never gets two
-issues. The rule reads the scope, not the notify call: `links` grants its
-`lychee` job `issues: write` but has no notify job, so an exhausted
-`links` run files nothing from either side. A real failure in a workflow without a notify job is not retried
-and gets no issue; it stays red in the Actions tab.
+files this issue only for a workflow that does not call the
+`notify-workflow-result` composite (by `uses: ./.github/actions/notify-workflow-result`
+or by its pinned self-reference): `ci` on `push`, `gitleaks`, `trufflehog`,
+`actions-cache-prune`, `links`, `reproducibility-check` and
+`docs-audit-reminder`. A workflow that calls it files its own issue through
+it on the final attempt, and the watchdog only prints a notice, so one
+failure never gets two issues. If the watchdog cannot read the workflow
+file to tell, it logs a warning and files, because an unfiled exhausted
+run is the worse mistake. A real failure in a workflow without a notify
+job is not retried and gets no watchdog issue; it stays red in the
+Actions tab.
 
 1. Open the run URL in the issue body and read each listed job's log. The
     class and reason beside each job name say what the classifier saw.
@@ -214,7 +226,9 @@ tells you which of three things happened:
     not errors, they are untried. A halt in the bot-PR loop lists every open
     PR behind the halt point, before the bot-author and auto-merge filters,
     so most entries are usually PRs the sweep would have skipped without
-    touching anyway, and ends with `every automated run (sweep not   started)`, because the automated loop never ran. A halt in the
+    touching anyway. Its last entry is
+    `every automated run (sweep not started)`, because the automated loop
+    never ran. A halt in the
     automated loop lists the candidate runs behind the halt point as
     `run <id> (<workflow>, <event>)`. The next sweep picks them up. Both signals trigger it:
     a 403 on an Octokit call whose response carries `x-ratelimit-remaining: 0`
@@ -286,9 +300,11 @@ why. Work from those:
     API call the script made itself. Status 1 is an API failure: read the
     `gh:` line of stderr that follows. Status 2 is a bad argument or a
     response or input that is not the expected shape. `no status` with
-    `Command failed` is the 180-second timeout. A `yq` command in the
-    message is the read of `.github/permission-scopes.yml` that decides
-    whether the watchdog files an automated run's exhaustion issue.
+    `Command failed` is the 180-second timeout. A `Command failed` naming
+    `scripts/select-automated-runs.sh` is reported as
+    `automated-run enumeration`, and no automated run was attempted. A
+    failed `yq` read of a workflow file is not an error: it is a warning
+    naming the file, and the watchdog files that run's exhaustion issue.
 
 A PR or run that errors on **every** sweep is a real bug, not a transient. It is
 also the case worth acting on quickly: while it is failing it is not being
