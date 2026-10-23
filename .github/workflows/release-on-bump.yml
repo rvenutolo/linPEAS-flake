@@ -1234,7 +1234,7 @@ jobs:
       && (needs.release.outputs.tag-exists == 'false' || inputs.force-republish)
       && github.repository == 'rvenutolo/linPEAS-flake'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -1480,12 +1480,15 @@ jobs:
           # forgetting: `gh pr merge --auto` returns 0 as soon as auto-merge
           # is armed, so without this poll the job reported success while the
           # changelog PR sat open (and, once tag-exists flipped true, could
-          # never re-run to rebase it). Fail on a closed PR or a stall so the
-          # notify job surfaces it; a re-run (force-republish) then recovers.
+          # never re-run to rebase it). Fail on a closed PR so the notify job
+          # surfaces it; a re-run (force-republish) then recovers. A PR still
+          # open at the deadline with auto-merge armed and no merge conflict
+          # is waiting on checks, which ci-watchdog retries on bot PRs, so the
+          # step hands it over and succeeds; any other open PR fails the step.
           # `gh pr view` by number still resolves after --delete-branch.
           pr_number="$(gh pr view "${pr_ref}" --json number --jq .number)"
           gh pr merge "${pr_number}" --auto --merge --delete-branch
-          deadline=$(($(date +%s) + 720))
+          deadline=$(($(date +%s) + 2100))
           while :; do
             state="$(gh pr view "${pr_number}" --json state --jq .state)"
             if [[ "${state}" == MERGED ]]; then
@@ -1497,7 +1500,15 @@ jobs:
               exit 1
             fi
             if (($(date +%s) > deadline)); then
-              printf 'changelog PR #%s did not merge within 12m; auto-merge armed but required checks may be stuck or conflicting\n' "${pr_number}" >&2
+              # `mergeable` is UNKNOWN while GitHub computes it; only
+              # CONFLICTING is a conflict.
+              handoff="$(gh pr view "${pr_number}" --json autoMergeRequest,mergeable \
+                --jq '(.autoMergeRequest != null) and (.mergeable != "CONFLICTING")')"
+              if [[ "${handoff}" == true ]]; then
+                printf '::warning::changelog PR #%s not merged after 35m; auto-merge armed, handing to ci-watchdog\n' "${pr_number}"
+                break
+              fi
+              printf 'changelog PR #%s did not merge within 35m; auto-merge is not armed or the PR conflicts\n' "${pr_number}" >&2
               exit 1
             fi
             sleep 20
@@ -1528,8 +1539,11 @@ jobs:
       && needs.release.result == 'success'
       && (needs.release.outputs.tag-exists == 'false' || inputs.force-republish || inputs.backfill-tag != '')
       && github.repository == 'rvenutolo/linPEAS-flake'
+    # Worst case is 30 minutes of work plus the retry sleeps: 4 attestation
+    # refs and 6 cosign refs, each retried up to 4 times at 30 s, plus the
+    # pin attestation (11 x 4 x 30 s = 22 minutes).
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: read
       attestations: read
@@ -1592,7 +1606,8 @@ jobs:
             "oci://docker.io/rvenutolo/linpeas@${HUB_AMD64_DIGEST}" \
             "oci://ghcr.io/rvenutolo/linpeas@${GHCR_ARM64_DIGEST}" \
             "oci://docker.io/rvenutolo/linpeas@${HUB_ARM64_DIGEST}"; do
-            gh attestation verify "${ref}" --repo rvenutolo/linPEAS-flake
+            ./scripts/retry-command.sh 5 30 -- \
+              gh attestation verify "${ref}" --repo rvenutolo/linPEAS-flake
           done
 
       - name: cosign verify per-arch + multi-arch images (keyless)
@@ -1622,7 +1637,8 @@ jobs:
             "docker.io/rvenutolo/linpeas@${HUB_ARM64_DIGEST}" \
             "ghcr.io/rvenutolo/linpeas@${GHCR_INDEX_DIGEST}" \
             "docker.io/rvenutolo/linpeas@${HUB_INDEX_DIGEST}"; do
-            nix shell .#cosign --command cosign verify \
+            ./scripts/retry-command.sh 5 30 -- \
+              nix shell .#cosign --command cosign verify \
               --certificate-identity "${COSIGN_IDENTITY}" \
               --certificate-oidc-issuer "${COSIGN_OIDC_ISSUER}" \
               "${ref}" > /dev/null
@@ -1639,7 +1655,8 @@ jobs:
           # Re-fetch the pin file from the release (avoids any chance of
           # local checkout drift altering the bytes).
           gh release download "${VERSION}" --pattern linpeas-pin.json --clobber
-          gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
+          ./scripts/retry-command.sh 5 30 -- \
+            gh attestation verify linpeas-pin.json --repo rvenutolo/linPEAS-flake
 
       - name: cosign verify-blob for release-asset sidecars
         # Re-fetch each release asset + .sigstore sidecar from the

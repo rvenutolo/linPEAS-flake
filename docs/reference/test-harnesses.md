@@ -155,6 +155,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/md-fence-shapes.test.sh`                | `scripts/check-manifest-digest-pinned.sh`   | —                                            |
 | `tests/octoscan-scan.test.sh`                  | `scripts/octoscan-scan.sh`                  | —                                            |
 | `tests/repo-root-guard.test.sh`                | `scripts/*.sh`                              | —                                            |
+| `tests/retry-command.test.sh`                  | `scripts/retry-command.sh`                  | —                                            |
 | `tests/run-doc-freshness.test.sh`              | `scripts/run-doc-freshness.sh`              | —                                            |
 | `tests/run-harness-group.test.sh`              | `scripts/run-harness-group.sh`              | —                                            |
 | `tests/run-lint-group.test.sh`                 | `scripts/run-lint-group.sh`                 | —                                            |

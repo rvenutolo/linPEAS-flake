@@ -61,6 +61,7 @@ readonly -a HARNESSES=(
   'flake-lock-staleness|check-flake-lock-staleness.test.sh|'
   'refresh-notify-result|classify-refresh-notify-result.test.sh|'
   'classify-ci-run|classify-ci-run.test.sh|'
+  'retry-command|retry-command.test.sh|'
   'fetch-ci-run|fetch-ci-run.test.sh|'
   'ci-watchdog-coverage|ci-watchdog-coverage.test.sh|'
   'select-automated-runs|select-automated-runs.test.sh|'

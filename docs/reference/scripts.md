@@ -2490,6 +2490,32 @@ Suppressions (CLI flags — `--config-file` is documented but
 Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
 (renovate.json customManager scoped to this file).
 
+### scripts/retry-command.sh
+
+Run a command up to N times, sleeping between attempts, and
+exit with the last attempt's status. Bounds the wait for a registry
+index that lags a push (Docker Hub's referrers index can trail it by a
+minute or two), so a signature or attestation check that races the
+index retries instead of failing the release. The command's stdout and
+stderr pass through unchanged; after each failed attempt except the
+last, a `retry-command: attempt N/M failed (exit X); retrying in Ds`
+line goes to stderr.
+
+Usage:
+
+```text
+  retry-command.sh <attempts> <delay-seconds> -- <command> [args...]
+```
+
+Exit codes:
+
+```text
+  0  the command succeeded on some attempt
+  2  usage error: a non-numeric or zero attempt count, a non-numeric
+      delay, a missing `--`, or no command after it
+  *  the last attempt's exit code, when every attempt failed
+```
+
 ### scripts/run-doc-freshness.sh
 
 Run every doc-freshness regenerate-and-diff harness

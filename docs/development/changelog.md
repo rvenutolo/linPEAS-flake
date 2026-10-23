@@ -241,9 +241,13 @@ sequence (its harden-runner egress step comes first, as in every job):
     commit).
 1. Open a PR against `main` and enable auto-merge
     (`gh pr merge --auto --merge --delete-branch`), then block until
-    the PR merges: the wait is bounded, and a closed PR or a stall fails
-    the job so `notify` files an issue. The PR lands once the
-    `protect-main` required status checks pass.
+    the PR merges: the wait is bounded to 35 minutes. A closed PR fails
+    the job so `notify` files an issue. A PR still open at the deadline
+    with auto-merge armed and no merge conflict is handed to
+    `ci-watchdog`, which retries its failed checks, and the job succeeds
+    with a warning; an open PR without armed auto-merge, or one in
+    conflict, fails the job. The PR lands once the `protect-main`
+    required status checks pass.
 1. If changed, patch the just-published release's body: build
     `.release-body.md` from `.release-notes.md` plus the upstream
     tracking footer and apply it with

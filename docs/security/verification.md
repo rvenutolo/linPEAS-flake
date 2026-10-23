@@ -220,8 +220,11 @@ the `attribute failure reason` step. Reasons:
 - `images-cosign-failed` — `cosign verify` of the published per-arch and
     index images failed against the pinned workflow identity and OIDC
     issuer, or the step could not reach cosign (`nix shell` error) or the
-    registries; the step log says which. Treat a cosign verification
-    error as a signing-chain incident, adjacent in severity to the
+    registries; the step log says which. The step retries each image up
+    to 5 times, 30 seconds apart, through `scripts/retry-command.sh`,
+    because Docker Hub's referrers index can lag a push by a minute or
+    two; a failure that persists through all attempts is final. Treat a
+    cosign verification error as a signing-chain incident, adjacent in severity to the
     `*-attest-failed` reasons. A trusted-root load error (see
     [Tools needed](#tools-needed)) verified nothing: re-run. The step
     runs the lock-pinned `.#cosign`, not a runner tool, so a re-run uses
