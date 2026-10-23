@@ -722,3 +722,16 @@ produces. So is a listed generator that declares no output at all —
 running a generator whose writes are bound to nothing puts its doc
 outside the check entirely, which is the first failure wearing a
 compliant-looking list.
+
+A lock-writing workflow may also declare an optional third list,
+`WORKFLOW_DERIVED_GENERATORS`, for generators whose docs derive from
+`.github/workflows/ci.yml` rather than from the lock. Each entry must be
+an executable generator run by a freshness hook whose `files` regex names
+`.github/workflows/ci.yml`, and its declared outputs join the same
+committable bound: `COMMITTABLE_PATHS` is exactly `flake.lock` plus the
+outputs both generator lists declare, in both directions, so it stays the
+one allowlist the credentialed job reads. The rule runs one way only.
+Many hooks name `ci.yml`, and a workflow is bound only to the ones it
+lists. A generator in both lists fails: it claims two triggers for the
+same docs, and one of the claims is false. An absent list is an empty
+one.

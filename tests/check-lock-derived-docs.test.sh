@@ -65,10 +65,16 @@ readonly LOCK_ALPHA='^(flake\\.lock|docs/reference/alpha\\.md)$'
 readonly NOLOCK_ALPHA='^(justfile|docs/reference/alpha\\.md)$'
 readonly LOCK_BETA='^(flake\\.lock|docs/reference/beta\\.md)$'
 readonly NOLOCK_BETA='^(justfile|docs/reference/beta\\.md)$'
+# delta-fresh's trigger, which names `.github/workflows/ci.yml` or not.
+# The workflow-derived rule matches that path against the unescaped
+# regex, so these carry the same doubled backslashes the real hook does.
+readonly CI_DELTA='^(\\.github/workflows/ci\\.yml|docs/reference/delta\\.md|docs/reference/epsilon\\.md|scripts/refresh-delta\\.sh)$'
+readonly NOCI_DELTA='^(justfile|docs/reference/delta\\.md|docs/reference/epsilon\\.md|scripts/refresh-delta\\.sh)$'
 
-# The two generators a fixture hook can run, both present and executable.
-# A scenario that needs a listed-but-absent generator names a third path
-# nothing writes.
+# The three generators a fixture hook can run, all present and
+# executable. A scenario that needs a listed-but-absent generator names a
+# path nothing writes. delta is the workflow-derived one: it splices
+# blocks into two docs, the shape the runner-label generator has.
 #
 # Each carries the output declaration the real generators carry, in the
 # header position the annotation parser reads, so a fixture generator
@@ -99,23 +105,37 @@ EOF
 set -Eeuo pipefail
 printf 'beta\n'
 EOF
-  chmod +x -- "${root}/scripts/refresh-alpha.sh" "${root}/scripts/refresh-beta.sh"
+  cat >"${root}/scripts/refresh-delta.sh" <<'EOF'
+#!/usr/bin/env bash
+# scripts/refresh-delta.sh
+# @generates-block docs/reference/delta.md
+# @generates-block docs/reference/epsilon.md
+set -Eeuo pipefail
+printf 'delta\n'
+EOF
+  chmod +x -- "${root}/scripts/refresh-alpha.sh" "${root}/scripts/refresh-beta.sh" \
+    "${root}/scripts/refresh-delta.sh"
 }
 
-# A freshness module carrying three hook blocks in the shape the real one
-# uses: two whose trigger regex is the variable under test, and one that
+# A freshness module carrying four hook blocks in the shape the real one
+# uses: two whose trigger regex is the variable under test, one that
 # never names the lock and runs a generator no fixture writes — proof that
 # a hook outside the lock-triggered set is neither required in the
-# workflow list nor checked for an on-disk generator.
+# workflow list nor checked for an on-disk generator — and delta-fresh,
+# which never names the lock and by default names
+# `.github/workflows/ci.yml`. A hook naming ci.yml is never required of a
+# workflow, so delta-fresh is inert unless a workflow lists its generator.
 #
 # alpha-fresh's entry line is a parameter so a scenario can give a
 # lock-triggered hook a body that names no generator at all.
 #
 # ${1}=root  ${2}=alpha-fresh trigger regex  ${3}=beta-fresh trigger regex
 # ${4}=alpha-fresh entry line (default: runs its own generator)
+# ${5}=delta-fresh trigger regex (default: names ci.yml)
 function write_hooks() {
   local -r root="$1" alpha_files="$2" beta_files="$3"
   local -r alpha_entry="${4:-exec bash scripts/refresh-alpha.sh --check}"
+  local -r delta_files="${5:-${CI_DELTA}}"
   mkdir --parents -- "${root}/nix/hooks"
 
   cat >"${root}/nix/hooks/freshness.nix" <<EOF
@@ -150,26 +170,41 @@ function write_hooks() {
     pass_filenames = false;
     language = "system";
   };
+  delta-fresh = {
+    enable = true;
+    name = "delta-fresh";
+    entry = "\${pkgs.writeShellScript "delta-fresh" ''
+      exec bash scripts/refresh-delta.sh --check
+    ''}";
+    files = "${delta_files}";
+    pass_filenames = false;
+    language = "system";
+  };
 }
 EOF
 }
 
-# A workflow the lint may discover. Both list bodies are whole indented
-# YAML block-scalar bodies, so a scenario can hand either one an empty
-# body; an empty body means the key is written with no entries. Passing
-# the literal string 'omit' for a body leaves the key out entirely, which
-# is a different shape from an empty one.
+# A workflow the lint may discover. Every list body is a whole indented
+# YAML block-scalar body, so a scenario can hand any one an empty body;
+# an empty body means the key is written with no entries. Passing the
+# literal string 'omit' for a body leaves the key out entirely, which is
+# a different shape from an empty one.
 #
 # ${1}=root  ${2}=workflow file name  ${3}=lock-writing (true|false)
 # ${4}=LOCK_DERIVED_GENERATORS body   ${5}=COMMITTABLE_PATHS body
+# ${6}=WORKFLOW_DERIVED_GENERATORS body (default: omit)
 function write_workflow() {
   local -r root="$1" wf_name="$2" lock_writing="$3"
   local -r generators="$4" committable="$5"
+  local -r workflow_generators="${6:-omit}"
   mkdir --parents -- "${root}/.github/workflows"
 
   local env_block=''
   if [[ ${generators} != 'omit' ]]; then
     env_block+="  LOCK_DERIVED_GENERATORS: |"$'\n'"${generators}"$'\n'
+  fi
+  if [[ ${workflow_generators} != 'omit' ]]; then
+    env_block+="  WORKFLOW_DERIVED_GENERATORS: |"$'\n'"${workflow_generators}"$'\n'
   fi
   if [[ ${committable} != 'omit' ]]; then
     env_block+="  COMMITTABLE_PATHS: |"$'\n'"${committable}"$'\n'
@@ -562,6 +597,112 @@ EOF
   expect 'bad: an env merge list is read first mapping wins' \
     "${work}/env-merge-list" 1 \
     'scripts/refresh-beta.sh is in LOCK_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml, but no lock-triggered hook runs it'
+
+  # (w) Workflow-derived generators. A workflow may also list, in
+  # WORKFLOW_DERIVED_GENERATORS, generators whose docs derive from
+  # .github/workflows/ci.yml rather than from the lock. Each must be run by
+  # a freshness hook whose `files` names ci.yml, and its declared outputs
+  # join the committable bound alongside the lock-derived ones.
+  local -r lock_and_delta=$'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/delta.md\n    docs/reference/epsilon.md'
+
+  # (w1) GOOD: delta is listed, run by a ci.yml-triggered hook, and both
+  # docs it splices are committable.
+  write_tree "${work}/workflow-list-agrees" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${lock_and_delta}"
+  write_workflow "${work}/workflow-list-agrees" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${lock_and_delta}" '    scripts/refresh-delta.sh'
+  expect 'agree: a workflow-derived generator a ci.yml hook runs, outputs committable' \
+    "${work}/workflow-list-agrees" 0 ''
+
+  # (w2) BAD: delta's hook never names ci.yml, so nothing declares its
+  # docs derive from the workflow the refresh exists to follow.
+  write_tree "${work}/workflow-gen-not-ci-triggered" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${lock_and_delta}"
+  write_hooks "${work}/workflow-gen-not-ci-triggered" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    'exec bash scripts/refresh-alpha.sh --check' "${NOCI_DELTA}"
+  write_workflow "${work}/workflow-gen-not-ci-triggered" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${lock_and_delta}" '    scripts/refresh-delta.sh'
+  expect 'bad: a workflow-derived generator no ci.yml-triggered hook runs fails' \
+    "${work}/workflow-gen-not-ci-triggered" 1 \
+    'scripts/refresh-delta.sh is in WORKFLOW_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml, but no freshness hook whose files names .github/workflows/ci.yml runs it'
+
+  # (w3) BAD: one of the two docs delta splices is not committable, so the
+  # credentialed job would drop it.
+  write_tree "${work}/workflow-gen-output-missing" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/delta.md'
+  write_workflow "${work}/workflow-gen-output-missing" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/delta.md' \
+    '    scripts/refresh-delta.sh'
+  expect 'bad: a workflow-derived output missing from the committable list fails' \
+    "${work}/workflow-gen-output-missing" 1 \
+    'scripts/refresh-delta.sh declares docs/reference/epsilon.md, which is absent from COMMITTABLE_PATHS'
+
+  # (w4) BAD: the committable list carries delta's docs while no list names
+  # delta — the shape of widening COMMITTABLE_PATHS without declaring the
+  # generator that writes the new paths.
+  write_tree "${work}/committable-without-workflow-list" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${lock_and_delta}"
+  expect 'bad: committable workflow-derived docs with no workflow list fail' \
+    "${work}/committable-without-workflow-list" 1 \
+    'docs/reference/delta.md is in COMMITTABLE_PATHS in .github/workflows/update-flake-lock.yml, but no listed generator declares it'
+
+  # (w5) BAD: one generator in both lists. Each list states a different
+  # trigger for the same docs, and one of the two statements is false.
+  write_tree "${work}/generator-in-both-lists" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md'
+  write_workflow "${work}/generator-in-both-lists" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md' \
+    '    scripts/refresh-alpha.sh'
+  expect 'bad: a generator in both lists fails' \
+    "${work}/generator-in-both-lists" 1 \
+    'scripts/refresh-alpha.sh is in both LOCK_DERIVED_GENERATORS and WORKFLOW_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml'
+
+  # (w6) BAD: a listed workflow-derived generator not on disk.
+  write_tree "${work}/workflow-gen-absent" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md'
+  write_workflow "${work}/workflow-gen-absent" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md' \
+    '    scripts/refresh-missing.sh'
+  expect 'bad: a listed workflow-derived generator missing from disk fails' \
+    "${work}/workflow-gen-absent" 1 \
+    'scripts/refresh-missing.sh is listed in WORKFLOW_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml but is not an executable generator'
+
+  # (w7) BAD: a listed workflow-derived generator declaring no output.
+  # Named in the message by the list it came from.
+  write_tree "${work}/workflow-gen-declares-nothing" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md'
+  sed --in-place --expression='/@generates-block/d' \
+    -- "${work}/workflow-gen-declares-nothing/scripts/refresh-delta.sh"
+  write_workflow "${work}/workflow-gen-declares-nothing" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md' \
+    '    scripts/refresh-delta.sh'
+  expect 'bad: a listed workflow-derived generator declaring no output fails' \
+    "${work}/workflow-gen-declares-nothing" 1 \
+    'scripts/refresh-delta.sh is listed in WORKFLOW_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml but declares no @generates or @generates-block path'
+
+  # (w8) GOOD: the list is optional. A sibling workflow without it is
+  # still scored on the lock-derived bound alone, and does not inherit the
+  # first subject's workflow-derived outputs: renovate-refresh.yml sorts
+  # first and carries the list, so a map carried over would score
+  # update-flake-lock.yml as omitting delta's docs.
+  write_tree "${work}/workflow-list-absent-unchanged" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md'
+  write_workflow "${work}/workflow-list-absent-unchanged" 'renovate-refresh.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${lock_and_delta}" '    scripts/refresh-delta.sh'
+  expect 'agree: a workflow without the workflow-derived list keeps the lock-only bound' \
+    "${work}/workflow-list-absent-unchanged" 0 ''
+
+  # (w9) BAD: the workflow-derived list on a workflow that writes no lock
+  # is unread config, the same as the lock-derived lists there.
+  write_tree "${work}/workflow-list-dead" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md'
+  write_workflow "${work}/workflow-list-dead" 'idle-refresh.yml' 'false' \
+    'omit' 'omit' '    scripts/refresh-delta.sh'
+  expect 'bad: a workflow-derived list on a workflow writing no lock fails' \
+    "${work}/workflow-list-dead" 1 \
+    '.github/workflows/idle-refresh.yml declares a lock-derived env list but runs no flake-lock update'
 
   harness_assert_verify || failures=$((failures + 1))
 
