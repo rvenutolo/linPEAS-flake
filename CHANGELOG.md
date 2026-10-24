@@ -6,6 +6,21 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261024-4542d30f] - 2026-10-24
+
+### CI
+- Run arm jobs on ubuntu-26.04-arm runners ([#1388](https://github.com/rvenutolo/linPEAS-flake/pull/1388))
+
+### Chores
+- Bump linpeas to 20261024-4542d30f ([#1393](https://github.com/rvenutolo/linPEAS-flake/pull/1393))
+- Update dependency nix to v2.35.3 ([#1378](https://github.com/rvenutolo/linPEAS-flake/pull/1378))
+- Update flake.lock ([#1386](https://github.com/rvenutolo/linPEAS-flake/pull/1386))
+- Update github-actions ([#1379](https://github.com/rvenutolo/linPEAS-flake/pull/1379))
+
+### Features
+- Generate runner labels in docs and refresh them on Renovate PRs ([#1390](https://github.com/rvenutolo/linPEAS-flake/pull/1390))
+- Retry transient CI failures automatically ([#1380](https://github.com/rvenutolo/linPEAS-flake/pull/1380))
+
 ## [20261021-2fe956c4] - 2026-10-22
 
 ### CI
