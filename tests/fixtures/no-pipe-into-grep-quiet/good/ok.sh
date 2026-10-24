@@ -27,3 +27,9 @@ BODY
 true # x |
 grep -q x f
 true # x | grep -q y
+
+# Not quiet: no `q` in the bundle, a `q` that is an option's argument, or a
+# long option that only starts like a quiet one.
+printf 'f\n' | grep -m1 f
+printf 'g\n' | grep -m1q g
+printf 'h\n' | grep --quietly h
