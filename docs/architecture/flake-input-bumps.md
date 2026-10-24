@@ -656,12 +656,21 @@ Credential split mirrors `update-flake-lock.yml`:
     libraries are byte-identical to the default-branch checkout when they
     run; nothing else in the checkout is relied on by `push-refresh`. The
     check runs no git, since a write that reached the checkout could also
-    plant git state that hides a change or runs code.
+    plant git state that hides a change or runs code, and no step of
+    `push-refresh` runs git at all: its commit step works inside the
+    artifact directory, where an artifact-supplied `.git/config` and
+    `.gitattributes` could make git run a filter command. The `source`
+    scan matches a `source` or `.` command anywhere on a line, not only
+    at its start. download-artifact's traversal protection is also all
+    that guards the runner's file-command files (`GITHUB_ENV`,
+    `GITHUB_PATH`) and so the step environment; the manifest does not
+    cover those.
 
 Loop-breaker: `compute-refresh`'s diff step sets `changed=false` when
 no path in `COMMITTABLE_PATHS` differs from the checkout after both
-refreshes, which skips `push-refresh` outright. Inside `push-refresh` a second, per-path guard compares each
-committable path's `git hash-object` against its blob SHA on the
+refreshes, which skips `push-refresh` outright. Inside `push-refresh` a
+second, per-path guard compares each committable path's git blob SHA,
+computed with `sha1sum` rather than git, against its blob SHA on the
 branch and skips the ones already current; zero commits is a clean
 exit, not a failure. Protects against the ci → refresh → ci cycle.
 

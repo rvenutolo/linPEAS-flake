@@ -461,8 +461,9 @@ jobs:
       # Hashes the floor's closure — scripts/check-runner-doc-diff.sh and
       # every file it sources, transitively — before any untrusted byte
       # reaches this runner. The list is read from the scripts' own
-      # `source` lines, so a new library cannot drop out of it; a source
-      # line in any other shape fails the step rather than going unhashed.
+      # `source` lines, so a new library cannot drop out of it; a `source`
+      # or `.` anywhere on a line in any other shape fails the step rather
+      # than going unhashed.
       # The manifest goes to a step output, not a file: nothing a later
       # step writes to the workspace or runner.temp can reach it.
       - name: hash the content floor and the files it sources
@@ -489,7 +490,12 @@ jobs:
             done
             ((seen == 0)) || continue
             closure+=("${file}")
-            lines="$(grep --extended-regexp -- '^[[:space:]]*(source|\.)[[:space:]]' "${file}" || true)"
+            # Any `source` or `.` command word, wherever it sits on the
+            # line (`cond && source …` included), not only at its start.
+            # Whole-line comments are skipped; every other match must be
+            # exactly the safe shape or the step fails.
+            lines="$(grep --extended-regexp -- '(^|[;&|[:space:](])(source|\.)[[:space:]]' "${file}" |
+              grep --invert-match --extended-regexp -- '^[[:space:]]*#' || true)"
             while IFS= read -r line; do
               [[ -n "${line}" ]] || continue
               if [[ ! "${line}" =~ ${safe_rel} ]] || [[ "${BASH_REMATCH[2]}" == *..* ]]; then
@@ -577,6 +583,9 @@ jobs:
       # after the checkout. It runs no git, because a write that reached
       # the checkout could reach `.git/` too, and git state there (an
       # index entry, a config hook) can hide a change or run code.
+      # download-artifact's traversal protection is also all that guards
+      # runner.temp's file-command files (GITHUB_ENV, GITHUB_PATH) and so
+      # the step environment; the manifest does not cover those.
       - name: verify the floor against its manifest
         env:
           REFRESHED_DIR: ${{ runner.temp }}/refreshed
@@ -615,6 +624,20 @@ jobs:
           old_dir="$(mktemp --directory)"
           trap 'rm --recursive --force -- "${old_dir}"' EXIT
 
+          # The git blob SHA the contents API reports, computed without
+          # git. This step's working directory is the untrusted artifact,
+          # and git run there would read a `.git/config` and
+          # `.gitattributes` the artifact carries, so a configured filter
+          # would run as a command while GH_TOKEN is in the environment.
+          # This job runs no git at all. `gh api` with a literal endpoint
+          # path does not run git either; only its `{owner}`-style
+          # placeholders resolve through git remotes, and none is used.
+          function blob_sha() {
+            local size
+            size="$(stat --format=%s -- "$1")"
+            { printf 'blob %d\0' "${size}"; cat -- "$1"; } | sha1sum | cut --delimiter=' ' --fields=1
+          }
+
           # Two passes, so a refused path aborts the job before ANY PUT,
           # not only before its own: a half-pushed refresh is the worse
           # outcome. Pass one decides each committable path; pass two
@@ -646,7 +669,8 @@ jobs:
               --header "${api_header}" \
               "repos/${REPO}/contents/${path}?ref=${HEAD_BRANCH}" \
               --jq .sha)"
-            if [[ "$(git hash-object -- "${path}")" == "${branch_sha}" ]]; then
+            local_sha="$(blob_sha "${path}")"
+            if [[ "${local_sha}" == "${branch_sha}" ]]; then
               printf 'skipping %s: already current on %s\n' "${path}" "${HEAD_BRANCH}"
               continue
             fi
@@ -665,7 +689,8 @@ jobs:
                 # name: a branch that moved between the two reads aborts
                 # here instead of being judged against one blob and
                 # committed over another.
-                if [[ "$(git hash-object -- "${old}")" != "${branch_sha}" ]]; then
+                old_sha="$(blob_sha "${old}")"
+                if [[ "${old_sha}" != "${branch_sha}" ]]; then
                   printf '%s changed on %s while it was read - aborting\n' \
                     "${path}" "${HEAD_BRANCH}" >&2
                   exit 1
