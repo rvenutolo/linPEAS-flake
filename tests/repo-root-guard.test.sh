@@ -99,6 +99,7 @@ readonly -a ROWS=(
   'refresh-just-recipes.sh|--check'
   'refresh-pin-parity.sh|--check'
   'refresh-precommit-table.sh|--check'
+  'refresh-runner-labels.sh|--check'
   'refresh-scripts-reference.sh|--check'
   'refresh-test-harnesses.sh|--check'
   'refresh-treefmt-config.sh|--check'

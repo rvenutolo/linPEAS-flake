@@ -34,6 +34,10 @@
           # in /etc/nix/nix.conf. `nix shell .#cosign` still works via host.
           jq
           yq-go
+          # Second awk for tests/check-runner-doc-diff.test.sh, which runs
+          # its floor under mawk (the ubuntu-latest runner's awk) as well as
+          # gawk. The package installs only `mawk`, so `awk` stays gawk.
+          mawk
           gh
           just
           curl

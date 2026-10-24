@@ -202,6 +202,7 @@ Hooks (alphabetical):
 | `pull-request-target-absent`        | No workflow uses the pull_request_target trigger.                                                                                                        |
 | `renovate-config-validator`         | Validate renovate.json against the upstream Renovate config schema.                                                                                      |
 | `run-block-strict`                  | Block-scalar and newline-carrying run: blocks in workflows and composite actions start with set -Eeuo pipefail.                                          |
+| `runner-labels-fresh`               | Runner labels in docs/architecture/ci.md and docs/install/nix.md match .github/workflows/ci.yml runs-on.                                                 |
 | `script-has-test`                   | Every scripts/check-*.sh paired with tests/check-*.test.sh.                                                                                              |
 | `script-shebang-pipefail`           | Every scripts/\*.sh has portable shebang + set -Eeuo pipefail.                                                                                           |
 | `scripts-reference-fresh`           | docs/reference/scripts.md matches in-script annotations.                                                                                                 |

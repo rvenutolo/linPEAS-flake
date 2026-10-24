@@ -1018,8 +1018,10 @@ Keep EXPECTED in sync with the lintTools list in nix/devshell-lint.nix.
 
 Lint: every workflow that writes a flake.lock runs a
 generator for each freshness hook that declares `flake.lock` a
-trigger, and may commit exactly the lock plus the outputs those
-generators declare with `@generates` / `@generates-block`.
+trigger, runs each generator it lists as workflow-derived from a
+freshness hook that declares `.github/workflows/ci.yml` a trigger, and
+may commit exactly the lock plus the outputs both generator lists
+declare with `@generates` / `@generates-block`.
 
 ### scripts/check-manifest-digest-pinned.sh
 
@@ -1792,6 +1794,13 @@ block under `.github/workflows/*.yml` (or `.yaml`) and
 `.github/actions/**/action.yml` (or `.yaml`) starts with
 `set -Eeuo pipefail` as its first non-blank, non-comment line.
 
+### scripts/check-runner-doc-diff.sh
+
+Content floor for a bot push of a runner-label doc: exit 0
+only when a new copy of docs/architecture/ci.md or docs/install/nix.md
+differs from the old one in nothing but the runner cells of its table
+and the padding inside that table.
+
 ### scripts/check-scorecard-threshold.sh
 
 Reads OSSF Scorecard JSON on stdin; exits 1 if any
@@ -2153,6 +2162,17 @@ in the flake.
 
 - `--check` — exit 1 if the doc would change; exit 2 if the doc is missing; do not mutate the working tree
 
+### scripts/refresh-runner-labels.sh
+
+Rewrite the runner labels in the functional-gates table of
+docs/architecture/ci.md and the platform-support table of
+docs/install/nix.md from the runs-on: of the jobs in
+.github/workflows/ci.yml.
+
+**Options:**
+
+- `--check` — exit 1 if either doc would change; exit 2 if an input file is missing, if a table's header row is missing or appears more than once, if a row is malformed or names a job ci.yml lacks or a system no job feeds, if a table job's runs-on is not one plain runner label, if the jobs feeding one system disagree on their runner, if ci.yml holds a job key the job list cannot carry (see scripts/lib/job-keys.sh), or if a tool fails to read the inputs
+
 ### scripts/refresh-scripts-reference.sh
 
 Regenerate the scripts-reference managed block in
@@ -2344,8 +2364,8 @@ and `push-refresh` job results followed by `identify`'s
 `should_refresh` and `unmapped` outputs, print `failure` when a
 refresh was attempted and did not land (or could not be attempted),
 `success` when one landed or was already in place, and `skipped` for
-the steady state where the `ci` completion was not a Renovate flake
-bump. Pure and side-effect free so the decision is unit-testable
+the steady state where the `ci` completion was not a Renovate PR
+needing a refresh. Pure and side-effect free so the decision is unit-testable
 without a workflow run.
 
 ### scripts/classify-renovate-flake-input.sh

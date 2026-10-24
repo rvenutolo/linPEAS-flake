@@ -233,6 +233,21 @@ in
     pass_filenames = false;
     language = "system";
   };
+  runner-labels-fresh = {
+    enable = true;
+    name = "runner-labels-fresh";
+    description = "Runner labels in docs/architecture/ci.md and docs/install/nix.md match .github/workflows/ci.yml runs-on.";
+    entry = "${pkgs-unstable.writeShellScript "runner-labels-fresh" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${toolPath}:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/refresh-runner-labels.sh --check
+    ''}";
+    files = "^(\\.github/workflows/ci\\.yml|docs/architecture/ci\\.md|docs/install/nix\\.md|scripts/refresh-runner-labels\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   ci-summary-fresh = {
     enable = true;
     name = "ci-summary-fresh";

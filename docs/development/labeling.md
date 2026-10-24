@@ -49,16 +49,19 @@ the workflow file.
 Ownership is declared at the generator, in the header annotation block
 `scripts/_script_docs.awk` reads:
 
-| Annotation                | Meaning                                              | On the ignore list |
-| ------------------------- | ---------------------------------------------------- | ------------------ |
-| `@generates <path>`       | the script owns that file's content                  | required           |
-| `@generates-block <path>` | the script splices a block into a hand-authored file | forbidden          |
+| Annotation                | Meaning                                        | On the ignore list |
+| ------------------------- | ---------------------------------------------- | ------------------ |
+| `@generates <path>`       | the script owns that file's content            | required           |
+| `@generates-block <path>` | the script writes part of a hand-authored file | forbidden          |
 
-Most generators own their output file outright. The minority splice a
-`<!-- BEGIN x -->` block into a doc that also carries hand-authored
-prose: `refresh-precommit-table.sh`, `refresh-pin-parity.sh`,
-`refresh-just-recipes.sh`, `refresh-ci-summary.sh`, and
-`refresh-ephemeral-refs-gap.sh`. `refresh-just-recipes.sh` is on both
+Most generators own their output file outright. The minority write part of
+a doc that also carries hand-authored prose. Five splice a
+`<!-- BEGIN x -->` block: `refresh-precommit-table.sh`,
+`refresh-pin-parity.sh`, `refresh-just-recipes.sh`,
+`refresh-ci-summary.sh`, and `refresh-ephemeral-refs-gap.sh`.
+`refresh-runner-labels.sh` carries no markers: it rewrites one column of a
+table it finds by the table's header row, and every other cell stays
+hand-written. `refresh-just-recipes.sh` is on both
 sides — it owns `docs/reference/just-recipes.md` and splices a block into
 `README.md`. Which side of the line a doc falls on is therefore a
 judgment: several `@generates` pages also splice between markers into a fixed
@@ -67,7 +70,7 @@ hand-written header — `docs/architecture/ci-dag.md`,
 `docs/reference/scripts.md`, `docs/reference/treefmt-config.md`. Their
 generators refuse to run when the marker is absent, so that header is preserved
 rather than emitted; they are annotated `@generates` because the block *is* the
-page, while the four files named below are annotated the other way because the
+page, while the six files named below are annotated the other way because the
 prose is. (`docs/security/enforcement-matrix.md` and
 `docs/reference/test-harnesses.md` are the pure cases among the
 `@generates` doc pages — their generators write the whole file, header
@@ -75,9 +78,10 @@ included.)
 Recording it at the generator keeps that judgment reviewable
 next to the code that makes it, where a coverage threshold would be a
 magic number that moves as the prose around the block grows. Files whose
-*substance* is hand-written prose around a block
+*substance* is hand-written prose around a block or a generated column
 (`README.md`, `docs/architecture/auto-update.md`,
-`docs/development/git.md`, `docs/development/linting.md`) stay off the
+`docs/architecture/ci.md`, `docs/development/git.md`,
+`docs/development/linting.md`, `docs/install/nix.md`) stay off the
 list on purpose: ignoring them wholesale would also drop hand-edits to the
 surrounding prose from the size count, which is the same failure in the
 opposite direction.
