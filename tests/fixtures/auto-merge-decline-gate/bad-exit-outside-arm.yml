@@ -1,0 +1,19 @@
+name: bad-exit-outside-arm
+on: workflow_dispatch
+jobs:
+  push-and-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: open and merge
+        run: |
+          set -Eeuo pipefail
+          [ -n "${BRANCH:-}" ] || exit 1
+          pr_state="$(gh pr view "${BRANCH}" --json state --jq .state 2>/dev/null || true)"
+          case "${pr_state}" in
+          OPEN) open_pr=true ;;
+          CLOSED|MERGED)
+            echo PAYLOAD_RAN
+            ;;
+          *) open_pr=false ;;
+          esac
+          gh pr merge "${BRANCH}" --auto --merge

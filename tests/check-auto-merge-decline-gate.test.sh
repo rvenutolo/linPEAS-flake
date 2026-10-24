@@ -31,6 +31,16 @@ expect drop-only-exit1.yml 1 "decline gate"
 expect drop-only-closedmerged.yml 1 "decline gate"
 expect drop-only-jsonstate.yml 1 "decline gate"
 
+# The exit must sit inside every CLOSED|MERGED arm, between its label and
+# the arm's `;;`: an exit elsewhere in the block, a commented one, or an
+# exit with another status does not abort that arm.
+expect good-single-line-arm.yml 0 ""
+expect bad-exit-outside-arm.yml 1 "decline gate"
+expect bad-exit-after-arm.yml 1 "decline gate"
+expect bad-exit-commented-in-arm.yml 1 "decline gate"
+expect bad-exit-10-in-arm.yml 1 "decline gate"
+expect bad-second-arm-no-exit.yml 1 "decline gate"
+
 # A workflow yq cannot parse must fail loud, not empty the scan silently.
 expect bad-malformed.yml 1 "could not evaluate"
 expect no-such-workflow.yml 2 'selected 0 of'
@@ -64,7 +74,7 @@ function expect_built() {
   printf 'OK   %s\n' "${name}"
 }
 readonly MERGE_P='p: &P {steps: [{run: "echo PAYLOAD_RAN; gh pr merge --auto 1"}]}\n'
-readonly MERGE_Q='q: &Q {steps: [{run: "gh pr merge --auto 1; gh pr view --json state; echo CLOSED|MERGED; exit 1"}]}\n'
+readonly MERGE_Q='q: &Q {steps: [{run: "gh pr merge --auto 1; gh pr view --json state; case x in CLOSED|MERGED) exit 1 ;; esac"}]}\n'
 expect_built 'a merge list is read first mapping wins: ungated first is a finding' \
   "on: push\n${MERGE_P}${MERGE_Q}jobs: {mlungated: {<<: [*P, *Q]}}\n" 1 'decline gate'
 expect_built 'a merge list is read first mapping wins: gated first passes' \

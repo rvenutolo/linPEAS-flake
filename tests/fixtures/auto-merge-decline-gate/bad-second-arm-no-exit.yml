@@ -1,0 +1,19 @@
+name: bad-second-arm-no-exit
+on: workflow_dispatch
+jobs:
+  push-and-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: open and merge
+        run: |
+          set -Eeuo pipefail
+          branch="chore/x"
+          pr_state="$(gh pr view "${branch}" --json state --jq .state 2>/dev/null || true)"
+          case "${pr_state}" in
+          CLOSED|MERGED) exit 1 ;;
+          esac
+          other_state="$(gh pr view "${branch}-2" --json state --jq .state 2>/dev/null || true)"
+          case "${other_state}" in
+          CLOSED|MERGED) echo PAYLOAD_RAN ;;
+          esac
+          gh pr merge "${branch}" --auto --merge

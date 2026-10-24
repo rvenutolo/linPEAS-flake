@@ -3,9 +3,9 @@
 #
 # @description Lint: every workflow run-block that calls `gh pr merge`
 # with `--auto` must also carry the decline gate (a `gh pr view --json
-# state` query plus a CLOSED|MERGED arm that exits non-zero), so a
-# maintainer-closed (declined) or already-merged PR is never silently
-# resurrected by an auto-merging update workflow.
+# state` query plus `CLOSED|MERGED` case arms that each carry `exit 1`
+# before their `;;`), so a maintainer-closed (declined) or already-merged
+# PR is never silently resurrected by an auto-merging update workflow.
 
 # An auto-merging update workflow recreates a per-period branch and
 # calls `gh pr merge --auto`. Without inspecting PR state first, a
@@ -19,8 +19,10 @@
 # foreclosing drift between sibling auto-merge workflows.
 #
 # Detection is textual, not a full shell parse: a run-block invoking
-# `gh pr merge ... --auto` must also contain `--json state` and a
-# `CLOSED|MERGED` token co-located with `exit 1`.
+# `gh pr merge ... --auto` must also contain `--json state`, at least one
+# `CLOSED|MERGED)` case arm, and `exit 1` inside every such arm, between
+# its label and the `;;` that ends it. An `exit 1` elsewhere in the block,
+# one in a comment, or an exit with another status does not satisfy it.
 #
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
 # finding and that workflow's jobs are not read. `jobs:` is read as
@@ -54,6 +56,41 @@ if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
   exit 2
 fi
+
+# Exits 0 when the block holds at least one `CLOSED|MERGED)` case arm and
+# every such arm carries `exit 1` between its label and the `;;` that ends
+# it. Text after a `#` that starts a word is a comment and is dropped
+# first, so a commented-out exit does not count. An arm with no `;;`
+# before the block ends counts as one that does not exit. The scan is
+# textual: an arm whose body holds a nested `case` ends at that nested
+# arm's `;;`, which reads as the arm ending early and fails closed.
+# shellcheck disable=SC2016 # awk program literal; its $ names are awk fields
+readonly ARM_EXITS_PROGRAM='
+  {
+    line = $0
+    sub(/(^|[[:space:]])#.*/, "", line)
+    while (line != "") {
+      if (!in_arm) {
+        if (!match(line, /(^|[[:space:](])CLOSED[|]MERGED[)]/)) break
+        arms++
+        in_arm = 1
+        exits = 0
+        line = substr(line, RSTART + RLENGTH)
+      }
+      end = index(line, ";;")
+      seg = end ? substr(line, 1, end - 1) : line
+      if (seg ~ /(^|[^[:alnum:]_])exit[[:space:]]+1([^[:alnum:]_]|$)/) exits = 1
+      if (!end) break
+      if (!exits) bad++
+      in_arm = 0
+      line = substr(line, end + 2)
+    }
+  }
+  END {
+    if (in_arm) bad++
+    exit (arms > 0 && bad == 0) ? 0 : 1
+  }
+'
 
 failed=0
 shopt -s nullglob
@@ -101,7 +138,7 @@ for f in "${selected_files[@]}"; do
     # Required gate signature, all within this same run-block.
     if grep -q -- '--json state' <<<"${block}" &&
       grep -Eq 'CLOSED\|MERGED' <<<"${block}" &&
-      grep -Eq 'exit[[:space:]]+1' <<<"${block}"; then
+      LC_ALL=C awk "${ARM_EXITS_PROGRAM}" <<<"${block}"; then
       continue
     fi
     printf '%s: auto-merge run-block missing CLOSED|MERGED decline gate\n' "${f}" >&2

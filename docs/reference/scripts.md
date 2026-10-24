@@ -103,9 +103,9 @@ that has not happened.
 ### scripts/check-auto-merge-decline-gate.sh
 
 Lint: every workflow run-block that calls `gh pr merge`
-with `--auto` must also carry the decline gate (a `gh pr view --json state` query plus a CLOSED|MERGED arm that exits non-zero), so a
-maintainer-closed (declined) or already-merged PR is never silently
-resurrected by an auto-merging update workflow.
+with `--auto` must also carry the decline gate (a `gh pr view --json state` query plus `CLOSED|MERGED` case arms that each carry `exit 1`
+before their `;;`), so a maintainer-closed (declined) or already-merged
+PR is never silently resurrected by an auto-merging update workflow.
 
 ### scripts/check-awk-operand-explicit.sh
 
