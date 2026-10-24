@@ -458,13 +458,63 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Hashes the floor's closure — scripts/check-runner-doc-diff.sh and
+      # every file it sources, transitively — before any untrusted byte
+      # reaches this runner. The list is read from the scripts' own
+      # `source` lines, so a new library cannot drop out of it; a source
+      # line in any other shape fails the step rather than going unhashed.
+      # The manifest goes to a step output, not a file: nothing a later
+      # step writes to the workspace or runner.temp can reach it.
+      - name: hash the content floor and the files it sources
+        id: floor-manifest
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          # The path class below is ASCII only in the C locale.
+          export LC_ALL=C
+          floor="${GITHUB_WORKSPACE}/scripts/check-runner-doc-diff.sh"
+          safe_rel='^source "\$\{(_lib_dir|_lib_self_dir)\}/([A-Za-z0-9_][A-Za-z0-9_./-]*\.sh)"$'
+          queue=("${floor}")
+          closure=()
+          while ((${#queue[@]} > 0)); do
+            file="${queue[0]}"
+            queue=("${queue[@]:1}")
+            if [[ ! -f "${file}" ]]; then
+              printf 'floor closure file %s is missing - aborting\n' "${file}" >&2
+              exit 1
+            fi
+            seen=0
+            for done_file in "${closure[@]}"; do
+              [[ "${done_file}" == "${file}" ]] && seen=1
+            done
+            ((seen == 0)) || continue
+            closure+=("${file}")
+            lines="$(grep --extended-regexp -- '^[[:space:]]*(source|\.)[[:space:]]' "${file}" || true)"
+            while IFS= read -r line; do
+              [[ -n "${line}" ]] || continue
+              if [[ ! "${line}" =~ ${safe_rel} ]] || [[ "${BASH_REMATCH[2]}" == *..* ]]; then
+                printf 'cannot resolve source line in %s: %s - aborting\n' "${file}" "${line}" >&2
+                exit 1
+              fi
+              queue+=("${file%/*}/${BASH_REMATCH[2]}")
+            done <<< "${lines}"
+          done
+          manifest="$(sha256sum -- "${closure[@]}")"
+          printf '%s\n' "${manifest}"
+          {
+            printf 'manifest<<FLOOR_MANIFEST_EOF\n'
+            printf '%s\n' "${manifest}"
+            printf 'FLOOR_MANIFEST_EOF\n'
+          } >> "${GITHUB_OUTPUT}"
       # Into the runner's temp directory, outside the checkout. Over the
       # checkout, a path the artifact lacked would be read from the default
       # branch's copy and pushed to the PR branch. Inside it, the trusted
       # floor would sit one `../` away from an archive that PR-branch code
       # built: compute-refresh runs that code before its upload step, so
-      # the archive's entry names are untrusted, and the floor's integrity
-      # would rest on the extractor never writing outside its target.
+      # the archive's entry names are untrusted. download-artifact's own
+      # path-traversal protection is what keeps them inside the target;
+      # the manifest check before the commit step catches a floor file
+      # that changed anyway.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: flake-lock-refreshed
@@ -517,17 +567,20 @@ jobs:
             printf 'docs/install/nix.md has no platform-support header row - aborting\n' >&2
             exit 1
           fi
-      # The commit step runs scripts/check-runner-doc-diff.sh, and the
-      # scripts/lib/ files it sources, from the checkout while holding the
-      # write token. The artifact extraction above is the one step that
-      # handled untrusted content after the checkout, so this proves it
-      # left the checkout as checked out: no tracked file changed, and no
-      # untracked or ignored file appeared anywhere in it. It also proves
-      # the artifact directory really is outside the checkout, rather
-      # than trusting the runner's layout.
-      - name: assert the trusted checkout is pristine
+      # What push-refresh relies on in the checkout is the floor and the
+      # files it sources, and nothing else. download-artifact's own
+      # path-traversal protection is the primary control keeping the
+      # artifact out of the checkout. This step adds two checks that do
+      # not trust it or anything else in the checkout: the artifact
+      # directory resolves outside the workspace, and every file in the
+      # floor's closure is byte-identical to the manifest hashed straight
+      # after the checkout. It runs no git, because a write that reached
+      # the checkout could reach `.git/` too, and git state there (an
+      # index entry, a config hook) can hide a change or run code.
+      - name: verify the floor against its manifest
         env:
           REFRESHED_DIR: ${{ runner.temp }}/refreshed
+          FLOOR_MANIFEST: ${{ steps.floor-manifest.outputs.manifest }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
@@ -537,16 +590,13 @@ jobs:
             printf 'artifact directory %s is inside the checkout - aborting\n' "${refreshed}" >&2
             exit 1
           fi
-          rc=0
-          git -C "${workspace}" diff --quiet HEAD -- || rc=$?
-          if [[ ${rc} -ne 0 ]]; then
-            printf 'tracked files in the checkout changed (git diff exit %d) - aborting\n' "${rc}" >&2
+          floor="${GITHUB_WORKSPACE}/scripts/check-runner-doc-diff.sh"
+          if ! grep --quiet --fixed-strings -- "  ${floor}" <<< "${FLOOR_MANIFEST}"; then
+            printf 'floor manifest does not cover %s - aborting\n' "${floor}" >&2
             exit 1
           fi
-          stray="$(git -C "${workspace}" status --porcelain --untracked-files=all --ignored)"
-          if [[ -n "${stray}" ]]; then
-            printf 'the checkout holds files it was not checked out with - aborting:\n%s\n' \
-              "${stray}" >&2
+          if ! sha256sum --check --strict --quiet <<< "${FLOOR_MANIFEST}"; then
+            printf 'the floor or a file it sources changed since checkout - aborting\n' >&2
             exit 1
           fi
       - name: commit refreshed lock and derived docs to PR branch
@@ -621,7 +671,12 @@ jobs:
                   exit 1
                 fi
                 floor_rc=0
-                "${FLOOR}" "${path}" "${old}" "${path}" || floor_rc=$?
+                # Run by `bash` on the hashed path, with BASH_ENV and ENV
+                # cleared so no startup file runs ahead of it: its `source`
+                # lines resolve from that path's own directory, which is
+                # what the manifest covers.
+                env --unset=BASH_ENV --unset=ENV bash -- "${FLOOR}" "${path}" "${old}" "${path}" ||
+                  floor_rc=$?
                 if [[ ${floor_rc} -ne 0 ]]; then
                   printf 'content floor refused %s (exit %d) - aborting before any commit\n' \
                     "${path}" "${floor_rc}" >&2

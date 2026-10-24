@@ -642,13 +642,21 @@ Credential split mirrors `update-flake-lock.yml`:
     default branch (this workflow's own ref, `persist-credentials:   false`), never the Renovate head, and it runs no code from the PR
     branch: the one script it runs, the runner-doc content floor, comes
     from that checkout. The artifact is downloaded into the runner's temp
-    directory, outside the checkout. A path missing from it then aborts
-    the job instead of being read from the default branch's copy, and the
-    trusted floor never relies on the artifact extractor refusing an entry
-    named `../`. A guard step before the commit step goes further: it fails
-    the job unless the checkout is exactly as checked out, with no changed
-    tracked file and no untracked or ignored file anywhere in it, and
-    unless the artifact directory resolves outside it.
+    directory, outside the checkout, so a path missing from it aborts the
+    job instead of being read from the default branch's copy.
+    download-artifact's own path-traversal protection is the primary
+    control keeping the artifact's entries, which PR-branch code can
+    name, inside that directory. On top of it, a step straight after the
+    checkout hashes the floor and every file it sources, transitively
+    (the list is read from their `source` lines, and any other shape of
+    `source` line fails the step), into a step output. Just before the
+    commit step another step re-checks those hashes with
+    `sha256sum --check --strict` and confirms the artifact directory
+    resolves outside the workspace. That proves the floor and its
+    libraries are byte-identical to the default-branch checkout when they
+    run; nothing else in the checkout is relied on by `push-refresh`. The
+    check runs no git, since a write that reached the checkout could also
+    plant git state that hides a change or runs code.
 
 Loop-breaker: `compute-refresh`'s diff step sets `changed=false` when
 no path in `COMMITTABLE_PATHS` differs from the checkout after both
