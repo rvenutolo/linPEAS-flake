@@ -244,12 +244,12 @@ function main() {
   fi
 
   # One line per job: `<job>\tlabel\t<runs-on>` for a runs-on that is one
-  # plain runner label, `<job>\tstring\t` for any other string (an
+  # plain runner label (a letter or digit, then letters, digits, `.`, `_`, `-`), `<job>\tstring\t` for any other string (an
   # expression, or text a table cell cannot hold), `<job>\tkind\t<tag>`
   # for a runs-on that is no string or is absent. A merge key brings in
   # its jobs and the keys inside them, read first mapping wins.
   # shellcheck disable=SC2016 # yq program text; its $ names are yq variables
-  local -r runners_q="[(${JOBS_NODE} // {}) | ${RESOLVE_JOB_ALIASES}"' | select(kind == "map") | to_entries[] | .key + "\t" + ((.value | select(kind == "map") | .["runs-on"]) as $r | if ($r | tag) == "!!str" then (if ($r | test("^[A-Za-z0-9._-]+$")) then "label\t" + $r else "string\t" end) else "kind\t" + ($r | tag) end)] | .[]'
+  local -r runners_q="[(${JOBS_NODE} // {}) | ${RESOLVE_JOB_ALIASES}"' | select(kind == "map") | to_entries[] | .key + "\t" + ((.value | select(kind == "map") | .["runs-on"]) as $r | if ($r | tag) == "!!str" then (if ($r | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) then "label\t" + $r else "string\t" end) else "kind\t" + ($r | tag) end)] | .[]'
   if ! yq eval "${YQ_MERGE_SPEC[@]}" "${runners_q}" "${workflow}" >"${tmp}/runners"; then
     log_err "could not read the runners from ${workflow}"
     exit 2

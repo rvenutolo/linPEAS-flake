@@ -252,6 +252,11 @@ function main() {
   set_runs_on "${dir}" build-linpeas '"${{ matrix.os }}"'
   expect_refusal 'expression-runs-on' "${dir}" 'job build-linpeas has a runs-on that is not one plain runner label'
 
+  # A label must start with a letter or digit, matching the docs floor.
+  dir="$(new_case leading-dash-runs-on)"
+  set_runs_on "${dir}" smoke-test-arm64 '"-bad"'
+  expect_refusal 'leading-dash-runs-on' "${dir}" 'job smoke-test-arm64 has a runs-on that is not one plain runner label'
+
   # disagreeing-arm-runners: the jobs feeding aarch64-linux disagree.
   dir="$(new_case disagreeing-arm-runners)"
   set_runs_on "${dir}" smoke-test-arm64 "\"${new_arm}\""

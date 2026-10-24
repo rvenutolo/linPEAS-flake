@@ -33,10 +33,10 @@ name: renovate-flake-lock-refresh
 #      (runner path), asserts nothing outside `COMMITTABLE_PATHS` was
 #      written, and uploads the result as a job-scoped artifact.
 #      No write credentials.
-#   3. `push-refresh` — downloads the artifact, checks each runner doc
+#   3. `push-refresh` — downloads the artifact, mints an App installation
+#      token (`linpeas-flake-bumper` GitHub App), checks each runner doc
 #      against its branch copy with `scripts/check-runner-doc-diff.sh`
-#      from the default branch, mints an App installation token
-#      (`linpeas-flake-bumper` GitHub App), and commits each changed
+#      from the default branch, and then commits each changed
 #      committable path to the PR branch via REST `PUT /contents`.
 #      GitHub web-flow-signs the commits because the request is
 #      authenticated by an App installation token, so
@@ -282,6 +282,7 @@ jobs:
                 printf 'unmapped=true\n'
                 printf 'pr_number=%s\n' "${pr_number}"
                 printf 'head_branch=%s\n' "${HEAD_BRANCH}"
+                printf 'runner_docs=%s\n' "${runner_docs}"
               } >> "${GITHUB_OUTPUT}"
               exit 0
             fi
@@ -477,9 +478,8 @@ jobs:
       # That floor polices output from the PR branch's generators while
       # this job holds a write token, so it has to come from trusted
       # content; resolving it from the head under test would let a branch
-      # choose the rule that judges it. Placed before the App-token step
-      # so no PR-derived content shares a step with the token before the
-      # floor has run.
+      # choose the rule that judges it. No PR-derived code runs in any
+      # step that holds the token, and no PUT precedes the floor.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

@@ -643,12 +643,13 @@ Credential split mirrors `update-flake-lock.yml`:
 - `push-refresh` job: holds `BUMP_APP_PRIVATE_KEY` only. Commits the
     changed committable paths to the PR branch via REST `PUT /contents`
     → web-flow signed by GitHub. No `git push`. Its checkout is the
-    default branch (this workflow's own ref, `persist-credentials:   false`), never the Renovate head, and it runs no code from the PR
-    branch: the one script it runs, the runner-doc content floor, comes
-    from that checkout. The artifact is downloaded into the runner's temp
-    directory, outside the checkout, so a path missing from it aborts the
-    job instead of being read from the default branch's copy.
-    download-artifact's own path-traversal protection is the primary
+    default branch (this workflow's own ref,
+    `persist-credentials: false`), never the Renovate head, and it runs
+    no code from the PR branch: the one script it runs, the runner-doc
+    content floor, comes from that checkout. The artifact is downloaded
+    into the runner's temp directory, outside the checkout, so a path
+    missing from it aborts the job instead of being read from the default
+    branch's copy. download-artifact's own path-traversal protection is the primary
     control keeping the artifact's entries, which PR-branch code can
     name, inside that directory. On top of it, a step straight after the
     checkout hashes the floor and every file it sources, transitively
