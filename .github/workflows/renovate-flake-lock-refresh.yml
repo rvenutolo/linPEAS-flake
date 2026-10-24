@@ -162,9 +162,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           REPO: ${{ github.repository }}
+          LC_ALL: C
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
+
+          # The head branch reaches push-refresh, where it lands inside
+          # `gh api` endpoints that run with the App token. gh expands
+          # `{owner}`, `{repo}` and `{branch}` placeholders anywhere in an
+          # endpoint, query string included, so only a branch name made of
+          # letters, digits, `.`, `_`, `/` and `-` goes further. Like an
+          # unexpected author, any other shape is an anomaly on a
+          # `renovate/` branch, so it fails the job and reaches `notify`
+          # rather than skipping. The bracket class is ASCII only under
+          # LC_ALL=C, set in this step's env.
+          if [[ ! "${HEAD_BRANCH}" =~ ^renovate/[A-Za-z0-9._/-]+$ ]]; then
+            printf 'head branch %q is not a plain renovate/ branch name - aborting\n' \
+              "${HEAD_BRANCH}" >&2
+            exit 1
+          fi
 
           # Find the open PR for this head branch.
           pr_number=$(gh pr list \
@@ -612,6 +628,10 @@ jobs:
         working-directory: ${{ runner.temp }}/refreshed
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Pins gh's repository context, so an `{owner}`-style
+          # placeholder in an endpoint resolves from this variable and
+          # never from `git remote` in the working directory.
+          GH_REPO: ${{ github.repository }}
           REPO: ${{ github.repository }}
           HEAD_BRANCH: ${{ needs.identify.outputs.head_branch }}
           INPUT_NAME: ${{ needs.identify.outputs.input_name }}
@@ -629,12 +649,29 @@ jobs:
           # and git run there would read a `.git/config` and
           # `.gitattributes` the artifact carries, so a configured filter
           # would run as a command while GH_TOKEN is in the environment.
-          # This job runs no git at all. `gh api` with a literal endpoint
-          # path does not run git either; only its `{owner}`-style
-          # placeholders resolve through git remotes, and none is used.
+          # This job runs no git at all, on two conditions. `gh api`
+          # expands `{owner}`, `{repo}` and `{branch}` placeholders
+          # anywhere in an endpoint, the `?ref=` query included, and
+          # without GH_REPO it resolves them by running `git remote` in
+          # the working directory; GH_REPO is set in this step's env, so
+          # `{owner}` and `{repo}` resolve from it and `{branch}` fails
+          # with no git run. And no placeholder gets in: `identify`
+          # refuses a head branch holding a character outside
+          # `[A-Za-z0-9._/-]`, REPO is this repository's literal name,
+          # and the paths are the literal COMMITTABLE_PATHS list.
+          #
+          # Only a regular file that is not a symlink is hashed: the
+          # artifact's entries are untrusted, and a link would read, and
+          # then commit, content from outside the artifact directory.
+          # Called inside `$(...)`, where errexit is off, so each failure
+          # returns explicitly; the caller's assignment then aborts.
           function blob_sha() {
             local size
-            size="$(stat --format=%s -- "$1")"
+            if [[ ! -f "$1" || -L "$1" ]]; then
+              printf '%s is not a regular file - aborting\n' "$1" >&2
+              return 1
+            fi
+            size="$(stat --format=%s -- "$1")" || return 1
             { printf 'blob %d\0' "${size}"; cat -- "$1"; } | sha1sum | cut --delimiter=' ' --fields=1
           }
 

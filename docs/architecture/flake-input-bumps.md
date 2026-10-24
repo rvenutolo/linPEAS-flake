@@ -582,7 +582,11 @@ block carries no filter). The `identify` job gates on ALL of:
     login-shape change disabling the whole workflow undetected.
 - The workflow is running in `rvenutolo/linPEAS-flake` itself
     (`github.repository` guard), keeping repo forks inert.
-- PR head branch starts with `renovate/`.
+- PR head branch starts with `renovate/`, and the whole name is made
+    of letters, digits, `.`, `_`, `/` and `-`. The name later sits
+    inside `gh api` endpoints in `push-refresh`, and gh expands
+    `{owner}`-style placeholders anywhere in an endpoint, so any other
+    character FAILS `identify`, as an unexpected author does.
 - The triggering `ci` run's own event was `pull_request` — a
     `workflow_run` fired by a push or dispatch is ignored.
 - The PR branch lives in this repo
@@ -659,7 +663,17 @@ Credential split mirrors `update-flake-lock.yml`:
     plant git state that hides a change or runs code, and no step of
     `push-refresh` runs git at all: its commit step works inside the
     artifact directory, where an artifact-supplied `.git/config` and
-    `.gitattributes` could make git run a filter command. The `source`
+    `.gitattributes` could make git run a filter command. That holds on
+    two conditions. `gh api` expands `{owner}`, `{repo}` and `{branch}`
+    placeholders anywhere in an endpoint, query string included, and
+    without `GH_REPO` it resolves them by running `git remote` in the
+    working directory, so the commit step sets `GH_REPO` to this
+    repository; and `identify` admits only a head branch made of
+    letters, digits, `.`, `_`, `/` and `-`, so no brace reaches an
+    endpoint through the branch name (the repository name and the
+    committable paths are literals). The step also hashes and commits
+    only regular files: a symlink in the artifact aborts the job, since
+    reading it would reach outside the artifact directory. The `source`
     scan matches a `source` or `.` command anywhere on a line, not only
     at its start. download-artifact's traversal protection is also all
     that guards the runner's file-command files (`GITHUB_ENV`,
