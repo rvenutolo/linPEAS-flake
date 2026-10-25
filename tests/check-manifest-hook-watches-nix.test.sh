@@ -57,15 +57,19 @@ function expect() {
   harness_assert_record "${name}" "${want_msg}" \
     "${outcome_file}" "${stdout_file}" "${stderr_file}"
 
-  local got_stderr
+  # The message is looked for in both streams, as the discrimination gate
+  # records them: a clean run's breadth line is on stdout, and it is what
+  # tells a pass that scored a hook apart from one that skipped it.
+  local got_stderr got_output
   got_stderr="$(cat -- "${stderr_file}")"
+  got_output="$(cat -- "${stdout_file}" "${stderr_file}")"
   if [[ ${got_exit} != "${want_exit}" ]]; then
     printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' \
       "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
     failures=$((failures + 1))
-  elif [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
-    printf 'FAIL %s: stderr missing %q\n  got: %s\n' \
-      "${name}" "${want_msg}" "${got_stderr}" >&2
+  elif [[ -n ${want_msg} && ${got_output} != *"${want_msg}"* ]]; then
+    printf 'FAIL %s: output missing %q\n  got: %s\n' \
+      "${name}" "${want_msg}" "${got_output}" >&2
     failures=$((failures + 1))
   else
     printf 'PASS: %s (exit %s)\n' "${name}" "${got_exit}"
@@ -99,6 +103,29 @@ function write_hook() {
     description = "Fixture manifest-reading hook.";
     entry = "bash scripts/refresh-fixture-table.sh --check";
     files = "${files}";
+    pass_filenames = false;
+    language = "system";
+  };
+}
+EOF
+}
+
+# Write a fixture nix/hooks/foo.nix with one manifest-reading hook block
+# whose name, files filter and extra attribute lines are the variables
+# under test. ${1}=dir, ${2}=hook name, ${3}=files-filter string value,
+# ${4}=extra attribute lines inserted after `files` (may be empty).
+function write_named_hook() {
+  local -r dir="$1" name="$2" files="$3" extra="$4"
+  mkdir --parents -- "${dir}"
+  cat >"${dir}/foo.nix" <<EOF
+{
+  ${name} = {
+    enable = true;
+    name = "${name}";
+    description = "Fixture manifest-reading hook.";
+    entry = "bash scripts/refresh-fixture-table.sh --check";
+    files = "${files}";
+${extra}
     pass_filenames = false;
     language = "system";
   };
@@ -413,6 +440,52 @@ EOF
   expect 'tooling: MODULE_ROOT with no nix module is a could-not-run' \
     "${work}/empty-modules/hooks" "${work}/empty-modules/scripts" 2 \
     'enumerated 0 files via nix module scan under'
+
+  # (k) GOOD: the filter admits nix/hooks through a negative lookahead,
+  # the shape pre-commit evaluates with Python `re`. POSIX ERE has no
+  # lookahead, so an ERE matcher warns and reads the filter as matching
+  # nothing under nix/hooks. The second, uninvolved hook block is what
+  # makes this run's breadth line its own.
+  write_manifest_script "${work}/lookahead/scripts"
+  write_named_hook "${work}/lookahead/hooks" fixture-lookahead-fresh \
+    '^(?!docs/)(flake|nix/hooks/.*)\\.nix$' ''
+  cat >"${work}/lookahead/hooks/bar.nix" <<'EOF'
+{
+  some-other-hook = {
+    enable = true;
+    name = "some-other-hook";
+    entry = "bash scripts/check-something-else.sh";
+    files = "^scripts/.*\.sh$";
+    pass_filenames = false;
+    language = "system";
+  };
+}
+EOF
+  expect 'good: a lookahead filter admitting nix/hooks counts as covered' \
+    "${work}/lookahead/hooks" "${work}/lookahead/scripts" 0 \
+    'ok — 2 hook block(s) scanned (1 script-referencing, 0 attribute-building)'
+
+  # (l) BAD: `files` admits nix/hooks, but the hook's `excludes` drop it.
+  # pre-commit runs a hook on a path only when `files` matches and the
+  # joined `excludes` do not, so a hook-definition edit never re-triggers
+  # this one. The list spans lines, as treefmt lays out a long one.
+  write_manifest_script "${work}/excluded/scripts"
+  write_named_hook "${work}/excluded/hooks" fixture-excluded-fresh \
+    '^(flake|nix/hooks/.*)\\.nix$' \
+    $'    excludes = [\n      "^docs/"\n      "^nix/hooks/"\n    ];'
+  expect 'bad: a filter whose excludes drop nix/hooks is not covered' \
+    "${work}/excluded/hooks" "${work}/excluded/scripts" 1 \
+    'hook fixture-excluded-fresh: files filter missing nix/hooks'
+
+  # (m) TOOLING: the filter does not compile under Python `re`, so
+  # pre-commit itself could not run the hook. Any coverage verdict about it
+  # would be a guess, so the run is a could-not-run that names the hook.
+  write_manifest_script "${work}/uncompilable/scripts"
+  write_named_hook "${work}/uncompilable/hooks" fixture-uncompilable-fresh \
+    '^(flake|nix/hooks/.*\\.nix$' ''
+  expect 'tooling: a filter that does not compile is a could-not-run naming the hook' \
+    "${work}/uncompilable/hooks" "${work}/uncompilable/scripts" 2 \
+    'hook fixture-uncompilable-fresh: its files pattern does not compile under Python re'
 
   harness_assert_verify || failures=$((failures + 1))
 

@@ -45,15 +45,19 @@ function expect() {
   harness_assert_record "${name}" "${want_msg##*$'\n'}" \
     "${outcome_file}" "${stdout_file}" "${stderr_file}"
 
-  local got_stderr
+  # The message is looked for in both streams, as the discrimination gate
+  # records them: a clean run's breadth line is on stdout, and it is what
+  # tells a pass that scored a hook apart from one that skipped it.
+  local got_stderr got_output
   got_stderr="$(cat -- "${stderr_file}")"
+  got_output="$(cat -- "${stdout_file}" "${stderr_file}")"
   if [[ ${got_exit} != "${want_exit}" ]]; then
     printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' \
       "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
     failures=$((failures + 1))
-  elif [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
-    printf 'FAIL %s: stderr missing %q\n  got: %s\n' \
-      "${name}" "${want_msg}" "${got_stderr}" >&2
+  elif [[ -n ${want_msg} && ${got_output} != *"${want_msg}"* ]]; then
+    printf 'FAIL %s: output missing %q\n  got: %s\n' \
+      "${name}" "${want_msg}" "${got_output}" >&2
     failures=$((failures + 1))
   else
     printf 'PASS: %s (exit %s)\n' "${name}" "${got_exit}"
@@ -114,6 +118,38 @@ EOF
     description = "Fixture generated-doc freshness hook.";
     entry = "bash scripts/refresh-fixture-doc.sh --check";
     files = "${files}";
+    pass_filenames = false;
+    language = "system";
+  };
+}
+EOF
+}
+
+# Replace a write_tree tree's freshness.nix with the generator hook under
+# a given name, files filter and extra attribute lines, plus an uninvolved
+# hook block that makes a clean run's breadth line its own.
+# ${1}=root, ${2}=hook name, ${3}=files-filter value, ${4}=extra attribute
+# lines inserted after `files` (may be empty).
+function write_named_hook() {
+  local -r root="$1" name="$2" files="$3" extra="$4"
+  cat >"${root}/nix/hooks/freshness.nix" <<EOF
+{
+  ${name} = {
+    enable = true;
+    name = "${name}";
+    description = "Fixture generated-doc freshness hook.";
+    entry = "bash scripts/refresh-fixture-doc.sh --check";
+    files = "${files}";
+${extra}
+    pass_filenames = false;
+    language = "system";
+  };
+  unrelated-hook = {
+    enable = true;
+    name = "unrelated-hook";
+    description = "An unrelated hook with a well-formed filter.";
+    entry = "true";
+    files = "^unrelated[.]txt\$";
     pass_filenames = false;
     language = "system";
   };
@@ -563,6 +599,40 @@ EOF
   printf '{\n  tool = { };\n}\n' >"${work}/locale-attr/nix/tool.nix"
   LC_ALL=en_US.UTF-8 expect 'locale: a non-ASCII attribute name reads as its ASCII prefix under en_US.UTF-8' \
     "${work}/locale-attr" 1 'does not cover nix/tool.nix (evaluates tool)'
+
+  # (v) GOOD: the filter admits every derived module through a negative
+  # lookahead, the shape pre-commit evaluates with Python `re`. POSIX ERE
+  # has no lookahead, so an ERE matcher reads the filter as matching none
+  # of them.
+  write_tree "${work}/lookahead" '^(nix/hooks/.*\\.nix)$' plain
+  write_named_hook "${work}/lookahead" fixture-doc-lookahead \
+    '^(?!docs/)(nix/hooks/.*|nix/manifests)\\.nix$' ''
+  expect 'good: a lookahead filter admitting every derived module counts as covered' \
+    "${work}/lookahead" 0 \
+    'ok — 2 hook block(s) scanned (1 generator-running, 0 attribute-building)'
+
+  # (w) BAD: `files` admits the module the definer imports, but the hook's
+  # `excludes` drop it. pre-commit runs a hook on a path only when `files`
+  # matches and the joined `excludes` do not, so an edit to that module
+  # never re-triggers this one. The list spans lines, as treefmt lays out a
+  # long one.
+  write_tree "${work}/excluded" '^(nix/hooks/.*\\.nix)$' plain
+  write_named_hook "${work}/excluded" fixture-doc-excluded \
+    '^(nix/hooks/.*|nix/manifests)\\.nix$' \
+    $'    excludes = [\n      "^docs/"\n      "^nix/hooks/members\\\\.nix$"\n    ];'
+  expect 'bad: a filter whose excludes drop a derived module is not covered' \
+    "${work}/excluded" 1 \
+    'hook fixture-doc-excluded: files filter does not cover nix/hooks/members.nix (evaluates fixtureAttr)'
+
+  # (x) TOOLING: the filter does not compile under Python `re`, so
+  # pre-commit itself could not run the hook. Any coverage verdict about it
+  # would be a guess, so the run is a could-not-run that names the hook.
+  write_tree "${work}/uncompilable" '^(nix/hooks/.*\\.nix)$' plain
+  write_named_hook "${work}/uncompilable" fixture-doc-uncompilable \
+    '^(nix/hooks/.*|nix/manifests\\.nix$' ''
+  expect 'tooling: a filter that does not compile is a could-not-run naming the hook' \
+    "${work}/uncompilable" 2 \
+    'hook fixture-doc-uncompilable: its files pattern does not compile under Python re'
 
   # A mention of the evaluated attribute behind a `#` and no mention at all
   # both leave the transposer as the sole uncovered module — the
