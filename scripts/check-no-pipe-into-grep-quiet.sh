@@ -38,7 +38,8 @@
 #
 # Workflow and composite-action YAML is matched on each step's extracted
 # `run:` body, never on raw YAML: every `run: |` key line ends in a pipe,
-# so a body opening with a quiet `grep` would read as a hit.
+# so a body opening with a quiet `grep` would read as a hit. A body
+# written as an alias (`run: *body`) is read as its anchored text.
 #
 # The scan set is every tracked `*.sh` file, every tracked
 # `.github/workflows/*.yml` (or `.yaml`) and every tracked
@@ -205,9 +206,11 @@ for path in ${yaml_files+"${yaml_files[@]}"}; do
   fi
   while IFS='|' read -r shape doc jpos idx; do
     [[ -n ${shape} ]] || continue
-    # The row numbers reach `yq` as data, through `env`.
+    # The row numbers reach `yq` as data, through `env`. A body written as
+    # an alias (`run: *body`) is resolved to its anchored text, which is
+    # what the runner executes; read as is it would be the alias name.
     if [[ ${shape} == composite ]]; then
-      if ! body="$(DOC="${doc}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .runs.steps[env(IDX)].run' "${path}")"; then
+      if ! body="$(DOC="${doc}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .runs.steps[env(IDX)].run | explode(.)' "${path}")"; then
         printf '%s: cannot read composite step[%s] run: block\n' "${rel}" "${idx}" >&2
         exit 2
       fi
@@ -217,7 +220,7 @@ for path in ${yaml_files+"${yaml_files[@]}"}; do
         printf '%s: cannot read the key of the job at position %s\n' "${rel}" "${jpos}" >&2
         exit 2
       fi
-      if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].value.steps[env(IDX)].run' "${path}")"; then
+      if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].value.steps[env(IDX)].run | explode(.)' "${path}")"; then
         printf '%s: cannot read job %q step[%s] run: block\n' "${rel}" "${job}" "${idx}" >&2
         exit 2
       fi
