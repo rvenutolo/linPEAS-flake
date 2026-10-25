@@ -95,7 +95,7 @@ Enforced by `scripts/check-pull-request-target-absent.sh`. Wired as the `lint-wo
 
 ## auto-merge-decline-gate
 
-Every workflow run-block that calls `gh pr merge` with `--auto` also carries the decline gate: a `--json state` query and at least one `CLOSED|MERGED)` case arm, where every such arm carries a literal `exit 1` between its label and the `;;` that ends it, all within the same run-block. An `exit 1` elsewhere in the block, a commented-out one, or an exit with another status does not count.
+Every workflow run-block that calls `gh pr merge` with `--auto` also carries the decline gate: a `--json state` query and at least one `CLOSED|MERGED)` case arm, where every such arm carries a literal `exit 1` between its label and the `;;` that ends it, all within the same run-block. An `exit 1` elsewhere in the block, a commented-out one, or an exit with another status does not count. A run-block written as an alias (`run: *body`) is read as its anchored text, which is what the runner executes.
 
 An auto-merging update workflow recreates a per-period branch and merges its PR unattended. Without inspecting PR state first, a re-run in the same period overwrites a PR the maintainer explicitly closed (declined) or one already merged — silently reversing a human decision in a no-review flow. The gate aborts non-zero on `CLOSED|MERGED` so the run fails and a failure issue is filed instead.
 
@@ -182,7 +182,7 @@ Enforced by `scripts/check-no-opaque-procsub.sh`. Wired as the `lint-script-hygi
 
 ## no-pipe-into-grep-quiet
 
-No tracked shell file and no workflow or composite-action `run:` body pipes into a quiet `grep`: `producer | grep -q PAT`, `producer | grep --quiet PAT`, the `--silent` alias, any prefix of either long option GNU grep accepts (`--qui`, `--s`), a bundled flag holding `q` after only letters, including one that runs into an attached option argument (`-qE`, `-Fq`, `-qxF`, `-qm1`, `-qA2`), an `LC_ALL=… grep` prefix, `|&` in place of `|`, and a pipe that ends one line with the quiet `grep` on the next. There is no exemption marker and no allowlist.
+No tracked shell file and no workflow or composite-action `run:` body pipes into a quiet `grep`: `producer | grep -q PAT`, `producer | grep --quiet PAT`, the `--silent` alias, any prefix of either long option GNU grep accepts (`--qui`, `--s`), a bundled flag holding `q` after only letters, including one that runs into an attached option argument (`-qE`, `-Fq`, `-qxF`, `-qm1`, `-qA2`), an `LC_ALL=… grep` prefix, `|&` in place of `|`, and a pipe that ends one line with the quiet `grep` on the next. A body written as an alias (`run: *body`) is read as its anchored text, which is what the runner executes. There is no exemption marker and no allowlist.
 
 A quiet `grep` exits at its first match. A producer still writing then takes SIGPIPE, and under `set -o pipefail` the pipeline's status is the producer's 141 — a match read as a miss. Whether the producer is still writing depends on how much it writes and on scheduling, so the same line passes on an idle machine and fails under load, such as in a parallel CI lint group.
 
@@ -647,7 +647,7 @@ Composite actions are covered for the same reason, and the exposure is larger th
 
 Adding the prelude to an existing block is a behavior change, not a formality: a command whose non-zero exit the block ignores today will abort the step under `-e`. Blocks that tolerate failure by design — retry loops, optional probes — must keep the tolerated command in a context that consumes its status (an `if` condition, a `||` fallback) and say so, rather than relying on `-e` being absent.
 
-The rule keys off YAML node style (`|`, `>`, and their chomping/indent variants) as well as newlines in the evaluated value. Newline presence alone under-detects: a folded scalar (`run: >-`) spells a `;`-separated command sequence across several source lines but folds to one newline-free string, so a block that plainly runs several commands would otherwise slip past the requirement.
+The rule keys off YAML node style (`|`, `>`, and their chomping/indent variants) as well as newlines in the evaluated value. Newline presence alone under-detects: a folded scalar (`run: >-`) spells a `;`-separated command sequence across several source lines but folds to one newline-free string, so a block that plainly runs several commands would otherwise slip past the requirement. A body written as an alias (`run: *body`) is judged by its anchored text and that text's node style, which is what the runner executes.
 
 Plain single-line `run:` invocations are exempt — they're already a single shell command whose exit status drives the step directly.
 

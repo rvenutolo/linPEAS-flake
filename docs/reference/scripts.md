@@ -1137,7 +1137,8 @@ long option starting with those letters.
 
 Workflow and composite-action YAML is matched on each step's extracted
 `run:` body, never on raw YAML: every `run: |` key line ends in a pipe,
-so a body opening with a quiet `grep` would read as a hit.
+so a body opening with a quiet `grep` would read as a hit. A body
+written as an alias (`run: *body`) is read as its anchored text.
 
 The scan set is every tracked `*.sh` file, every tracked
 `.github/workflows/*.yml` (or `.yaml`) and every tracked

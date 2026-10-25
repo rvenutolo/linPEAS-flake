@@ -253,4 +253,32 @@ expect_workflow jobs-alias-strict $'x-jobs: &js\n  a:\n'"${STRICT_STEP}"$'jobs: 
 expect_workflow jobs-alias-weak $'x-jobs: &js\n  a:\n'"${WEAK_STEP}"$'jobs: *js\n' 1 "@F@: job a${weak_tail}"
 expect_workflow jobs-alias-key-alias-weak $'x-name: &ka named\nx-jobs: &js\n  *ka :\n'"${WEAK_STEP}"$'jobs: *js\n' 1 "@F@: job named${weak_tail}"
 
+# A run: body written as an alias is read as its anchored text, as the
+# runner reads it: a strict block passes, a weak block or folded block is
+# named, and an alias to a plain one-line command stays exempt. Each
+# block style is its own scenario: a one-line `|-` body carries no newline,
+# so only its style selects it.
+readonly ALIAS_STEP=$'jobs:\n  a:\n    steps:\n      - run: *body\n'
+expect_workflow run-alias-strict $'x-body: &body |\n  set -Eeuo pipefail\n  echo PAYLOAD_RAN\n'"${ALIAS_STEP}" 0 ''
+expect_workflow run-alias-weak $'x-body: &body |\n  set -euo pipefail\n  echo PAYLOAD_RAN\n'"${ALIAS_STEP}" 1 "@F@: job a${weak_tail}"
+printf -v folded_tail ' step[0] run: block must start with %q (got %q)\n1 run: block(s) missing strict-mode prelude' \
+  'set -Eeuo pipefail' 'echo PAYLOAD_RAN; echo PAYLOAD_RAN'
+expect_workflow run-alias-folded-weak $'x-body: &body >-\n  echo PAYLOAD_RAN;\n  echo PAYLOAD_RAN\n'"${ALIAS_STEP}" 1 "@F@: job a${folded_tail}"
+expect_workflow run-alias-one-line $'x-body: &body echo PAYLOAD_RAN\n'"${ALIAS_STEP}" 0 ''
+printf -v literal_tail ' step[0] run: block must start with %q (got %q)\n1 run: block(s) missing strict-mode prelude' \
+  'set -Eeuo pipefail' 'echo PAYLOAD_RAN'
+expect_workflow run-alias-literal-one-line $'x-body: &body |-\n  echo PAYLOAD_RAN\n'"${ALIAS_STEP}" 1 "@F@: job a${literal_tail}"
+mkdir -- "${key_dir}/run-alias-composite"
+printf 'x-body: &body |\n  set -euo pipefail\n  echo PAYLOAD_RAN\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: *body\n' \
+  >"${key_dir}/run-alias-composite/action.yml"
+alias_comp_exit=0
+alias_comp_err="$(ACTIONS_DIR_OVERRIDE="${key_dir}/run-alias-composite" "${SCRIPT}" 2>&1 >/dev/null)" || alias_comp_exit=$?
+printf -v alias_comp_want '%s: composite step[0] run: block must start with %q (got %q)\n1 run: block(s) missing strict-mode prelude' \
+  "${key_dir}/run-alias-composite/action.yml" 'set -Eeuo pipefail' 'set -euo pipefail'
+if [[ ${alias_comp_exit} != 1 || ${alias_comp_err} != "${alias_comp_want}" ]]; then
+  printf 'FAIL run-alias-composite: exit %s, want 1\n  stderr: %s\n' "${alias_comp_exit}" "${alias_comp_err}" >&2
+  exit 1
+fi
+printf 'OK   run-alias-composite\n'
+
 printf 'all tests passed\n'

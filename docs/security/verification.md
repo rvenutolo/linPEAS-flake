@@ -290,7 +290,9 @@ in the attribution `env:`, every such env var is read by the ladder,
 every `reason` token the ladder emits appears somewhere on this page (a
 fixed-string match, not a check against the list above), and the
 ladder's branch order matches the steps' execution order — the order the
-"first failed step wins" rule depends on.
+"first failed step wins" rule depends on. An attribution `run:` written
+as an alias (`run: *body`) is read as its anchored text, which is what
+the runner executes.
 
 Without that binding, a step added without a ladder branch reports
 `unattributed`, whose documented meaning is a gap in the ladder —

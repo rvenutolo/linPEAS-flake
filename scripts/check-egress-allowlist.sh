@@ -371,7 +371,9 @@ readonly HARDEN_RUNNER_RE CHECKOUT_RE FLAKEHUB_CACHE_RE CODEQL_INIT_RE TRIVY_RE 
 # list (printing the alias) never names, and would expand every alias
 # in `jobs:` on each lookup. The
 # `.steps[]` reads after the lookup follow aliases and merge keys inside
-# the job, first mapping winning in a merge list (`YQ_MERGE_SPEC`).
+# the job, first mapping winning in a merge list (`YQ_MERGE_SPEC`). A
+# step's run: written as an alias (`run: *body`) is exploded to its
+# anchored text, which is what the runner executes.
 readonly JOB_BY_KEY="${JOBS_NODE}"' | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # Resolved against this script's own location rather than the scan root:
@@ -666,7 +668,7 @@ for f in "${selected_files[@]}"; do
       printf '%s: cannot read the step uses: list for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi
-    if ! runs="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .steps[].run // ""' "${f}")"; then
+    if ! runs="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .steps[] | (.run // "") | explode(.)' "${f}")"; then
       printf '%s: cannot read the step run: list for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi

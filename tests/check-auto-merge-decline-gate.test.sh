@@ -101,6 +101,14 @@ expect_built 'a refused job key hides the jobs behind it' \
 expect_built 'an unparsable workflow is one finding' \
   'jobs: [\n' 1 "could not evaluate workflow with yq (malformed?)${ONE_FINDING}"
 
+# A run: body written as an alias is the anchored text the runner
+# executes: an ungated merge there is a finding, a gated one passes.
+expect_built 'an ungated merge in an aliased run: body is a finding' \
+  'x-body: &body |\n  echo PAYLOAD_RAN\n  gh pr merge --auto 1\non: push\njobs:\n  aliased:\n    steps:\n      - run: *body\n' 1 \
+  "auto-merge run-block missing CLOSED|MERGED decline gate${ONE_FINDING}"
+expect_built 'a gated merge in an aliased run: body passes' \
+  'x-body: &body |\n  gh pr view 1 --json state\n  case x in CLOSED|MERGED) exit 1 ;; esac\n  gh pr merge --auto 1\non: push\njobs:\n  aliased:\n    steps:\n      - run: *body\n' 0 ''
+
 # A failing read of the job keys is a finding of its own, even when the
 # read of the steps would succeed. The shim fails only the read that
 # prints keys as JSON.

@@ -145,8 +145,10 @@ if [[ -z ${env_rows} ]]; then
   exit 2
 fi
 
+# A run: written as an alias (`run: *body`) is exploded to its anchored
+# text, which is what the runner executes.
 if ! ladder_body="$(yq eval "${YQ_MERGE_SPEC[@]}" \
-  "${JOBS_NODE} | .verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .run" \
+  "${JOBS_NODE} | .verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .run | explode(.)" \
   "${WORKFLOW}")"; then
   printf '%s: could not evaluate the attribution step run body with yq\n' "${WORKFLOW}" >&2
   exit 2

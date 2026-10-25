@@ -858,6 +858,61 @@ EOF
     "${work}/upload-twice" 1 \
     '.github/workflows/update-flake-lock.yml has 2 actions/upload-artifact steps in jobs that run the flake-lock update; want exactly one'
 
+  # (y) A run: body written as an alias is the anchored text the runner
+  # executes, so a step written `run: *body` over `nix flake update`
+  # makes its workflow lock-writing and its job the upload candidate.
+  # (y1) BAD: the aliased writer declares nothing.
+  write_tree "${work}/alias-run-writer" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}"
+  cat >"${work}/alias-run-writer/.github/workflows/aliased-run.yml" <<'EOF'
+name: aliased-run
+on:
+  workflow_dispatch:
+permissions: {}
+x-body: &body |
+  nix flake update
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: *body
+EOF
+  expect 'bad: an aliased run: body updating the lock is a lock-writing workflow' \
+    "${work}/alias-run-writer" 1 \
+    'aliased-run.yml writes flake.lock but declares no LOCK_DERIVED_GENERATORS'
+
+  # (y2) BAD: the aliased writer's job is the upload candidate, and it
+  # uploads less than it may commit.
+  write_tree "${work}/alias-run-upload" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}"
+  cat >"${work}/alias-run-upload/.github/workflows/aliased-bump.yml" <<'EOF'
+name: aliased-bump
+on:
+  workflow_dispatch:
+permissions: {}
+env:
+  LOCK_DERIVED_GENERATORS: |
+    scripts/refresh-alpha.sh
+  COMMITTABLE_PATHS: |
+    flake.lock
+    docs/reference/alpha.md
+x-body: &body |
+  nix flake update
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: *body
+      - uses: actions/upload-artifact@v7
+        with:
+          name: result
+          path: |
+            flake.lock
+EOF
+  expect 'bad: an aliased writer job uploading less than it commits fails' \
+    "${work}/alias-run-upload" 1 \
+    'docs/reference/alpha.md is in COMMITTABLE_PATHS in .github/workflows/aliased-bump.yml but missing from its upload-artifact path list'
+
   # (ac) BAD: beta-fresh's trigger uses negative lookaheads, the shape
   # pre-commit evaluates with Python `re`. Under that engine it matches
   # flake.lock, so the hook is lock-triggered and the bumper that skips

@@ -35,6 +35,9 @@
 # command sequence would otherwise escape the requirement. Node
 # style, which survives folding, catches it.
 #
+# A body written as an alias (`run: *body`) is judged by its anchored
+# text and that text's node style.
+#
 # Plain single-line `run:` invocations stay exempt — they are
 # already a single shell command whose exit status drives the step
 # directly. The prelude would just be noise.
@@ -86,8 +89,11 @@ fi
 
 # Selects the step entries whose run: is a block scalar or carries a
 # newline. `style` reports `folded` / `literal` for block scalars and is
-# empty for a plain one-line command.
-readonly MULTILINE_SELECT='select(.value.run != null and ((.value.run | contains("\n")) or (.value.run | style) == "folded" or (.value.run | style) == "literal"))'
+# empty for a plain one-line command. A body written as an alias
+# (`run: *body`) is exploded first, so both tests see the anchored text
+# and its style; on the alias node itself `contains` errors and `style`
+# is empty. The tests are parenthesized: yq binds `|` tighter than `or`.
+readonly MULTILINE_SELECT='select(.value.run != null and (.value.run | explode(.) | (contains("\n") or (style == "folded") or (style == "literal"))))'
 
 # Emits one `<shape>|<document>|<job position>|<step index>` row per
 # multi-line run: block. Both document shapes are read from every file:
@@ -167,9 +173,10 @@ for f in "${selected_files[@]}"; do
     # its body succeeds. A yq that dies here has read no run: block, and
     # its exit 1 would surface as a strict-mode violation in a block
     # nothing was read from. The row's numbers reach `yq` as data, through
-    # `env`.
+    # `env`. A body written as an alias is read as its anchored text, which
+    # is what the runner executes.
     if [[ ${shape} == composite ]]; then
-      if ! body="$(DOC="${doc}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .runs.steps[env(IDX)].run' "${f}")"; then
+      if ! body="$(DOC="${doc}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .runs.steps[env(IDX)].run | explode(.)' "${f}")"; then
         printf '%s: cannot read composite step[%s] run: block\n' "${f}" "${idx}" >&2
         exit 2
       fi
@@ -179,7 +186,7 @@ for f in "${selected_files[@]}"; do
         printf '%s: cannot read the key of the job at position %s\n' "${f}" "${jpos}" >&2
         exit 2
       fi
-      if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].value.steps[env(IDX)].run' "${f}")"; then
+      if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].value.steps[env(IDX)].run | explode(.)' "${f}")"; then
         printf '%s: cannot read job %q step[%s] run: block\n' "${f}" "${job}" "${idx}" >&2
         exit 2
       fi

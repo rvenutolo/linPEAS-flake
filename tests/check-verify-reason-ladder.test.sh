@@ -317,7 +317,13 @@ function main() {
     'is not documented in'
 
   expect 'bad-ladder-order' 'workflow.yml' 1 \
-    'but the steps run in the opposite order'
+    'ladder tests STEP_CHARLIE before STEP_BRAVO, but the steps run in the opposite order'
+
+  # An attribution run: body written as an alias is read as its anchored
+  # text, which is what the runner executes: its ladder is walked like an
+  # inline one, so an order drift there is named.
+  expect 'alias-ladder-order' 'workflow.yml' 1 \
+    'ladder tests STEP_BRAVO before STEP_ALPHA, but the steps run in the opposite order'
 
   expect 'exempt-step' 'workflow.yml' 0 ''
 
