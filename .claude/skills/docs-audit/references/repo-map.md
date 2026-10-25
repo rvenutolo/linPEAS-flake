@@ -229,7 +229,7 @@ mechanism. A body naming no documented mechanism — a bare link, a title — ha
 nothing to drift against and is not a finding.
 
 Part of `.claude/` is tracked and committed — the `docs-audit`,
-`docs-audit-fix` and `repo-review` skills and their slash commands; the cluster map's
+`docs-audit-fix` and `repo-review` skills, each its own slash command; the cluster map's
 `claude-tooling` row is what puts those tracked files in scope. Those are maintained
 artifacts with real commit history, and they restate facts that live elsewhere
 in the tree: the generated-doc table below and the ephemeral-token classes on
