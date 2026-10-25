@@ -10,7 +10,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-readonly -a EXPECTED=(bash cat yq jq gh git shellcheck shfmt actionlint check-jsonschema sed grep awk find)
+readonly -a EXPECTED=(bash cat yq jq gh git shellcheck shfmt actionlint check-jsonschema python3 sed grep awk find)
 
 function main() {
   local missing=0 tool
