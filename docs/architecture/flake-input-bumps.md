@@ -840,7 +840,7 @@ generator.
 `scripts/check-lock-derived-docs.sh` asserts the lists stay in agreement
 with each other and with the hooks that declare the dependency. It discovers its subjects
 rather than naming them: every workflow carrying a lock update in a `run`
-block must declare `LOCK_DERIVED_GENERATORS` and `COMMITTABLE_PATHS`,
+block, including one written as an alias to an anchored body, must declare `LOCK_DERIVED_GENERATORS` and `COMMITTABLE_PATHS`,
 every freshness hook whose trigger admits `flake.lock` must have its
 generator in that workflow's `LOCK_DERIVED_GENERATORS`, and every entry
 there must be backed by such a hook. A hook that names `flake.lock` a

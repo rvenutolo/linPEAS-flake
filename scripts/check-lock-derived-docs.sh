@@ -291,11 +291,13 @@ readonly ENV_NODE="${ROOT_KEY_NODE//@KEY@/env}"
 # a step list a later mapping would override is not the one searched.
 # `jobs:` and the workflow `env:` are read as `ROOT_KEY_NODE` reads a root
 # key, so one written as an alias is read as GitHub Actions reads it, and
-# one given twice, plain and as an alias, fails the parse.
+# one given twice, plain and as an alias, fails the parse. A step's run:
+# written as an alias (`run: *body`) is exploded to its anchored text,
+# which is what the runner executes.
 function workflow_facts() {
   # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
   yq eval "${YQ_MERGE_SPEC[@]}" "(${ENV_NODE}) as \$env | (${JOBS_NODE}) as \$jobs"' | [
-      ([$jobs | .[]?.steps[]?.run // ""] | map(select(test("nix flake update"))) | length > 0),
+      ([$jobs | .[]?.steps[]? | (.run // "") | explode(.)] | map(select(test("nix flake update"))) | length > 0),
       (($env.LOCK_DERIVED_GENERATORS // "") != ""),
       (($env.COMMITTABLE_PATHS // "") != ""),
       (($env.WORKFLOW_DERIVED_GENERATORS // "") != "")
