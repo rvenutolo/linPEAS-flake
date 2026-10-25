@@ -1,0 +1,12 @@
+name: w
+on: push
+x-anchor: &body |
+  set -Eeuo pipefail
+  while IFS= read -r row; do
+    printf '%s\n' "${row}"
+  done < <(yq eval '.rows[]' rows.yml)
+jobs:
+  anchored:
+    runs-on: ubuntu-latest
+    steps:
+      - run: *body

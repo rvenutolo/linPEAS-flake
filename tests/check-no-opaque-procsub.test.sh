@@ -98,6 +98,18 @@ expect workflow-run-body "${FIXTURES}/good" "${FIXTURES}/bad-workflow/.github/wo
 expect composite-run-body "${FIXTURES}/good" "${GOOD_WORKFLOWS}" "${FIXTURES}/bad-action/.github/actions" 1 \
   "bad-action/.github/actions/a/action.yml: composite step[0] run: line 2: ${HIT_DIAG}: mapfile -t names < <(find"
 
+# A run: body given as an alias to an anchored block scalar is the
+# anchored text: the scan reads it, not the literal alias name.
+expect workflow-alias-run-body "${FIXTURES}/good" "${FIXTURES}/alias-workflow/.github/workflows" "${GOOD_ACTIONS}" 1 \
+  "alias-workflow/.github/workflows/w.yml: job anchored step[0] run: line 4: ${HIT_DIAG}: done < <(yq"
+expect composite-alias-run-body "${FIXTURES}/good" "${GOOD_WORKFLOWS}" "${FIXTURES}/alias-action/.github/actions" 1 \
+  "alias-action/.github/actions/a/action.yml: composite step[0] run: line 2: ${HIT_DIAG}: mapfile -t keys < <(jq"
+# An action under a `fixtures/` segment of the actions root holds the
+# banned shape on purpose and is left out of the scan set, so only the
+# clean workflow's two run: blocks are read.
+expect action-under-fixtures "${FIXTURES}/good" "${GOOD_WORKFLOWS}" "${FIXTURES}/bad-action-under-fixtures/.github/actions" 0 \
+  'no-opaque-procsub: ok — scanned 2 shell script(s) and 2 run: block(s)'
+
 # Generated here rather than committed: YAML that does not parse fails
 # the formatter.
 mkdir --parents -- "${scratch}/malformed"

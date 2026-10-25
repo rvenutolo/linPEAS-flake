@@ -1,0 +1,10 @@
+name: a
+description: a
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -Eeuo pipefail
+        mapfile -t names < <(find . -name '*.sh')
+        printf '%s\n' "${names[@]}"
