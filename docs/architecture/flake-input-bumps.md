@@ -694,9 +694,8 @@ Credential split mirrors `update-flake-lock.yml`:
     under the artifact directory: a symlink anywhere on a committed path,
     the file or any parent directory, aborts the job before any PUT,
     since reading through it would reach outside the artifact directory.
-    The `source`
-    scan matches a `source` or `.` command anywhere on a line, not only
-    at its start. download-artifact's traversal protection is also all
+    The `source` scan matches a `source` or `.` command anywhere on a
+    line, not only at its start. download-artifact's traversal protection is also all
     that guards the runner's file-command files (`GITHUB_ENV`,
     `GITHUB_PATH`) and so the step environment; the manifest does not
     cover those.
