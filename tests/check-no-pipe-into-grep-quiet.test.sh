@@ -60,8 +60,13 @@ function expect() {
 expect single-line "${FIXTURES}/bad/single" 1 'single.sh:5: '"${HIT_DIAG}"
 # Each spelling of the quiet flag is its own line, so a matcher that
 # knows only some of them misses a line number.
+# A bundle may run into an attached option argument (`-qm1`), and GNU
+# grep takes any unambiguous prefix of `--quiet` or `--silent`.
 expect bundled-flags "${FIXTURES}/bad/flags" 1 \
-  'flags.sh:5: ' 'flags.sh:6: ' 'flags.sh:7: ' 'flags.sh:8: ' '4 pipe(s) into quiet grep found'
+  'flags.sh:5: ' 'flags.sh:6: ' 'flags.sh:7: ' 'flags.sh:8: ' \
+  'flags.sh:9: ' 'flags.sh:10: ' 'flags.sh:11: ' 'flags.sh:12: ' \
+  'flags.sh:13: ' 'flags.sh:14: ' 'flags.sh:15: ' 'flags.sh:16: ' \
+  '12 pipe(s) into quiet grep found'
 expect pipe-amp "${FIXTURES}/bad/pipeamp" 1 'pipeamp.sh:5: '
 # A pipe that ends a line is reported at the line the quiet grep sits
 # on, with and without a backslash after the pipe, and across a blank or

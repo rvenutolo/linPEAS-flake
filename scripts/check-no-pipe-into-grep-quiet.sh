@@ -3,7 +3,8 @@
 #
 # @description Lint: no shell file and no workflow or composite-action
 # `run:` block pipes into a quiet `grep` (`-q`, a bundled flag holding
-# `q`, `--quiet`, or its alias `--silent`). A quiet `grep` exits at its
+# `q`, `--quiet`, or its alias `--silent`, either long option also as
+# any prefix GNU grep accepts). A quiet `grep` exits at its
 # first match. A producer still writing then takes SIGPIPE, and under
 # `set -o pipefail` the pipeline's status is the producer's 141, so a
 # match reads as a miss. Whether the producer is still writing depends on
@@ -28,7 +29,12 @@
 # `grep`, so `command grep`, `env ... grep`, `timeout ... grep` and
 # `LANG=C grep` are not seen. The quiet flag must sit on the `grep`
 # word's own line, and a `|`, `;` or `&` inside an earlier argument, as in
-# `grep -E 'a|b' --quiet`, hides a flag that follows it.
+# `grep -E 'a|b' --quiet`, hides a flag that follows it. A bundle counts
+# when `q` follows only letters, so it may run into an attached option
+# argument (`-qm1`, `-qA2`) but a `q` after a digit (`-m1q`, where the
+# `q` belongs to `-m`'s argument) does not. Any prefix of `--quiet` or
+# `--silent` down to `--q` or `--s` counts, since GNU grep has no other
+# long option starting with those letters.
 #
 # Workflow and composite-action YAML is matched on each step's extracted
 # `run:` body, never on raw YAML: every `run: |` key line ends in a pipe,
@@ -108,7 +114,7 @@ readonly HIT_PROGRAM='
   {
     code = code_part($0)
     text = pending ? "| " code : code
-    if (text ~ /(^|[^|])[|]&?[[:space:]]*(LC_ALL=[^[:space:]]+[[:space:]]+)?grep[[:space:]]+([^|;&]*[[:space:]])?(-[[:alpha:]]*q[[:alpha:]]*|--quiet|--silent)([^[:alnum:]_-]|$)/) {
+    if (text ~ /(^|[^|])[|]&?[[:space:]]*(LC_ALL=[^[:space:]]+[[:space:]]+)?grep[[:space:]]+([^|;&]*[[:space:]])?(-[[:alpha:]]*q[[:alnum:]]*|--q(u(i(e(t)?)?)?)?|--s(i(l(e(n(t)?)?)?)?)?)([^[:alnum:]_-]|$)/) {
       print NR
     }
     pending = (code ~ /(^|[^|])[|]&?[[:space:]]*[\\]?[[:space:]]*$/)
