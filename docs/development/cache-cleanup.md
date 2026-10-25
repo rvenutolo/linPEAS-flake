@@ -90,7 +90,7 @@ files the failure issue. Each enumeration is captured into a variable
 before its delete loop rather than fed to the loop from a process
 substitution, so `set -Eeuo pipefail` sees a failed listing: a broken
 listing never reads as "nothing to prune" and a green run with zero
-deletions means the listing came back empty. Manual recovery for the
+deletions means the listing succeeded and found nothing to prune. Manual recovery for the
 daily sweep: `gh workflow run actions-cache-prune.yml`; a failed
 PR-close prune is picked up by a later orphan-ref sweep instead, which
 evicts the merge ref's cache on the next tick and the head ref's once
