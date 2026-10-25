@@ -1,0 +1,17 @@
+name: w
+on: push
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set -Eeuo pipefail
+          # Captured rather than read as done < <(yq eval '.x' f.yml), so a
+          # yq failure aborts the step instead of reading as no rows.
+          rows="$(yq eval '.x' f.yml)"
+          while IFS= read -r row; do
+            printf '%s\n' "${row}"
+          done <<<"${rows}"
+      - run: |
+          set -Eeuo pipefail
+          diff <(jq --raw-output 'keys[]' a.json) <(jq --raw-output 'keys[]' b.json)

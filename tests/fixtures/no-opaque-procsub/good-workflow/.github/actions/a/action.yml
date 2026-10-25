@@ -1,0 +1,12 @@
+name: a
+description: a
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -Eeuo pipefail
+        names="$(find . -name '*.sh')"
+        while IFS= read -r name; do
+          printf '%s\n' "${name}"
+        done <<<"${names}"

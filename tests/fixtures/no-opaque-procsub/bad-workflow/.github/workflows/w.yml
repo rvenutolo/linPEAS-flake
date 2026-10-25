@@ -1,0 +1,14 @@
+name: w
+on: push
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set -Eeuo pipefail
+          printf 'start\n'
+      - run: |
+          set -Eeuo pipefail
+          while IFS= read -r line; do
+            printf '%s\n' "${line}"
+          done < <(grep --no-filename 'uses:' .github/workflows/*.yml)
