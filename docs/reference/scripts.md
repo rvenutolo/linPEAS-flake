@@ -788,8 +788,10 @@ a fork-guard `if:` pinning execution to the canonical repo.
 ### scripts/check-freshness-hook-watches-modules.sh
 
 Lint: every pre-commit hook whose entry runs a generator
-that evaluates `devTooling.<system>.<attr>` names, in its `files`
-regex, every nix module that attribute is defined or transposed by.
+that evaluates `devTooling.<system>.<attr>` admits, through its `files`
+and `excludes` filters, every nix module that attribute is defined or
+transposed by. Filters are evaluated as pre-commit evaluates them, with
+Python `re.search`; a filter that does not compile is a could-not-run.
 
 ### scripts/check-gh-api-version-header.sh
 

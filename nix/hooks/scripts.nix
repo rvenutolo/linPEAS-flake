@@ -130,7 +130,8 @@ in
   };
   # Every flake-evaluating freshness hook watches every source its
   # evaluation reads, so an edit to one re-triggers the freshness check on
-  # the per-changed-file git commit path. See
+  # the per-changed-file git commit path. The lint matches filters with
+  # Python `re`, as pre-commit does, so python3 is on its path. See
   # docs/security/workflow-hardening.md.
   freshness-hook-watches-modules = {
     enable = true;
@@ -140,6 +141,7 @@ in
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.python3}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-freshness-hook-watches-modules.sh
     ''}";
     # The lint reads every nix module in the tree (including flake.nix,

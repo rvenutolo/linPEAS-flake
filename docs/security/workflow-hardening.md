@@ -505,7 +505,7 @@ Enforced by `scripts/check-manifest-hook-watches-nix.sh`. Wired as the `lint-scr
 
 ## freshness hook watches evaluated sources
 
-Every pre-commit hook whose entry evaluates a flake attribute names, in its `files` filter, every source that evaluation reads. Two hook shapes evaluate one: a generator script the entry runs, which reads `devTooling.<system>.<attr>`, and an entry that evaluates an attribute directly with `nix build` or `nix eval`, naming no script at all.
+Every pre-commit hook whose entry evaluates a flake attribute admits, through its `files` and `excludes` filters, every source that evaluation reads. Two hook shapes evaluate one: a generator script the entry runs, which reads `devTooling.<system>.<attr>`, and an entry that evaluates an attribute directly with `nix build` or `nix eval`, naming no script at all.
 
 A freshness hook regenerates a doc from an evaluated flake attribute and refuses a stale commit. Its `files` regex decides which changed paths re-trigger it on the per-changed-file `git commit` path. When the filter misses a module the generator evaluates, a commit touching only that module leaves the doc stale with the guard silent. The `--all-files` CI mirror still catches the drift, but the local fast-path defense is lost, so the gap surfaces late.
 
@@ -515,7 +515,9 @@ For a generator subject: modules naming the evaluated attribute in non-comment n
 
 For an attribute subject: `flake.nix` and `flake.lock`, since any flake evaluation reads both and a lock bump changes the packages the attribute resolves to; every module assigning the attribute, matched on the assignment shape so that merely naming the leaf does not qualify a module that is not a source of it; and one level of the relative paths those modules reference, of any extension — a module embedding `${../scripts/foo.sh}` genuinely depends on that script.
 
-The guard is source-parsed rather than `nix eval`-ed: `files` and `entry` are literal in source, and `nix eval` is the known local-commit-path long pole. It fails loud if it finds no `devTooling`-evaluating generator, no hook running one, an attribute with no defining or assigning module, or a hook entry naming a flake attribute that subject discovery did not pick up — each of which means the derivation broke rather than that the tree is clean.
+Filters are evaluated as pre-commit evaluates them, with Python `re.search`: a path is admitted when `files` matches it and the joined `excludes` do not. POSIX ERE would misread the lookaheads hook filters use, and a filter that does not compile is a could-not-run naming the hook.
+
+The guard is source-parsed rather than `nix eval`-ed: `files`, `excludes` and `entry` are literal in source, and `nix eval` is the known local-commit-path long pole. It fails loud if it finds no `devTooling`-evaluating generator, no hook running one, an attribute with no defining or assigning module, or a hook entry naming a flake attribute that subject discovery did not pick up — each of which means the derivation broke rather than that the tree is clean.
 
 Enforced by `scripts/check-freshness-hook-watches-modules.sh`. Wired as the `lint-script-hygiene` CI job (member check `freshness-hook-watches-modules`) and as a pre-commit hook.
 
