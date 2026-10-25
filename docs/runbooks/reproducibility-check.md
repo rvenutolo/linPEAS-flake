@@ -13,21 +13,20 @@ On its weekly Friday cron (and on `workflow_dispatch`), the workflow:
 1. Builds `.#linpeas` and `.#linpeas-image` twice on independent `ubuntu-latest` runners.
 1. Records five values per build: linpeas store path, linpeas NAR hash, image store path, image tar SHA-256, and image manifest digest.
 1. Compares the three hash values pairwise (`linpeas_nar_hash`, `image_tar_sha256`, `image_manifest_digest`); the two store paths are reported for context only and do not affect the result.
-1. On any nonzero compare result — a hash mismatch or an exit-2 measurement failure: runs `diffoscope` on both pairs (the image tars and the linpeas tarballs), each under its own 20-minute cap. `summary.txt` and whichever of the `image.html`/`image.txt` and `linpeas.html`/`linpeas.txt` reports diffoscope wrote are uploaded as the `repro-diff` artifact (30-day retention), a GitHub issue labelled `reproducibility` is opened, and the `compare` job is failed by its `fail job (on mismatch)` step.
+1. On any nonzero compare result — a hash mismatch or an exit-2 measurement failure: runs `diffoscope` on both pairs (the image tars and the linpeas tarballs), each under its own 20-minute cap. `summary.txt` and whichever of the `image.html`/`image.txt` and `linpeas.html`/`linpeas.txt` reports diffoscope wrote are uploaded as the `repro-diff` artifact (30-day retention), and the `compare` job is failed by its `fail job (on mismatch)` step.
+1. The `notify` job opens or updates one deduped issue labelled `reproducibility` through the `notify-workflow-result` composite when the run fails: a mismatch, an exit-2 measurement failure, a failed or cancelled build, or any other failed step in `compare`. The next passing run closes it.
 
 `diffoscope` is resolved from this repo's own flake — the compare job installs Nix through the `./.github/actions/setup-nix` composite and invokes `nix shell .#diffoscopeMinimal --command diffoscope`. The version that runs therefore tracks `flake.lock`, not whatever a distribution archive currently ships, and the job reaches only the hosts already in its `allowed-endpoints` list.
 
 ## How you'll be notified
 
-During burn-in (`continue-on-error: true` on the compare job), workflow runs report green in the Actions UI even on mismatch — the primary alert channel is the auto-opened GitHub issue. If `gh issue create` itself fails, the step logs a `WARN` and the fallback signals are the `compare` job's own status and the `repro-diff` artifact.
+During burn-in (`continue-on-error: true` on the compare job), workflow runs report green in the Actions UI even on mismatch, so the alert channel is the issue the `notify` job files. `continue-on-error` also reports a failed `compare` as succeeded in its own result, so `notify` reads the job's `completed` output instead: only `compare`'s last step sets it, and any failed step, the mismatch step included, stops the job before it. A run whose `compare` did not complete therefore files, whatever its job result says.
 
-To ensure mismatches are seen, the repo owner watches "All Activity" or "Issues" notifications on this repo.
-
-The `gh issue create` invocation sets no `--assignee`; mismatches rely on default repo notification settings. Add `--assignee` to that invocation once a maintainer wants direct paging, and revisit after the first real mismatch (the "What to do when it fails" section below assumes the responder has already seen the issue).
+To ensure mismatches are seen, the repo owner watches "All Activity" or "Issues" notifications on this repo. The issue carries no assignee; it relies on default repo notification settings.
 
 ## What to do when it fails
 
-1. Open the auto-created issue (label: `reproducibility`).
+1. Open the auto-filed issue (label: `reproducibility`).
 1. Follow the run link to the failed workflow run.
 1. Download the `repro-diff` artifact.
 1. Read `summary.txt`, then open the `.html` report of each pair it marks `report written`.
@@ -40,7 +39,7 @@ The `gh issue create` invocation sets no `--assignee`; mismatches rely on defaul
 - A `nix path-info --json` shape change is not the cause: both `measure hashes` steps pipe it through `jq --exit-status` under `set -Eeuo pipefail`, so a shape change fails its own build job, and `compare` needs both builds and never runs.
 - What *can* reach `compare` is a `build.json` that uploaded or downloaded incompletely.
 - A `repro-diff` artifact is present on exit 2 — the diffoscope and upload steps gate on `exit_code != '0'`, which 2 satisfies (the `force_diffoscope` input, below, widens the same gate) — but it diffs builds whose measurement the compare script already rejected. Read the `build.json` files in the `repro-build-a` / `repro-build-b` artifacts instead; those expire after 7 days (vs `repro-diff`'s 30), so exit-2 triage has a one-week window.
-- The `open issue (on mismatch)` and `fail job (on mismatch)` steps gate on the same `exit_code != '0'` condition, so exit 2 also files an issue and fails the job. The issue body names both causes. On a divergence the run's job summary holds a `**Result:** MISMATCH` line; on exit 2 the `compare hashes` step log holds the error instead.
+- The `fail job (on mismatch)` step gates on the same `exit_code != '0'` condition, so exit 2 also fails the job and files the issue. The issue body names both causes. On a divergence the run's job summary holds a `**Result:** MISMATCH` line; on exit 2 the `compare hashes` step log holds the error instead.
 - If a build job itself went red, triage its `measure hashes` step there.
 
 ## Exercising the diagnostic path on demand
@@ -51,7 +50,7 @@ The diffoscope step and the `repro-diff` upload run on a nonzero compare result,
 gh workflow run reproducibility-check.yml --ref <ref> --field force_diffoscope=true
 ```
 
-The input widens the `if:` on the diagnostic steps only — the diffoscope run and the `repro-diff` upload. `open issue (on mismatch)` and `fail job (on mismatch)` keep the compare-nonzero condition unwidened by `force_diffoscope`, so a forced run can add execution but can never fabricate or suppress the reproducibility signal.
+The input widens the `if:` on the diagnostic steps only — the diffoscope run and the `repro-diff` upload. `fail job (on mismatch)` keeps the compare-nonzero condition unwidened by `force_diffoscope`, so a forced run can add execution but can never fabricate or suppress the reproducibility signal.
 
 A healthy forced run on a reproducible tree looks like this:
 

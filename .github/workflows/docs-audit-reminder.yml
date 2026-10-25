@@ -100,3 +100,51 @@ jobs:
               --title 'docs-audit: CI churn since last audit — run /docs-audit' \
               --body-file "${BODY_FILE}"
           fi
+
+  notify:
+    name: notify
+    needs: pressure
+    if: always() && github.repository == 'rvenutolo/linPEAS-flake'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      checks: read
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
+        with:
+          # Raw job result: the composite files cancelled runs as
+          # infrastructure failures and is inert on skipped. The label is
+          # not `docs-audit`: a green run closes every open issue under
+          # its label, and the reminder issue must outlive it.
+          result: ${{ needs.pressure.result }}
+          label: docs-audit-reminder-failure
+          title: "docs-audit-reminder: drift pressure could not be measured"
+          label-description: docs-audit-reminder could not measure CI drift pressure or update its issue
+          body: |
+            The monthly `docs-audit-reminder` workflow failed, so this
+            month's docs-audit drift pressure was not reported. Drift
+            pressure itself never fails the run: this is the pressure
+            script erroring, a GitHub API call failing, or
+            `.github/docs-audit-state` being unreadable.
+
+            Run:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            To resolve: read the failing step's log, fix the cause, and
+            dispatch the workflow again
+            (`gh workflow run docs-audit-reminder.yml`). This issue
+            auto-closes on the next clean run.
+          github-token: ${{ secrets.GITHUB_TOKEN }}

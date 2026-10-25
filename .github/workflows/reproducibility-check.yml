@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
     inputs:
       # This input widens the `if:` on the diagnostic steps only — the
-      # diffoscope run and its artifact upload. `open issue (on mismatch)`
-      # and `fail job (on mismatch)` keep the nonzero-result condition, so a
-      # forced run can add execution but can never fabricate or suppress
-      # the reproducibility signal.
+      # diffoscope run and its artifact upload. `fail job (on mismatch)`
+      # keeps the nonzero-result condition, so a forced run can add
+      # execution but can never fabricate or suppress the reproducibility
+      # signal.
       force_diffoscope:
         description: "Run the mismatch diagnostic steps even when the builds match, to prove the diffoscope path still works."
         type: boolean
@@ -187,10 +187,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: true
+    # `continue-on-error` reports this job as succeeded even when a step
+    # fails, so `notify` reads `completed` instead: only the last step
+    # sets it, and every failure, a mismatch included, stops the job
+    # before it.
+    outputs:
+      completed: ${{ steps.completed.outputs.completed }}
     permissions:
       contents: read
       actions: read
-      issues: write
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
@@ -285,30 +290,63 @@ jobs:
           path: diffoscope-out
           retention-days: 30
           if-no-files-found: error
-      - name: open issue (on mismatch)
-        if: steps.compare.outputs.exit_code != '0'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -Eeuo pipefail
-          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          today="$(date -u +%Y-%m-%d)"
-          runbook_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/main/docs/runbooks/reproducibility-check.md"
-          # Build body with printf -v to avoid YAML-breaking heredoc or indented multiline strings.
-          # Using %s for the backtick-containing artifact names avoids SC2016 false positives.
-          artifact_note="\`repro-diff\` (30-day retention) — \`summary.txt\` plus the \`image.html\`/\`image.txt\` and \`linpeas.html\`/\`linpeas.txt\` reports diffoscope wrote"
-          printf -v body \
-            'The reproducibility check failed: the hashes of the two builds differ, or the comparison could not measure them. The job summary of the run holds a Result: MISMATCH line when the hashes differ; otherwise the log of the compare hashes step holds the error.\n\n- Run: %s\n- Diffoscope artifacts: %s\n- Runbook: [docs/runbooks/reproducibility-check.md](%s)\n\nInvestigate per the runbook; do not close until root cause is fixed or the workflow has been demoted per runbook criteria.' \
-            "${run_url}" "${artifact_note}" "${runbook_url}"
-          gh issue create \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "repro mismatch: ${today}" \
-            --label reproducibility \
-            --body "${body}" \
-            || echo 'WARN: gh issue create failed; signal is still visible via job status + artifact.'
       - name: fail job (on mismatch)
         if: steps.compare.outputs.exit_code != '0'
         run: |
           set -Eeuo pipefail
           echo 'Reproducibility mismatch detected. continue-on-error keeps workflow green during burn-in.'
           exit 1
+      - name: mark completed
+        id: completed
+        run: echo 'completed=true' >> "${GITHUB_OUTPUT}"
+
+  notify:
+    name: notify
+    needs: [build-a, build-b, compare]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      checks: read
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
+        with:
+          # A failed or cancelled build is the run's result. Otherwise
+          # `compare` decides, read through its `completed` output because
+          # `continue-on-error` hides its failure from its own result.
+          result: ${{ (needs.build-a.result == 'failure' || needs.build-b.result == 'failure') && 'failure' || (needs.build-a.result == 'cancelled' || needs.build-b.result == 'cancelled' || needs.compare.result == 'cancelled') && 'cancelled' || needs.compare.result == 'skipped' && 'skipped' || needs.compare.outputs.completed == 'true' && 'success' || 'failure' }}
+          label: reproducibility
+          title: "reproducibility-check: builds differ, or the check could not run"
+          label-description: two independent builds of linpeas or the image differ, or the check could not run
+          body: |
+            The reproducibility check failed: the hashes of the two
+            builds differ, or a build or the comparison failed before it
+            could measure them. The job summary of the run holds a
+            `Result: MISMATCH` line when the hashes differ; otherwise the
+            failing step's log holds the error.
+
+            Run:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            On a mismatch the run carries the `repro-diff` artifact
+            (30-day retention): `summary.txt` plus the `image.html` /
+            `image.txt` and `linpeas.html` / `linpeas.txt` reports
+            diffoscope wrote.
+
+            Investigate per the runbook,
+            [docs/runbooks/reproducibility-check.md](https://github.com/${{ github.repository }}/blob/main/docs/runbooks/reproducibility-check.md).
+            This issue auto-closes on the next run whose builds match.
+          github-token: ${{ secrets.GITHUB_TOKEN }}

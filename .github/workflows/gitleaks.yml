@@ -39,3 +39,49 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    name: notify
+    needs: gitleaks
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      checks: read
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
+        with:
+          # Raw job result: the composite files cancelled runs as
+          # infrastructure failures and is inert on skipped. A pull
+          # request run's failure shows on the pull request itself.
+          result: ${{ needs.gitleaks.result }}
+          label: gitleaks-failure
+          title: "gitleaks: secret detected, or the scan could not run"
+          label-description: gitleaks found a secret outside a pull request, or the gitleaks scan could not run
+          body: |
+            The `gitleaks` workflow failed on a `${{ github.event_name }}`
+            run: either gitleaks reported a secret in the repository
+            history, or a step before the scan (harden-runner, checkout)
+            failed. The job log says which.
+
+            Run:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            A finding is a security incident: rotate the secret, then purge
+            it from history, as the Gitleaks section of
+            docs/security/verification.md describes. This issue
+            auto-closes on the next clean run.
+          github-token: ${{ secrets.GITHUB_TOKEN }}

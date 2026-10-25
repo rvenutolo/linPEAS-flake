@@ -37,7 +37,7 @@ than waiting for the daily cron sweep.
 
 ## Permissions
 
-Both jobs declare `actions: write` (cache deletion) and
+Both prune jobs declare `actions: write` (cache deletion) and
 `contents: read`, the scope GitHub documents for the branch listing
 `prune-stale` does (on this public repository neither that listing nor
 the open-PR one needs any token permission); `prune-on-pr-close` reads
@@ -45,8 +45,10 @@ nothing outside the Actions-cache API
 and carries the scope only for parity. The `actions: write` grant is what
 `scripts/check-permission-scopes.sh` pins, via the per-job allowlist in
 `.github/permission-scopes.yml`; read scopes are outside that lint. The
-fork-guard `github.repository == 'rvenutolo/linPEAS-flake'` is on both
-jobs; it
+`notify` job declares `issues: write` for the failure issue it files and
+no other write scope. The
+fork-guard `github.repository == 'rvenutolo/linPEAS-flake'` is on all
+three jobs; it
 keeps the workflow inert in forks of this repository. A PR opened
 *from* a fork against `main` still runs `prune-on-pr-close`, since
 `github.repository` on a `pull_request` event names the base repo.
@@ -55,7 +57,10 @@ keeps the workflow inert in forks of this repository. A PR opened
 
 A failed prune run is not load-bearing. Stale caches cost only space
 and a small cache-key search penalty; they do not corrupt or block
-release pipelines. The workflow does not page on failure.
+release pipelines. A failed run still files a deduped
+`actions-cache-prune-failure` issue through the `notify` job, on every
+trigger, the PR-close prune included, because nobody watches a closed
+PR's runs. The next passing run closes it.
 
 ## Recovery
 

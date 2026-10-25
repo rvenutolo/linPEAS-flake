@@ -148,3 +148,50 @@ jobs:
             )
           done
           printf 'pruned %d cache entries for PR #%s\n' "${deleted}" "${PR_NUMBER}"
+
+  notify:
+    name: notify
+    needs: [prune-stale, prune-on-pr-close]
+    if: always() && github.repository == 'rvenutolo/linPEAS-flake'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      checks: read
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
+        with:
+          # The two prune jobs run on disjoint events, so exactly one of
+          # them runs and the other is skipped; its raw result is the run's.
+          result: ${{ needs.prune-stale.result == 'skipped' && needs.prune-on-pr-close.result || needs.prune-stale.result }}
+          label: actions-cache-prune-failure
+          title: "actions-cache-prune: cache pruning failed"
+          label-description: actions-cache-prune could not prune the Actions cache
+          body: |
+            The `actions-cache-prune` workflow failed on a
+            `${{ github.event_name }}` run, so stale or orphaned Actions
+            cache entries were not deleted. A missed prune costs only
+            cache space, but a cache entry left behind outlives the window
+            this workflow bounds it to.
+
+            Run:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            To resolve: read the failing step's log, then dispatch the
+            daily sweep again (`gh workflow run actions-cache-prune.yml`),
+            which also evicts what a failed PR-close prune left. See
+            docs/development/cache-cleanup.md. This issue auto-closes on
+            the next clean run.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
