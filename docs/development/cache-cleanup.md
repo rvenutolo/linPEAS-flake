@@ -84,14 +84,14 @@ opaquely repopulates on its next run. No release-path job waits on a
 cache warm-up, so a mass deletion costs nothing in image-publication
 latency.
 
-If the action-token rate-limits on one of the delete calls, the
-workflow fails cleanly and re-runs on the next cron tick. A rate limit
-that lands on a cache enumeration instead is swallowed — every cache
-enumeration feeds a `while` loop from a process substitution, whose
-exit status is discarded even under
-`set -Eeuo pipefail` — so that run reports zero deletions and goes
-green. Manual recovery for the daily sweep either way:
-`gh workflow run actions-cache-prune.yml`; a swallowed PR-close prune
-is picked up by a later orphan-ref sweep instead, which evicts the
-merge ref's cache on the next tick and the head ref's once the branch
-is deleted.
+If the action-token rate-limits on one of the delete calls, or a cache
+enumeration fails (rate limit, 5xx, auth), the step fails and `notify`
+files the failure issue. Each enumeration is captured into a variable
+before its delete loop rather than fed to the loop from a process
+substitution, so `set -Eeuo pipefail` sees a failed listing: a broken
+listing never reads as "nothing to prune" and a green run with zero
+deletions means the listing came back empty. Manual recovery for the
+daily sweep: `gh workflow run actions-cache-prune.yml`; a failed
+PR-close prune is picked up by a later orphan-ref sweep instead, which
+evicts the merge ref's cache on the next tick and the head ref's once
+the branch is deleted.
