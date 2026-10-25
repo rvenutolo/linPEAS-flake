@@ -8,8 +8,9 @@
 # Python `re.search`; a filter that does not compile is a could-not-run.
 
 # Lint: a freshness hook regenerates a doc from an evaluated flake
-# attribute and refuses a stale commit. Its `files` regex decides which
-# changed paths re-trigger it on the per-changed-file `git commit` path.
+# attribute and refuses a stale commit. Its `files` and `excludes`
+# filters decide which changed paths re-trigger it on the
+# per-changed-file `git commit` path.
 # A filter that misses a module the generator evaluates leaves the doc
 # stale locally with the guard silent — CI's --all-files mirror still
 # catches it, but the local fast-path defense is lost.

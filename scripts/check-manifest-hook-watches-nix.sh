@@ -10,10 +10,11 @@
 
 # Lint: a freshness/cross-check hook that regenerates or validates a
 # doc by reading the Nix pre-commit hook manifest must watch
-# `nix/hooks/**` in its pre-commit `files` filter. Otherwise a commit
-# that edits only a hook definition under `nix/hooks/*.nix` changes the
-# manifest yet never triggers the freshness hook on the per-changed-file
-# `git commit` path, so a stale generated doc can slip through locally.
+# `nix/hooks/**` through its pre-commit `files` and `excludes` filters.
+# Otherwise a commit that edits only a hook definition under
+# `nix/hooks/*.nix` changes the manifest yet never triggers the freshness
+# hook on the per-changed-file `git commit` path, so a stale generated
+# doc can slip through locally.
 #
 # Two hook shapes reach the manifest, and both are subjects here.
 #
