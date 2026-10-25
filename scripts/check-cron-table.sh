@@ -9,7 +9,8 @@
 # Exit codes:
 #   0  all checks passed
 #   1  drift detected (details printed to stderr)
-#   2  missing input files / parse error / workflow declares >1 cron line
+#   2  missing input files / unreadable workflow / parse error /
+#      workflow declares >1 cron line
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -95,7 +96,12 @@ function main() {
 
   # A workflow with >1 cron line can't be represented in the name-keyed
   # table model; surface the limitation rather than silently dropping lines.
-  local f cron_count
+  # The count's status is read three ways: no cron line (1) is a count of
+  # 0, and a grep that could not read the file (2) is a could-not-run,
+  # since its cron line is unknown and scoring it as absent would report
+  # table drift for a file nothing examined. Every later read of a workflow
+  # follows this guard.
+  local f cron_count count_status
   local -a workflow_files=()
   glob_into workflow_files 'workflow YAML' \
     "${WORKFLOWS_DIR}/*.yml" "${WORKFLOWS_DIR}/*.yaml"
@@ -103,7 +109,12 @@ function main() {
   # `foo.yml` matches the pattern the same way a file does.
   for f in "${workflow_files[@]}"; do
     [[ -f ${f} ]] || continue
-    cron_count="$(grep -Ec '^[[:space:]]*-[[:space:]]*cron:' "${f}" || true)"
+    count_status=0
+    cron_count="$(grep -Ec '^[[:space:]]*-[[:space:]]*cron:' "${f}")" || count_status=$?
+    if ((count_status > 1)); then
+      printf 'could not read %s\n' "${f}" >&2
+      exit 2
+    fi
     if ((cron_count > 1)); then
       printf 'multiple cron lines in %s (%d); not supported — extend check-cron-table.sh\n' \
         "${f}" "${cron_count}" >&2

@@ -117,6 +117,20 @@ function main() {
     "${FIXTURES}/bad-yaml-missing-in-table/ci.md" \
     1 'missing-in-table'
 
+  # A workflow grep cannot read is a could-not-run: its cron line is
+  # unknown, and scoring it as absent would report table drift instead.
+  # Generated here because the fixture tree cannot hold an unreadable file.
+  local scratch
+  scratch="$(mktemp --directory)"
+  # shellcheck disable=SC2064 # expanded now on purpose: the path is fixed once created
+  trap "chmod --recursive u+rwx -- '${scratch}'; rm --recursive --force -- '${scratch}'" EXIT
+  cp --recursive -- "${FIXTURES}/good/workflows" "${scratch}/workflows"
+  chmod 000 -- "${scratch}/workflows/beta.yml"
+  run_scenario 'unreadable workflow exits 2' \
+    "${scratch}/workflows" \
+    "${FIXTURES}/good/ci.md" \
+    2 "could not read ${scratch}/workflows/beta.yml"
+
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

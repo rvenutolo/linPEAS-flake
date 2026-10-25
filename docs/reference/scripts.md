@@ -335,7 +335,8 @@ Exit codes:
 ```text
   0  all checks passed
   1  drift detected (details printed to stderr)
-  2  missing input files / parse error / workflow declares >1 cron line
+  2  missing input files / unreadable workflow / parse error /
+      workflow declares >1 cron line
 ```
 
 ### scripts/check-doc-anchors.sh
@@ -1095,8 +1096,8 @@ Honors SCRIPTS_DIR_OVERRIDE (default: scripts), WORKFLOWS_DIR_OVERRIDE
 (default: .github/workflows) and ACTIONS_DIR_OVERRIDE (default:
 .github/actions) for fixtures.
 Exit 0 clean, 1 on any hit, 2 on operational error: `yq` is missing, a
-scan set is empty, or `yq` cannot read a workflow or action file or one
-of its steps.
+scan set is empty, `grep` cannot read a shell script, or `yq` cannot
+read a workflow or action file or one of its steps.
 
 ### scripts/check-no-pipe-into-grep-quiet.sh
 

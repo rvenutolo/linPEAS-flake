@@ -16,7 +16,7 @@ failures=0
 scratch="$(make_temp --directory)"
 readonly scratch
 # shellcheck disable=SC2064 # expanded now on purpose: the path is fixed once created
-trap "rm --recursive --force -- '${scratch}'" EXIT
+trap "chmod --recursive u+rwx -- '${scratch}'; rm --recursive --force -- '${scratch}'" EXIT
 
 # @description Run the lint over one set of scan roots (or the real tree
 # when all three are empty) and assert the exit code plus every expected
@@ -116,6 +116,12 @@ mkdir --parents -- "${scratch}/malformed"
 printf 'jobs: [unclosed\n' >"${scratch}/malformed/w.yml"
 expect malformed-yaml "${FIXTURES}/good" "${scratch}/malformed" "${GOOD_ACTIONS}" 2 \
   'malformed/w.yml: could not evaluate workflow or action with yq (malformed?)'
+
+# A script grep cannot read is a could-not-run, not a script with no hit.
+cp --recursive -- "${FIXTURES}/good" "${scratch}/unreadable"
+chmod 000 -- "${scratch}/unreadable/clean.sh"
+expect unreadable "${scratch}/unreadable" "${GOOD_WORKFLOWS}" "${GOOD_ACTIONS}" 2 \
+  'could not scan '"${scratch}"'/unreadable/clean.sh for process substitutions'
 
 # The tracked tree itself: every script and run: body this lint guards is
 # clean. The counts drift with the tree, so only the exit code is

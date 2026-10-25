@@ -17,7 +17,8 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/check-pin-diff-isolated"
 failures=0
 
 # @arg $1 scenario name
-# @arg $2 fixture subdir
+# @arg $2 fixture subdir, or an absolute path to a directory built at run
+#   time
 # @arg $3 expected exit
 # @arg $4 expected stderr substring (empty skips)
 function run_scenario() {
@@ -31,8 +32,13 @@ function run_scenario() {
   stdout_file="$(mktemp)"
   outcome_file="$(mktemp)"
 
+  local scripts_dir="${FIXTURES}/${fixture_dir}"
+  if [[ ${fixture_dir} == /* ]]; then
+    scripts_dir="${fixture_dir}"
+  fi
+
   local actual_exit=0
-  SCRIPTS_DIR_OVERRIDE="${FIXTURES}/${fixture_dir}" \
+  SCRIPTS_DIR_OVERRIDE="${scripts_dir}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
   harness_assert_record "${name}" "${expected_stderr}" \
@@ -70,6 +76,17 @@ function main() {
   # must not share an exit code.
   run_scenario 'absent scripts dir is a tooling error' \
     'no-such-fixture' 2 'scripts dir not found'
+  # A second writer grep cannot read is not a tree with one writer: the
+  # search could not examine it, so the run is a could-not-run.
+  # Generated here because the fixture tree cannot hold an unreadable file.
+  scratch="$(mktemp --directory)"
+  # shellcheck disable=SC2064 # expanded now on purpose: the path is fixed once created
+  trap "chmod --recursive u+rwx -- '${scratch}'; rm --recursive --force -- '${scratch}'" EXIT
+  cp --recursive -- "${FIXTURES}/bad-multi-writer" "${scratch}/unreadable-writer"
+  chmod 000 -- "${scratch}/unreadable-writer/update-pin.sh"
+  run_scenario 'unreadable second writer is a tooling error' \
+    "${scratch}/unreadable-writer" 2 \
+    "could not search ${scratch}/unreadable-writer for writers of linpeas-pin.json"
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then
