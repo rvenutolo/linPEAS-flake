@@ -142,9 +142,11 @@ for path in ${yaml_files+"${yaml_files[@]}"}; do
   fi
   while IFS='|' read -r shape doc jpos idx; do
     [[ -n ${shape} ]] || continue
-    # The row numbers reach `yq` as data, through `env`.
+    # The row numbers reach `yq` as data, through `env`. A body written as
+    # an alias (`run: *body`) is resolved to its anchored text, which is
+    # what the runner executes; read as is it would be the alias name.
     if [[ ${shape} == composite ]]; then
-      if ! body="$(DOC="${doc}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .runs.steps[env(IDX)].run' "${path}")"; then
+      if ! body="$(DOC="${doc}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .runs.steps[env(IDX)].run | explode(.)' "${path}")"; then
         printf '%s: cannot read composite step[%s] run: block\n' "${path}" "${idx}" >&2
         exit 2
       fi
@@ -154,7 +156,7 @@ for path in ${yaml_files+"${yaml_files[@]}"}; do
         printf '%s: cannot read the key of the job at position %s\n' "${path}" "${jpos}" >&2
         exit 2
       fi
-      if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].value.steps[env(IDX)].run' "${path}")"; then
+      if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].value.steps[env(IDX)].run | explode(.)' "${path}")"; then
         printf '%s: cannot read job %q step[%s] run: block\n' "${path}" "${job}" "${idx}" >&2
         exit 2
       fi
