@@ -113,7 +113,7 @@ function run_scenario() {
 # allowlisted. Deliberately omits EPHEMERAL_REFS_SOURCES_OVERRIDE: that
 # variable short-circuits the enumeration this scenario is about, so
 # only the root override may be set. The `.claude/` fixture file sits
-# under `commands/` because contributor ignore rules commonly exclude
+# under `skills/` because contributor ignore rules commonly exclude
 # direct children of `.claude/`, and an ignored file is neither
 # committable nor enumerable.
 function run_scope_scenario() {

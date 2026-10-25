@@ -18,14 +18,14 @@ something.
 
 Invoke the `/docs-audit` slash command. It is read-only: it emits one
 severity-ranked findings report and edits nothing. Fix what it finds with
-the `/docs-fix` slash command, described below.
+the `/docs-audit-fix` slash command, described below.
 
 ## Fixing what an audit finds
 
 About half of an audit's findings were defects the previous round's fix
 pass had written, and the share swung widely from round to round. A pass
 rewriting a paragraph reads the finding, not the artifact, so a
-corrected claim becomes a differently-wrong one. The `/docs-fix` slash
+corrected claim becomes a differently-wrong one. The `/docs-audit-fix` slash
 command holds the fix PR to a contract that includes:
 
 - Every rewritten paragraph records the `file:line` range of the code,
@@ -41,7 +41,7 @@ command holds the fix PR to a contract that includes:
     artifact's fact. Replacing a claim with a differently wrong exclusive
     or a precise wrong fact is the most repeated defect these audits find.
 
-`/docs-fix` records each pair in a ledger, has a separate agent gate
+`/docs-audit-fix` records each pair in a ledger, has a separate agent gate
 every pair, and opens the PR only after a checker has matched the ledger
 against the branch's diff and found each pair's verdict `TRUE` against
 the paragraph's current text.

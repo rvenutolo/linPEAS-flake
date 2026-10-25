@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# collect-ground-truth.sh — bundled with the docs-correctness-audit skill.
+# collect-ground-truth.sh — bundled with the docs-audit skill.
 #
 # @description Emit, in one labeled dump, the repo ground-truth bundle the audit
 # shares with every cluster reader: a prose-hotspot ranking of the docs recent

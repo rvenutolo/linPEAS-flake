@@ -1,7 +1,8 @@
 ---
 name: docs-audit-fix
-description: Fix pass for a docs-correctness-audit findings report — works the findings on a branch, records a paragraph ledger, runs a separate-agent gate, and opens the PR only when check-fix-ledger.sh passes. Invoke ONLY via the /docs-fix slash command. Do NOT auto-trigger on natural-language mentions of fixing docs or audit findings.
-user-invocable: false
+description: Fix pass for a docs-audit findings report — works the findings on a branch, records a paragraph ledger, runs a separate-agent gate, and opens the PR only when check-fix-ledger.sh passes.
+argument-hint: '[findings report path]'
+disable-model-invocation: true
 ---
 
 # Docs-audit fix pass
@@ -9,6 +10,11 @@ user-invocable: false
 A findings report from `/docs-audit` is the input. The output is one PR
 whose body shows, per rewritten paragraph, the artifact it was
 written against and the gate's verdict on it.
+
+Report: $ARGUMENTS
+
+The argument is the findings report's path. If none is given, use the newest
+`.claude/reports/*-docs-correctness-findings*.md` and say which one.
 
 This phase exists because a fix pass reads the finding, not the audit's
 rules. Across this repo's audit cycles, about half of an audit's findings

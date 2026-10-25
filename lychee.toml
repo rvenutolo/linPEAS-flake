@@ -44,8 +44,8 @@ exclude_path = [
   # they are not real docs and must not be link-checked.
   "tests/fixtures/",
   # Untracked working notes. Part of the Claude tooling tree IS tracked — the
-  # docs-correctness-audit, docs-audit-fix and multi-agent-review skills and
-  # their slash commands — and those are maintained docs whose links belong in
+  # docs-audit, docs-audit-fix and repo-review skills, each its own slash
+  # command — and those are maintained docs whose links belong in
   # scope, so the entries below name the untracked areas rather than the whole
   # tree.
   # They bite only because the lint recipe names the dotted trees as inputs:
@@ -65,7 +65,7 @@ exclude_path = [
   # wildcard rather than one name — a second one must not be link-checked
   # for the breakage it is planted with.
   "\\.claude/skills/[^/]+/evals/seeded-defects/fixtures/",
-  ".claude/skills/docs-correctness-audit-workspace/",
+  ".claude/skills/docs-audit-workspace/",
   ".claude/specs/",
   ".claude/worktrees/",
 ]

@@ -1,16 +1,14 @@
 ---
-name: multi-agent-review
+name: repo-review
 description: >-
   Multi-agent, refute-all code/infra review of this repo across 8 fixed
   dimensions (nix packaging, shell scripts, CI/supply-chain, docs, test
   harnesses, invariant↔enforcement, over-engineering, release-chain E2E). The
   user scopes each dimension interactively, then a per-dimension gated Workflow
   fan-out finds candidate issues and adversarially refutes them, emitting one
-  severity-ranked report without editing anything. Invoke ONLY via the
-  /repo-review slash command. Do NOT auto-trigger on natural-language mentions
-  of reviews, audits, bugs, or "look over the code" — this skill runs on
-  explicit request only.
-user-invocable: false
+  severity-ranked report without editing anything.
+argument-hint: '[dimensions, e.g. 2,5 or nix]'
+disable-model-invocation: true
 ---
 
 # Multi-agent refute-all review
@@ -28,6 +26,15 @@ The 8 dimensions, their finder slices, per-dimension refuter guidance, and the
 cross-dimension watch-outs are hardcoded (tuned for this repo) in
 [`references/dimensions.md`](references/dimensions.md). Read it before scoping —
 it is the source of truth for what each dimension covers.
+
+## Arguments
+
+Arguments: $ARGUMENTS
+
+With no argument, every dimension is offered in the scoping step. An argument
+naming a subset — dimension numbers such as `2,5`, or a topic such as `nix` —
+limits the review to those dimensions: offer only them in step 1, and keep the
+same method for each.
 
 ## Why these disciplines matter
 
@@ -185,7 +192,7 @@ If a task-notification truncates, recover per-agent returns from the run's
 
 ### 4. Write / append the report
 
-One artifact at `.claude/reports/<YYYY-MM-DD>-multi-agent-review-findings.md`
+One artifact at `.claude/reports/<YYYY-MM-DD>-repo-review-findings.md`
 (never tracked `docs/`). Structure below.
 After the last dimension, confirm `git status` shows no modified tracked files.
 

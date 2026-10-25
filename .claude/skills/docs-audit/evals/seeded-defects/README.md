@@ -1,6 +1,6 @@
 # Seeded-defect recall harness
 
-Measures how reliably `docs-correctness-audit` (`/docs-audit`) detects
+Measures how reliably the `docs-audit` skill (`/docs-audit`) detects
 single-instance defects. `plant.sh` seeds one known defect per category into a
 disposable clone of the repo and commits the seeds into its history; you run
 the audit M times against that copy; `score.sh` reports per-category recall
