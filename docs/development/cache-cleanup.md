@@ -29,7 +29,18 @@ described under Permissions below. It removes all cache entries
 scoped to:
 
 - `refs/pull/${PR_NUMBER}/merge`
-- `refs/heads/${HEAD_REF}`
+- `refs/heads/${HEAD_REF}`, only when the head ref holds nothing but
+    ASCII letters, digits, `.`, `_`, `/` and `-`
+
+`scripts/classify-pr-cache-refs.sh` computes that list. A branch name
+may hold characters that change the cache listing query it is sent in
+(`&` or `?` adds query parameters that select other refs' caches, and
+`{owner}`, `{repo}` or `{branch}` is a placeholder `gh api` expands), so
+a head ref outside that set is skipped with a log line and its caches
+age out in the daily sweep; the merge ref is still pruned. The step also
+passes each ref as a `gh api` query field, which gh URL-encodes, and sets
+`GH_REPO` so gh never reads the repository from the checkout's git
+remote.
 
 This shortens the cache-poisoning persistence window: should any PR
 cache exist, a poisoned one is evicted immediately on PR close rather
@@ -40,9 +51,8 @@ than waiting for the daily cron sweep.
 Both prune jobs declare `actions: write` (cache deletion) and
 `contents: read`, the scope GitHub documents for the branch listing
 `prune-stale` does (on this public repository neither that listing nor
-the open-PR one needs any token permission); `prune-on-pr-close` reads
-nothing outside the Actions-cache API
-and carries the scope only for parity. The `actions: write` grant is what
+the open-PR one needs any token permission) and the checkout
+`prune-on-pr-close` does to run `scripts/classify-pr-cache-refs.sh`. The `actions: write` grant is what
 `scripts/check-permission-scopes.sh` pins, via the per-job allowlist in
 `.github/permission-scopes.yml`; read scopes are outside that lint. The
 `notify` job declares `issues: write` for the failure issue it files and

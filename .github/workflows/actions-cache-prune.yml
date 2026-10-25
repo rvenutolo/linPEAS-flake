@@ -119,19 +119,25 @@ jobs:
             github.com:443
             objects.githubusercontent.com:443
 
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
       - name: prune caches scoped to closed PR
         env:
           GH_TOKEN: ${{ github.token }}
+          # Set so `gh api` never fills a `{owner}`, `{repo}` or `{branch}`
+          # placeholder from the checkout's git remote.
+          GH_REPO: ${{ github.repository }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          targets=(
-            "refs/pull/${PR_NUMBER}/merge"
-            "refs/heads/${HEAD_REF}"
-          )
+          # The helper drops a head ref that could change the listing query.
+          refs="$(bash scripts/classify-pr-cache-refs.sh "${PR_NUMBER}" "${HEAD_REF}")"
+          mapfile -t targets <<< "${refs}"
           deleted=0
           for ref in "${targets[@]}"; do
             while read -r id; do
@@ -141,8 +147,12 @@ jobs:
                 --header "X-GitHub-Api-Version: 2022-11-28" >/dev/null
               deleted=$((deleted + 1))
             done < <(
-              gh api --paginate \
-                "repos/${REPO}/actions/caches?per_page=100&ref=${ref}" \
+              # Query fields, not a hand-built query string, so gh
+              # URL-encodes the ref.
+              gh api --method GET --paginate \
+                "repos/${REPO}/actions/caches" \
+                --raw-field per_page=100 \
+                --raw-field ref="${ref}" \
                 --header "X-GitHub-Api-Version: 2022-11-28" \
                 --jq '.actions_caches[].id'
             )

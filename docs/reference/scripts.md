@@ -2363,6 +2363,37 @@ and side-effect free so the drift decision — including the
 attack-detection branch — is unit-testable without contacting the
 GitHub API.
 
+### scripts/classify-pr-cache-refs.sh
+
+Print the cache refs actions-cache-prune's PR-close job
+deletes for one closed PR, one per line: always the PR's
+`refs/pull/<n>/merge`, then `refs/heads/<head-ref>` only when the head
+ref holds nothing but ASCII letters, digits, `.`, `_`, `/` and `-`.
+
+The head ref is a branch name anyone with push access chooses, and git
+allows characters that change the cache listing query it is placed in:
+`&` or `?` adds query parameters that select other refs' caches, which
+the job then deletes, and `{owner}`, `{repo}` or `{branch}` is a
+placeholder `gh api` expands. A head ref outside the allowed set is
+skipped with a notice on stderr rather than escaped; its caches age out
+in the daily sweep. The match runs under `C.UTF-8`, where the ranges
+hold ASCII only, so a non-ASCII letter or digit is skipped in every
+locale.
+
+Usage:
+
+```text
+  classify-pr-cache-refs.sh <pr-number> <head-ref>
+```
+
+Exit codes:
+
+```text
+  0  the refs were printed (a skipped head ref is a verdict, not a
+      failure)
+  2  bad arguments: not two, or a PR number that is not ASCII digits
+```
+
 ### scripts/classify-refresh-notify-result.sh
 
 Classify what `renovate-flake-lock-refresh.yml`'s
