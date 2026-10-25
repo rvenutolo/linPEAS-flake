@@ -144,6 +144,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/ci-watchdog-coverage.test.sh`           | `.github/workflows/ci-watchdog.yml`                 | —                                            |
 | `tests/classify-backfill-image-mode.test.sh`   | `scripts/classify-backfill-image-mode.sh`           | —                                            |
 | `tests/classify-ci-run.test.sh`                | `scripts/classify-ci-run.sh`                        | `tests/fixtures/classify-ci-run`             |
+| `tests/classify-pr-cache-refs.test.sh`         | `scripts/classify-pr-cache-refs.sh`                 | —                                            |
 | `tests/classify-refresh-notify-result.test.sh` | `scripts/classify-refresh-notify-result.sh`         | —                                            |
 | `tests/classify-renovate-flake-input.test.sh`  | `scripts/classify-renovate-flake-input.sh`          | —                                            |
 | `tests/classify-renovate-pr-author.test.sh`    | `scripts/classify-renovate-pr-author.sh`            | —                                            |
