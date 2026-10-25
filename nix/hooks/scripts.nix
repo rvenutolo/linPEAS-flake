@@ -32,24 +32,25 @@ in
     pass_filenames = false;
     language = "system";
   };
-  # No scripts/*.sh feeds a redirection from a process substitution,
-  # whatever the producer. A substitution's exit status stays in its own
-  # subshell and is invisible under set -Eeuo pipefail, so a producer
-  # failure hands the consumer an empty result to score as data instead
-  # of failing loud. `diff <(...) <(...)` stays legal, because diff
-  # consumes both as file arguments and its own status is what the caller
-  # acts on. See docs/security/workflow-hardening.md.
+  # No scripts/*.sh and no workflow or composite-action run: body feeds
+  # a redirection from a process substitution, whatever the producer. A
+  # substitution's exit status stays in its own subshell and is invisible
+  # under set -Eeuo pipefail, so a producer failure hands the consumer an
+  # empty result to score as data instead of failing loud.
+  # `diff <(...) <(...)` stays legal, because diff consumes both as file
+  # arguments and its own status is what the caller acts on. See
+  # docs/security/workflow-hardening.md.
   no-opaque-procsub = {
     enable = true;
     name = "no-opaque-procsub";
-    description = "No scripts/*.sh feeds a redirection from a process substitution.";
+    description = "No scripts/*.sh, workflow run: body or composite-action run: body feeds a redirection from a process substitution.";
     entry = "${pkgs-unstable.writeShellScript "no-opaque-procsub-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-no-opaque-procsub.sh
     ''}";
-    files = "^scripts/.*\\.sh$";
+    files = "^(scripts/.*\\.sh|\\.github/workflows/[^/]*\\.ya?ml|\\.github/actions/.*/action\\.ya?ml)$";
     pass_filenames = false;
     language = "system";
   };

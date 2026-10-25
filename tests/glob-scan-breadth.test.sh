@@ -102,6 +102,7 @@ readonly -a ROWS=(
   "manifest-hook-modules|check-manifest-hook-watches-nix.sh|hook modules|SCRIPTS_DIR_OVERRIDE=${REPO_ROOT}/scripts,HOOKS_DIR_OVERRIDE=${EMPTY}"
   "min-permissions|check-min-permissions.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
   "no-opaque-procsub|check-no-opaque-procsub.sh|repo shell scripts|SCRIPTS_DIR_OVERRIDE=${EMPTY}"
+  "no-opaque-procsub-run-bodies|check-no-opaque-procsub.sh|workflow and composite-action files|SCRIPTS_DIR_OVERRIDE=${REPO_ROOT}/scripts,WORKFLOWS_DIR_OVERRIDE=${EMPTY},ACTIONS_DIR_OVERRIDE=${EMPTY}"
   "no-pipe-into-grep-quiet|check-no-pipe-into-grep-quiet.sh|shell, workflow and composite-action files|SCAN_ROOT_OVERRIDE=${EMPTY}"
   "notify-arms|check-notify-arms.sh|workflow YAML|SCAN_ROOT_OVERRIDE=${ARMS_ROOT}"
   "notify-label-descriptions|check-notify-label-descriptions.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"

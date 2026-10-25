@@ -189,7 +189,7 @@ Hooks (alphabetical):
 | `nix-run-pinned`                    | No unpinned nix run nixpkgs#<pkg>; use nix shell .#<pkg> or pin a rev.                                                                                   |
 | `nixfmt`                            | Nix file formatting.                                                                                                                                     |
 | `nixpkgs-hammering`                 | nixpkgs idiom checker for the linpeas derivation.                                                                                                        |
-| `no-opaque-procsub`                 | No scripts/\*.sh feeds a redirection from a process substitution.                                                                                        |
+| `no-opaque-procsub`                 | No scripts/\*.sh, workflow run: body or composite-action run: body feeds a redirection from a process substitution.                                      |
 | `no-pipe-into-grep-quiet`           | No tracked shell file, workflow run: body or composite-action run: body pipes into a quiet grep.                                                         |
 | `notify-label-descriptions`         | Every notify label description fits the labels API cap and agrees across callers.                                                                        |
 | `octoscan`                          | synacktiv/octoscan workflow vulnerability scanner.                                                                                                       |

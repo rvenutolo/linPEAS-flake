@@ -1,0 +1,11 @@
+name: a
+description: a
+x-anchor: &body |
+  set -Eeuo pipefail
+  mapfile -t keys < <(jq --raw-output 'keys[]' a.json)
+  printf '%s\n' "${keys[@]}"
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: *body
