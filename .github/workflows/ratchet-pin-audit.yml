@@ -81,7 +81,7 @@ jobs:
           # tool failure) prevents a silent no-op if a future refactor moves
           # workflows out from under us.
           shopt -s nullglob
-          mapfile -t files < <(printf '%s\n' .github/workflows/*.yml .github/workflows/*.yaml)
+          files=(.github/workflows/*.yml .github/workflows/*.yaml)
           shopt -u nullglob
           if (( ${#files[@]} == 0 )); then
             printf 'no workflow files matched .github/workflows/*.{yml,yaml}\n' >&2
@@ -124,6 +124,16 @@ jobs:
           #   3) if pinned != canonical, emit a drift line.
           drift_lines=""
           # Pattern: `uses: owner/repo@<sha> # <tag>` (canonical pin shape in this repo)
+          # Captured before the loop so grep's status is read here: exit 1
+          # is a workflow set with no SHA-pinned `uses:` line, but a higher
+          # status is grep failing (an unreadable workflow file), which read
+          # as no lines would score as "no drift".
+          uses_rc=0
+          uses_lines="$(grep -hE '^\s*-?\s*uses:\s+[A-Za-z0-9._/-]+@[0-9a-f]{7,40}' "${files[@]}")" || uses_rc=$?
+          if (( uses_rc > 1 )); then
+            printf 'grep exit %d reading the workflow set for uses: lines\n' "${uses_rc}" >&2
+            emit_result failure ratchet-tool-failure ''
+          fi
           while IFS= read -r line; do
             # line format from grep -h: `      - uses: owner/repo@SHA # vX.Y.Z`
             if [[ "${line}" =~ uses:[[:space:]]+([A-Za-z0-9._/-]+)@([0-9a-f]{7,40})[[:space:]]*#[[:space:]]*([A-Za-z0-9._/-]+) ]]; then
@@ -222,7 +232,7 @@ jobs:
                   ;;
               esac
             fi
-          done < <(grep -hE '^\s*-?\s*uses:\s+[A-Za-z0-9._/-]+@[0-9a-f]{7,40}' "${files[@]}" || true)
+          done <<<"${uses_lines}"
 
           if [[ -z "${drift_lines}" ]]; then
             emit_result success none ''
@@ -304,7 +314,8 @@ jobs:
               re-derivation is skipped in that case), OR
               `classify-pin-ref.sh` failed or returned an unrecognized
               verdict, OR a drift line failed shape validation, OR the
-              workflow glob matched zero files. Check first for an
+              workflow glob matched zero files, OR grep could not read
+              the workflow set for `uses:` lines. Check first for an
               unpinned `uses:` finding — the PR gate should have caught
               it, so one here means the gate was bypassed. If ratchet
               instead started failing a workflow set it accepted before
