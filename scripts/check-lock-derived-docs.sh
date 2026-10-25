@@ -6,7 +6,8 @@
 # trigger, runs each generator it lists as workflow-derived from a
 # freshness hook that declares `.github/workflows/ci.yml` a trigger, and
 # may commit exactly the lock plus the outputs both generator lists
-# declare with `@generates` / `@generates-block`.
+# declare with `@generates` / `@generates-block`, and uploads exactly
+# that committable set from the job that writes the lock.
 
 # A freshness hook whose `files` regex names `flake.lock` is a
 # declaration that bumping the lock can leave its doc stale. A workflow
@@ -210,12 +211,28 @@ function workflow_list() {
   yq eval "${YQ_MERGE_SPEC[@]}" --exit-status "${ENV_NODE} | .${2} // \"\"" -- "$1"
 }
 
+# The `actions/upload-artifact` steps of the jobs that run the lock
+# update: their count on the first line, then the `path:` value of the
+# first one. The jobs and the keys in them are resolved through
+# `RESOLVE_JOB_ALIASES`, so a step list or a `with:` written as an alias
+# is read as GitHub Actions reads it. The two values are joined into one
+# string rather than emitted as two results: `yq` drops a variable bound
+# by `as` from the second branch of a `,`, so that form prints the count
+# alone.
+function upload_candidates() {
+  yq eval "${YQ_MERGE_SPEC[@]}" "[(${JOBS_NODE} // {}) | ${RESOLVE_JOB_ALIASES}"' | .[]?
+      | select([.steps[]?.run // "" | select(test("nix flake update"))] | length > 0)
+      | .steps[]? | select((.uses // "") | test("^actions/upload-artifact@"))]
+    | [(length | tostring), (.[0].with.path // "" | tostring)] | join("\n")' -- "$1"
+}
+
 declare -a lock_writing=()
 workflows_scanned=0
 committable_total=0
 declarations_total=0
 generators_declaring=0
 workflow_derived_total=0
+upload_total=0
 for wf in "${workflow_files[@]}"; do
   workflows_scanned=$((workflows_scanned + 1))
   rel="${wf#"${ROOT}/"}"
@@ -364,6 +381,55 @@ for wf in "${workflow_files[@]}"; do
     failed=$((failed + 1))
   fi
 
+  # The compute job hands the credentialed job its files through one
+  # artifact, and that upload's `path:` list cannot read COMMITTABLE_PATHS
+  # (octoscan reports an `env.*` expression in a `with:` value), so the
+  # list is written out a second time. As a set it must equal the
+  # committable one: a committable path the upload omits aborts the push
+  # job, and an uploaded path nothing may commit is dead weight that reads
+  # as permission. Lines are read as the upload action reads them —
+  # trimmed, blank and `#` comment lines skipped. With no candidate step
+  # or more than one, which list to compare is a guess, so that is the
+  # finding rather than a silent pass.
+  if ! upload_raw="$(upload_candidates "${wf}")"; then
+    printf 'lock-derived-docs: could not parse %s\n' "${rel}" >&2
+    exit 2
+  fi
+  upload_count="${upload_raw%%$'\n'*}"
+  if [[ ${upload_count} == '0' ]]; then
+    printf 'lock-derived-docs: %s has no actions/upload-artifact step in a job that runs the flake-lock update\n' \
+      "${rel}" >&2
+    failed=$((failed + 1))
+  elif [[ ${upload_count} != '1' ]]; then
+    printf 'lock-derived-docs: %s has %s actions/upload-artifact steps in jobs that run the flake-lock update; want exactly one\n' \
+      "${rel}" "${upload_count}" >&2
+    failed=$((failed + 1))
+  else
+    unset upload_set
+    declare -A upload_set=()
+    upload_lines=''
+    [[ ${upload_raw} == *$'\n'* ]] && upload_lines="${upload_raw#*$'\n'}"
+    while IFS= read -r p; do
+      p="${p#"${p%%[![:space:]]*}"}"
+      p="${p%"${p##*[![:space:]]}"}"
+      [[ -n ${p} && ${p} != '#'* ]] || continue
+      upload_set["${p}"]=1
+    done <<<"${upload_lines}"
+    for p in "${!committable_set[@]}"; do
+      [[ -n ${upload_set["${p}"]:-} ]] && continue
+      printf 'lock-derived-docs: %s is in COMMITTABLE_PATHS in %s but missing from its upload-artifact path list\n' \
+        "${p}" "${rel}" >&2
+      failed=$((failed + 1))
+    done
+    for p in "${!upload_set[@]}"; do
+      upload_total=$((upload_total + 1))
+      [[ -n ${committable_set["${p}"]:-} ]] && continue
+      printf 'lock-derived-docs: %s is in the upload-artifact path list in %s but not in COMMITTABLE_PATHS\n' \
+        "${p}" "${rel}" >&2
+      failed=$((failed + 1))
+    done
+  fi
+
   # The committable set is exactly `flake.lock` plus what the generators
   # of both lists declare they write, checked in both directions. A generator
   # regenerates a doc the credentialed job may not commit and the doc
@@ -454,8 +520,9 @@ fi
 # A clean run is otherwise silent about how much it checked, which reads
 # identically whether it compared real sets or two empty ones. State the
 # breadth covered, on both halves of the comparison.
-printf 'lock-derived-docs: ok — %d hook block(s) scanned, %d lock-triggered, %d ci.yml-triggered generator(s), %d workflow(s) scanned, %d lock-writing, %d committable path(s), %d generator declaration(s) resolved across %d listed generator(s), %d workflow-derived\n' \
+printf 'lock-derived-docs: ok — %d hook block(s) scanned, %d lock-triggered, %d ci.yml-triggered generator(s), %d workflow(s) scanned, %d lock-writing, %d committable path(s), %d generator declaration(s) resolved across %d listed generator(s), %d workflow-derived, %d upload path(s)\n' \
   "${total_blocks}" "${lock_triggered}" "${#ci_hook_generators[@]}" \
   "${workflows_scanned}" "${#lock_writing[@]}" "${committable_total}" \
-  "${declarations_total}" "${generators_declaring}" "${workflow_derived_total}"
+  "${declarations_total}" "${generators_declaring}" "${workflow_derived_total}" \
+  "${upload_total}"
 exit 0

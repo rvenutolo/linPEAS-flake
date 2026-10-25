@@ -438,10 +438,10 @@ jobs:
       # Every committable path exists in a checkout, so the artifact
       # always holds all of them, changed or not, and a missing one is an
       # error. push-refresh's per-path hash check skips the unchanged.
-      # This list must equal COMMITTABLE_PATHS. It is written out rather
-      # than read from `env` because octoscan flags any `env.*` expression
-      # in a `with:` value. Drift fails closed: push-refresh aborts, before
-      # any PUT, on a committable path missing from the artifact.
+      # The path list is written out rather than read from `env` because
+      # octoscan flags any `env.*` expression in a `with:` value;
+      # scripts/check-lock-derived-docs.sh requires it to equal
+      # COMMITTABLE_PATHS as a set.
       - name: upload refreshed files
         if: steps.diff.outputs.changed == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

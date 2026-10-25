@@ -858,3 +858,18 @@ Many hooks name `ci.yml`, and a workflow is bound only to the ones it
 lists. A generator in both lists fails: it claims two triggers for the
 same docs, and one of the claims is false. An absent list is an empty
 one.
+
+The compute job hands its files to the credentialed job through one
+`actions/upload-artifact` step, and that step's `path:` list cannot read
+`COMMITTABLE_PATHS`: octoscan reports any `env.*` expression in a
+`with:` value as expression injection, so the list is written out a
+second time. The lint requires the two to agree. In the job that runs
+the lock update there must be exactly one upload-artifact step — none,
+or more than one, is a finding, since which list to compare would be a
+guess — and its `path:` lines, read as the action reads them (trimmed,
+blank and `#` comment lines skipped), must equal `COMMITTABLE_PATHS` as
+a set. Each missing and each extra path is reported by name. Drift here
+fails closed rather than widening anything: a committable path the
+upload omits makes the push job abort on a path missing from the
+artifact, and an uploaded path outside `COMMITTABLE_PATHS` is never
+committed.
