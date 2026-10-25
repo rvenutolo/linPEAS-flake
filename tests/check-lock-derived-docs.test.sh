@@ -15,6 +15,8 @@ source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-lock-derived-docs.sh"
 
 failures=0
+# The exempt set a fixture scenario runs with; see expect.
+exempt_override=''
 
 # Declared top-level so the EXIT trap can reach across function boundaries.
 work=''
@@ -33,8 +35,15 @@ function expect() {
   stderr_file="$(mktemp)"
   outcome_file="$(mktemp)"
 
+  # A fixture module carries the real exempt hook only when a scenario
+  # says so, so fixtures run with the exempt set the scenario names
+  # (default: none). The live tree runs with the lint's own set.
+  local -a exempt_env=("LOCK_TRIGGER_EXEMPT_OVERRIDE=${exempt_override}")
+  if [[ ${root} == "${REPO_ROOT}" ]]; then
+    exempt_env=()
+  fi
   local got_exit=0
-  ROOT_OVERRIDE="${root}" \
+  env ${exempt_env+"${exempt_env[@]}"} ROOT_OVERRIDE="${root}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || got_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
   harness_assert_record "${name}" "${want_msg}" \
@@ -919,6 +928,7 @@ EOF
     $'    flake.lock\n    docs/reference/alpha.md'
   write_hooks "${work}/exempt-hook" "${LOCK_ALPHA}" "${NOLOCK_BETA}" '' '' '' \
     "$(exempt_block "${EXEMPT_LOCK_FILES}")"
+  exempt_override='ephemeral-refs-gap-fresh'
   expect 'agree: an exempt lock-triggered hook needs no generator in the workflow' \
     "${work}/exempt-hook" 0 '2 lock-triggered (1 exempt)'
 
@@ -933,6 +943,16 @@ EOF
   expect 'bad: an exemption for a hook not lock-triggered fails' \
     "${work}/exempt-stale" 1 \
     'hook ephemeral-refs-gap-fresh is exempt from LOCK_DERIVED_GENERATORS but does not declare flake.lock a trigger'
+
+  # (aj) BAD: the exemption names a hook the module no longer has, so it
+  # excuses nothing today and would excuse the next hook given that name.
+  write_tree "${work}/exempt-absent" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  expect 'bad: an exemption naming no hook block fails' \
+    "${work}/exempt-absent" 1 \
+    'hook ephemeral-refs-gap-fresh is exempt from LOCK_DERIVED_GENERATORS but no hook block in nix/hooks/freshness.nix has that name'
+  exempt_override=''
 
   harness_assert_verify || failures=$((failures + 1))
 

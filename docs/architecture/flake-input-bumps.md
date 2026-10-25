@@ -868,8 +868,9 @@ of a new type reaches the check. Its generator,
 files that carry a full-line `#` comment and nothing else of their
 content. `flake.lock` is JSON written by Nix, in which no line starts
 with `#`, so rewriting the lock cannot change the block it renders. The
-lint reports an exemption whose hook no longer admits `flake.lock`, so
-the exemption cannot outlive its reason.
+lint reports an exemption whose hook no longer admits `flake.lock`, and
+one that names no hook block at all, so the exemption cannot outlive its
+reason.
 
 It asserts the committable binding in both directions, per workflow. A
 path a listed generator declares but `COMMITTABLE_PATHS` omits is drift:
