@@ -190,13 +190,22 @@ EOF
 # literal string 'omit' for a body leaves the key out entirely, which is
 # a different shape from an empty one.
 #
+# A lock-writing workflow also carries the compute job's upload-artifact
+# step, whose `path:` list the lint requires to equal COMMITTABLE_PATHS.
+# By default that list mirrors the committable body, so a scenario about
+# another rule is not also scored on the upload. `none` writes no upload
+# step, `twice` writes the mirrored step twice, and any other value is
+# the upload list body itself, re-indented under `path: |`.
+#
 # ${1}=root  ${2}=workflow file name  ${3}=lock-writing (true|false)
 # ${4}=LOCK_DERIVED_GENERATORS body   ${5}=COMMITTABLE_PATHS body
 # ${6}=WORKFLOW_DERIVED_GENERATORS body (default: omit)
+# ${7}=upload path list body, or mirror|none|twice (default: mirror)
 function write_workflow() {
   local -r root="$1" wf_name="$2" lock_writing="$3"
   local -r generators="$4" committable="$5"
   local -r workflow_generators="${6:-omit}"
+  local -r upload="${7:-mirror}"
   mkdir --parents -- "${root}/.github/workflows"
 
   local env_block=''
@@ -218,6 +227,23 @@ function write_workflow() {
     run_line='          nix flake update'
   fi
 
+  local upload_body="${upload}"
+  if [[ ${upload} == 'mirror' || ${upload} == 'twice' ]]; then
+    upload_body="${committable}"
+  fi
+  local upload_step=''
+  if [[ ${lock_writing} == 'true' && ${upload} != 'none' &&
+    ${upload_body} != 'omit' && -n ${upload_body} ]]; then
+    upload_step="      - uses: actions/upload-artifact@v7"$'\n'
+    upload_step+="        with:"$'\n'
+    upload_step+="          name: result"$'\n'
+    upload_step+="          path: |"$'\n'
+    upload_step+="$(sed --expression='s/^[[:space:]]*\(.\)/            \1/' <<<"${upload_body}")"$'\n'
+    if [[ ${upload} == 'twice' ]]; then
+      upload_step+="${upload_step}"
+    fi
+  fi
+
   cat >"${root}/.github/workflows/${wf_name}" <<EOF
 name: ${wf_name%.yml}
 on:
@@ -230,6 +256,7 @@ ${env_block}jobs:
       - run: |
 ${run_line}
 EOF
+  printf '%s' "${upload_step}" >>"${root}/.github/workflows/${wf_name}"
 }
 
 # A whole miniature repo: the generators, the freshness module, and the
@@ -593,6 +620,14 @@ jobs:
     steps:
       - run: |
           nix flake update
+      - uses: actions/upload-artifact@v7
+        with:
+          name: result
+          path: |
+            flake.lock
+            docs/reference/alpha.md
+            docs/reference/beta.md
+            docs/reference/gamma.md
 EOF
   expect 'bad: an env merge list is read first mapping wins' \
     "${work}/env-merge-list" 1 \
@@ -703,6 +738,77 @@ EOF
   expect 'bad: a workflow-derived list on a workflow writing no lock fails' \
     "${work}/workflow-list-dead" 1 \
     '.github/workflows/idle-refresh.yml declares a lock-derived env list but runs no flake-lock update'
+
+  # (x) The compute job's upload-artifact `path:` list, as a set, equals
+  # COMMITTABLE_PATHS. The upload cannot read the env list (octoscan
+  # flags an `env.*` expression in a `with:` value), so the two are
+  # written twice and this rule is what keeps them one list.
+  local -r alpha_committable=$'    flake.lock\n    docs/reference/alpha.md'
+
+  # (x1) GOOD: the same set in another order, with a blank line and a
+  # comment line the upload action skips, beside two sibling workflows so
+  # the breadth line differs from every other passing scenario. An upload
+  # step in a job that writes no lock is not a candidate.
+  write_tree "${work}/upload-agrees" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}"
+  write_workflow "${work}/upload-agrees" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}" 'omit' \
+    $'    docs/reference/alpha.md\n\n    # the lock\n    flake.lock'
+  write_workflow "${work}/upload-agrees" 'renovate-refresh.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}"
+  write_workflow "${work}/upload-agrees" 'third-refresh.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}"
+  cat >>"${work}/upload-agrees/.github/workflows/renovate-refresh.yml" <<'EOF'
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/upload-artifact@v7
+        with:
+          name: other
+          path: unrelated.txt
+EOF
+  expect 'agree: an upload list equal to COMMITTABLE_PATHS as a set' \
+    "${work}/upload-agrees" 0 ''
+
+  # (x2) BAD: a committable path the upload omits. The push job would
+  # abort on the path missing from the artifact.
+  write_tree "${work}/upload-missing" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}"
+  write_workflow "${work}/upload-missing" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}" 'omit' '    flake.lock'
+  expect 'bad: a committable path missing from the upload list fails' \
+    "${work}/upload-missing" 1 \
+    'docs/reference/alpha.md is in COMMITTABLE_PATHS in .github/workflows/update-flake-lock.yml but missing from its upload-artifact path list'
+
+  # (x3) BAD: an uploaded path nothing may commit.
+  write_tree "${work}/upload-extra" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}"
+  write_workflow "${work}/upload-extra" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}" 'omit' \
+    $'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/zeta.md'
+  expect 'bad: an uploaded path absent from COMMITTABLE_PATHS fails' \
+    "${work}/upload-extra" 1 \
+    'docs/reference/zeta.md is in the upload-artifact path list in .github/workflows/update-flake-lock.yml but not in COMMITTABLE_PATHS'
+
+  # (x4) BAD: no upload step in the lock-writing job, so there is no list
+  # to compare and nothing would reach the push job.
+  write_tree "${work}/upload-none" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}"
+  write_workflow "${work}/upload-none" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}" 'omit' 'none'
+  expect 'bad: a lock-writing job with no upload-artifact step fails' \
+    "${work}/upload-none" 1 \
+    '.github/workflows/update-flake-lock.yml has no actions/upload-artifact step in a job that runs the flake-lock update'
+
+  # (x5) BAD: two candidate upload steps. Which one carries the committed
+  # files is a guess, so neither is compared.
+  write_tree "${work}/upload-twice" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}"
+  write_workflow "${work}/upload-twice" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}" 'omit' 'twice'
+  expect 'bad: two candidate upload-artifact steps fail' \
+    "${work}/upload-twice" 1 \
+    '.github/workflows/update-flake-lock.yml has 2 actions/upload-artifact steps in jobs that run the flake-lock update; want exactly one'
 
   harness_assert_verify || failures=$((failures + 1))
 
