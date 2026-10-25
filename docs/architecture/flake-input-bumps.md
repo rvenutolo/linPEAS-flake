@@ -690,8 +690,11 @@ Credential split mirrors `update-flake-lock.yml`:
     letters, digits, `.`, `_`, `/` and `-`, so no brace reaches an
     endpoint through the branch name (the repository name and the
     committable paths are literals). The step also hashes and commits
-    only regular files: a symlink in the artifact aborts the job, since
-    reading it would reach outside the artifact directory. The `source`
+    only regular files whose resolved path is exactly the expected one
+    under the artifact directory: a symlink anywhere on a committed path,
+    the file or any parent directory, aborts the job before any PUT,
+    since reading through it would reach outside the artifact directory.
+    The `source`
     scan matches a `source` or `.` command anywhere on a line, not only
     at its start. download-artifact's traversal protection is also all
     that guards the runner's file-command files (`GITHUB_ENV`,

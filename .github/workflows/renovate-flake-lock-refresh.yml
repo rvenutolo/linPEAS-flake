@@ -669,9 +669,7 @@ jobs:
           # `[A-Za-z0-9._/-]`, REPO is this repository's literal name,
           # and the paths are the literal COMMITTABLE_PATHS list.
           #
-          # Only a regular file that is not a symlink is hashed: the
-          # artifact's entries are untrusted, and a link would read, and
-          # then commit, content from outside the artifact directory.
+          # Only a regular file that is not a symlink is hashed.
           # Called inside `$(...)`, where errexit is off, so each failure
           # returns explicitly; the caller's assignment then aborts.
           function blob_sha() {
@@ -682,6 +680,22 @@ jobs:
             fi
             size="$(stat --format=%s -- "$1")" || return 1
             { printf 'blob %d\0' "${size}"; cat -- "$1"; } | sha1sum | cut --delimiter=' ' --fields=1
+          }
+
+          # The artifact's entries are untrusted, and a symlink anywhere
+          # on a path, the file or any parent directory, would read and
+          # then commit content from outside the artifact directory. So an
+          # artifact path is hashed only when its resolved path is exactly
+          # the expected one under the artifact directory, resolved once
+          # here from this step's working directory.
+          artifact="$(realpath -- .)"
+          function artifact_blob_sha() {
+            local file="${artifact}/$1"
+            if [[ "$(realpath -- "${file}")" != "${file}" ]]; then
+              printf '%s resolves outside the artifact directory - aborting\n' "$1" >&2
+              return 1
+            fi
+            blob_sha "${file}"
           }
 
           # Two passes, so a refused path aborts the job before ANY PUT,
@@ -715,7 +729,7 @@ jobs:
               --header "${api_header}" \
               "repos/${REPO}/contents/${path}?ref=${HEAD_BRANCH}" \
               --jq .sha)"
-            local_sha="$(blob_sha "${path}")"
+            local_sha="$(artifact_blob_sha "${path}")"
             if [[ "${local_sha}" == "${branch_sha}" ]]; then
               printf 'skipping %s: already current on %s\n' "${path}" "${HEAD_BRANCH}"
               continue
