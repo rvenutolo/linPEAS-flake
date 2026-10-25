@@ -95,7 +95,7 @@ Enforced by `scripts/check-pull-request-target-absent.sh`. Wired as the `lint-wo
 
 ## auto-merge-decline-gate
 
-Every workflow run-block that calls `gh pr merge` with `--auto` also carries the decline gate: a `--json state` query and at least one `CLOSED|MERGED)` case arm, where every such arm carries a literal `exit 1` between its label and the `;;` that ends it, all within the same run-block. An `exit 1` elsewhere in the block, a commented-out one, or an exit with another status does not count.
+Every workflow run-block that calls `gh pr merge` with `--auto` also carries the decline gate: a `--json state` query and at least one `CLOSED|MERGED)` case arm, where every such arm carries a literal `exit 1` between its label and the `;;` that ends it, all within the same run-block. An `exit 1` elsewhere in the block, a commented-out one, or an exit with another status does not count. A run-block written as an alias (`run: *body`) is read as its anchored text, which is what the runner executes.
 
 An auto-merging update workflow recreates a per-period branch and merges its PR unattended. Without inspecting PR state first, a re-run in the same period overwrites a PR the maintainer explicitly closed (declined) or one already merged — silently reversing a human decision in a no-review flow. The gate aborts non-zero on `CLOSED|MERGED` so the run fails and a failure issue is filed instead.
 
