@@ -27,6 +27,15 @@ cross-dimension watch-outs are hardcoded (tuned for this repo) in
 [`references/dimensions.md`](references/dimensions.md). Read it before scoping —
 it is the source of truth for what each dimension covers.
 
+## Arguments
+
+Arguments: $ARGUMENTS
+
+With no argument, every dimension is offered in the scoping step. An argument
+naming a subset — dimension numbers such as `2,5`, or a topic such as `nix` —
+limits the review to those dimensions: offer only them in step 1, and keep the
+same method for each.
+
 ## Why these disciplines matter
 
 - **Refute-all is the verification — nothing reaches the report unrefuted.**

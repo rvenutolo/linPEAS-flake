@@ -11,6 +11,11 @@ A findings report from `/docs-audit` is the input. The output is one PR
 whose body shows, per rewritten paragraph, the artifact it was
 written against and the gate's verdict on it.
 
+Report: $ARGUMENTS
+
+The argument is the findings report's path. If none is given, use the newest
+`.claude/reports/*-docs-correctness-findings*.md` and say which one.
+
 This phase exists because a fix pass reads the finding, not the audit's
 rules. Across this repo's audit cycles, about half of an audit's findings
 were defects the previous round's fix pass had written, and the share swung

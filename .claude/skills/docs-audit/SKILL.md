@@ -40,9 +40,19 @@ two sites.
 
 This skill is tuned to this repo. Concrete ground-truth commands, the doc
 cluster map, the generated-doc → generator table, and the ephemeral-token
-regex live in [`references/repo-map.md`](references/repo-map.md). Read it before
-dispatching — the audit shares those facts with every reader so cross-checks
-agree on one source of truth.
+regex live in [`references/repo-map.md`](references/repo-map.md). Read it in
+full before dispatching anything — the audit shares those facts with every
+reader so cross-checks agree on one source of truth.
+
+## Arguments
+
+Arguments: $ARGUMENTS
+
+With no argument, audit every doc this skill covers. An argument naming a
+subset — a single cluster such as `security/`, or a list of files — scopes the
+audit to that subset, but the method stays the same: the priority set, the
+collector run, the reader brief, empirical verification, the twin sweep, and
+the report.
 
 ## Why these disciplines matter
 
@@ -453,7 +463,7 @@ there. Do not edit any doc. Surface, in the report's closing notes, anything
 that needs a human decision (spec ambiguity, a generated-doc/generator fix, a
 finding whose "fix" would change runtime behavior).
 
-### 6. Hand the fix pass to `/docs-fix`
+### 6. Hand the fix pass to `/docs-audit-fix`
 
 Across this repo's audit cycles, about half of an audit's findings were
 defects the previous round's fix pass had written, and the share swung widely
@@ -464,7 +474,7 @@ it is held to, not more advice.
 
 The contract, the gate that enforces it, and the checker that proves the gate
 saw every changed paragraph in its scope live in the `docs-audit-fix` skill.
-Close the report by telling the reader to run `/docs-fix <this report>` rather
+Close the report by telling the reader to run `/docs-audit-fix <this report>` rather
 than fixing by hand. Keep stating each quantifier finding's fix shape in the
 finding itself, as below.
 
@@ -544,7 +554,7 @@ different amounts:
 
 ## Notes for the fix pass
 - <batching suggestion, decisions the user must make, generated-doc/generator fixes>
-- Fix with `/docs-fix <this report>`: it holds the PR to the fix-pass
+- Fix with `/docs-audit-fix <this report>`: it holds the PR to the fix-pass
   contract and does not open it until the ledger checker passes.
 - Cycle: <this audit closes the cycle | another audit will run against these fixes>
 ```
