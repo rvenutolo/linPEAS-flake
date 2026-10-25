@@ -839,16 +839,38 @@ generator.
 with each other and with the hooks that declare the dependency. It discovers its subjects
 rather than naming them: every workflow carrying a lock update in a `run`
 block must declare `LOCK_DERIVED_GENERATORS` and `COMMITTABLE_PATHS`,
-every freshness hook whose `files` regex
-names `flake.lock` must have its generator in that workflow's
-`LOCK_DERIVED_GENERATORS`, and every entry there must be backed by such a
-hook. A hook that names `flake.lock` a trigger while naming no generator
+every freshness hook whose trigger admits `flake.lock` must have its
+generator in that workflow's `LOCK_DERIVED_GENERATORS`, and every entry
+there must be backed by such a hook. A hook that names `flake.lock` a
+trigger while naming no generator
 fails the same way — the two halves of one declaration disagreeing is
 drift, not a hook the lint may quietly ignore. A workflow declaring the
 lists while running no lock update fails too: the lists outlived the step
 they bounded, and nothing reads them. Adding a lock-derived generator
 without teaching every lock-writing workflow to run it fails the lint
 rather than surfacing later as a PR that cannot merge.
+
+A hook's trigger is decided the way pre-commit decides it: a path
+triggers the hook when the hook's `files` pattern matches it and its
+`exclude` pattern does not (an `excludes` list joined into one
+alternation), both evaluated with Python `re.search`. The lint uses
+Python's `re` rather than POSIX ERE because the hook module uses
+lookaheads, which ERE lacks: grep reads such a pattern as matching
+nothing and would drop a hook pre-commit runs on every lock change. A
+pattern that does not compile under Python `re` is a could-not-run (exit
+2\) that names the hook, not a guessed verdict.
+
+One lock-triggered hook is exempt from `LOCK_DERIVED_GENERATORS`:
+`ephemeral-refs-gap-fresh`. Its trigger admits every file type no
+ephemeral-refs extractor claims, `flake.lock` among them, so that a file
+of a new type reaches the check. Its generator,
+`scripts/refresh-ephemeral-refs-gap.sh`, renders the type labels of those
+files that carry a full-line `#` comment and nothing else of their
+content. `flake.lock` is JSON written by Nix, in which no line starts
+with `#`, so rewriting the lock cannot change the block it renders. The
+lint reports an exemption whose hook no longer admits `flake.lock`, and
+one that names no hook block at all, so the exemption cannot outlive its
+reason.
 
 It asserts the committable binding in both directions, per workflow. A
 path a listed generator declares but `COMMITTABLE_PATHS` omits is drift:
@@ -866,7 +888,7 @@ compliant-looking list.
 A lock-writing workflow may also declare an optional third list,
 `WORKFLOW_DERIVED_GENERATORS`, for generators whose docs derive from
 `.github/workflows/ci.yml` rather than from the lock. Each entry must be
-an executable generator run by a freshness hook whose `files` regex names
+an executable generator run by a freshness hook whose trigger admits
 `.github/workflows/ci.yml`, and its declared outputs join the same
 committable bound: `COMMITTABLE_PATHS` is exactly `flake.lock` plus the
 outputs both generator lists declare, in both directions, so it stays the

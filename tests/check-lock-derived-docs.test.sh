@@ -15,6 +15,8 @@ source "${REPO_ROOT}/scripts/lib/harness-assert.sh"
 readonly SCRIPT="${REPO_ROOT}/scripts/check-lock-derived-docs.sh"
 
 failures=0
+# The exempt set a fixture scenario runs with; see expect.
+exempt_override=''
 
 # Declared top-level so the EXIT trap can reach across function boundaries.
 work=''
@@ -33,22 +35,32 @@ function expect() {
   stderr_file="$(mktemp)"
   outcome_file="$(mktemp)"
 
+  # A fixture module carries the real exempt hook only when a scenario
+  # says so, so fixtures run with the exempt set the scenario names
+  # (default: none). The live tree runs with the lint's own set.
+  local -a exempt_env=("LOCK_TRIGGER_EXEMPT_OVERRIDE=${exempt_override}")
+  if [[ ${root} == "${REPO_ROOT}" ]]; then
+    exempt_env=()
+  fi
   local got_exit=0
-  ROOT_OVERRIDE="${root}" \
+  env ${exempt_env+"${exempt_env[@]}"} ROOT_OVERRIDE="${root}" \
     "${SCRIPT}" >"${stdout_file}" 2>"${stderr_file}" || got_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${outcome_file}"
   harness_assert_record "${name}" "${want_msg}" \
     "${outcome_file}" "${stdout_file}" "${stderr_file}"
 
-  local got_stderr
+  # The asserted substring may sit on either stream: a finding is on
+  # stderr, and the breadth summary a clean run prints is on stdout.
+  local got_stderr got_stdout
   got_stderr="$(cat -- "${stderr_file}")"
+  got_stdout="$(cat -- "${stdout_file}")"
   if [[ ${got_exit} != "${want_exit}" ]]; then
     printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' \
       "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
     failures=$((failures + 1))
-  elif [[ -n ${want_msg} && ${got_stderr} != *"${want_msg}"* ]]; then
-    printf 'FAIL %s: stderr missing %q\n  got: %s\n' \
-      "${name}" "${want_msg}" "${got_stderr}" >&2
+  elif [[ -n ${want_msg} && ${got_stderr}${got_stdout} != *"${want_msg}"* ]]; then
+    printf 'FAIL %s: output missing %q\n  stderr: %s\n  stdout: %s\n' \
+      "${name}" "${want_msg}" "${got_stderr}" "${got_stdout}" >&2
     failures=$((failures + 1))
   else
     printf 'PASS: %s (exit %s)\n' "${name}" "${got_exit}"
@@ -70,6 +82,35 @@ readonly NOLOCK_BETA='^(justfile|docs/reference/beta\\.md)$'
 # regex, so these carry the same doubled backslashes the real hook does.
 readonly CI_DELTA='^(\\.github/workflows/ci\\.yml|docs/reference/delta\\.md|docs/reference/epsilon\\.md|scripts/refresh-delta\\.sh)$'
 readonly NOCI_DELTA='^(justfile|docs/reference/delta\\.md|docs/reference/epsilon\\.md|scripts/refresh-delta\\.sh)$'
+
+# Python-`re`-only trigger shapes, the kind pre-commit evaluates and
+# POSIX ERE cannot: a negative lookahead that admits flake.lock, one that
+# rules it out, and a variable-width look-behind that does not compile.
+readonly LOOKAHEAD_LOCK_BETA='^((?!docs/|\\.claude/)(?!.*\\.(md|sh)$).*|docs/reference/beta\\.md)$'
+readonly LOOKAHEAD_NOLOCK_BETA='^((?!flake\\.lock$)[^/]*\\.lock|docs/reference/beta\\.md)$'
+readonly UNCOMPILABLE_BETA='^(flake\\.lock|(?<=a+)docs/reference/beta\\.md)$'
+# Triggers for the hook the lint exempts from the generator list, one
+# naming the lock and one not.
+readonly EXEMPT_LOCK_FILES='^(flake\\.lock|docs/development/linting\\.md)$'
+readonly EXEMPT_NOLOCK_FILES='^(justfile|docs/development/linting\\.md)$'
+
+# The hook block the lint exempts, under its real name, running a
+# generator no fixture writes or lists.
+# ${1}=trigger regex
+function exempt_block() {
+  cat <<EOF
+  ephemeral-refs-gap-fresh = {
+    enable = true;
+    name = "ephemeral-refs-gap-fresh";
+    entry = "\${pkgs.writeShellScript "ephemeral-refs-gap-fresh" ''
+      exec bash scripts/refresh-ephemeral-refs-gap.sh --check
+    ''}";
+    files = "$1";
+    pass_filenames = false;
+    language = "system";
+  };
+EOF
+}
 
 # The three generators a fixture hook can run, all present and
 # executable. A scenario that needs a listed-but-absent generator names a
@@ -127,15 +168,20 @@ EOF
 # workflow, so delta-fresh is inert unless a workflow lists its generator.
 #
 # alpha-fresh's entry line is a parameter so a scenario can give a
-# lock-triggered hook a body that names no generator at all.
+# lock-triggered hook a body that names no generator at all. beta-fresh
+# can carry extra attribute lines (an `excludes` list), and whole extra
+# hook blocks can follow delta-fresh.
 #
 # ${1}=root  ${2}=alpha-fresh trigger regex  ${3}=beta-fresh trigger regex
 # ${4}=alpha-fresh entry line (default: runs its own generator)
 # ${5}=delta-fresh trigger regex (default: names ci.yml)
+# ${6}=extra beta-fresh attribute lines (default: none)
+# ${7}=extra hook blocks appended to the module (default: none)
 function write_hooks() {
   local -r root="$1" alpha_files="$2" beta_files="$3"
   local -r alpha_entry="${4:-exec bash scripts/refresh-alpha.sh --check}"
   local -r delta_files="${5:-${CI_DELTA}}"
+  local -r beta_extra="${6:-}" extra_blocks="${7:-}"
   mkdir --parents -- "${root}/nix/hooks"
 
   cat >"${root}/nix/hooks/freshness.nix" <<EOF
@@ -157,6 +203,7 @@ function write_hooks() {
       exec bash scripts/refresh-beta.sh --check
     ''}";
     files = "${beta_files}";
+${beta_extra}
     pass_filenames = false;
     language = "system";
   };
@@ -180,6 +227,7 @@ function write_hooks() {
     pass_filenames = false;
     language = "system";
   };
+${extra_blocks}
 }
 EOF
 }
@@ -809,6 +857,102 @@ EOF
   expect 'bad: two candidate upload-artifact steps fail' \
     "${work}/upload-twice" 1 \
     '.github/workflows/update-flake-lock.yml has 2 actions/upload-artifact steps in jobs that run the flake-lock update; want exactly one'
+
+  # (ac) BAD: beta-fresh's trigger uses negative lookaheads, the shape
+  # pre-commit evaluates with Python `re`. Under that engine it matches
+  # flake.lock, so the hook is lock-triggered and the bumper that skips
+  # its generator has a gap. POSIX ERE has no lookahead, so a matcher
+  # built on it reads this pattern as matching nothing and passes.
+  write_tree "${work}/lookahead-lock" "${LOCK_ALPHA}" "${LOOKAHEAD_LOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  expect 'bad: a lookahead trigger matching flake.lock is lock-triggered' \
+    "${work}/lookahead-lock" 1 \
+    'hook beta-fresh declares flake.lock a trigger, but scripts/refresh-beta.sh is absent from LOCK_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml'
+
+  # (ad) BAD: beta-fresh's lookahead rules flake.lock out, so the hook is
+  # not lock-triggered and a workflow listing its generator lists one no
+  # lock-triggered hook runs. The workflow name keeps this output apart
+  # from the plain-ERE scenario with the same finding.
+  write_generators "${work}/lookahead-nolock"
+  write_hooks "${work}/lookahead-nolock" "${LOCK_ALPHA}" "${LOOKAHEAD_NOLOCK_BETA}"
+  write_workflow "${work}/lookahead-nolock" 'lookahead-bump.yml' 'true' \
+    $'    scripts/refresh-alpha.sh\n    scripts/refresh-beta.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/beta.md'
+  expect 'bad: a lookahead trigger excluding flake.lock is not lock-triggered' \
+    "${work}/lookahead-nolock" 1 \
+    'scripts/refresh-beta.sh is in LOCK_DERIVED_GENERATORS in .github/workflows/lookahead-bump.yml, but no lock-triggered hook runs it'
+
+  # (ae) BAD: beta-fresh's `files` names flake.lock, but its `excludes`
+  # list drops it again. pre-commit runs a hook on a path only when
+  # `files` matches and `exclude` does not, so the hook is not
+  # lock-triggered. The list is written across lines, as the real modules
+  # write a long one, and the lock is its second entry, so every entry is
+  # read rather than the first.
+  write_generators "${work}/exclude-lock"
+  write_hooks "${work}/exclude-lock" "${LOCK_ALPHA}" "${LOCK_BETA}" '' '' \
+    $'    excludes = [\n      "^justfile$"\n      "^flake\\\\.lock$"\n    ];'
+  write_workflow "${work}/exclude-lock" 'exclude-bump.yml' 'true' \
+    $'    scripts/refresh-alpha.sh\n    scripts/refresh-beta.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md\n    docs/reference/beta.md'
+  expect 'bad: a trigger whose excludes drop flake.lock is not lock-triggered' \
+    "${work}/exclude-lock" 1 \
+    'scripts/refresh-beta.sh is in LOCK_DERIVED_GENERATORS in .github/workflows/exclude-bump.yml, but no lock-triggered hook runs it'
+
+  # (af) TOOLING: beta-fresh's trigger does not compile under Python `re`
+  # (a variable-width look-behind). pre-commit cannot run such a hook, and
+  # any verdict about whether it names the lock would be a guess.
+  write_tree "${work}/files-uncompilable" "${LOCK_ALPHA}" "${UNCOMPILABLE_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  expect 'tooling: a files pattern that does not compile is a could-not-run' \
+    "${work}/files-uncompilable" 2 \
+    'hook beta-fresh: its files pattern does not compile under Python re'
+
+  # (ag) TOOLING: the same for the merged `excludes` pattern.
+  write_tree "${work}/exclude-uncompilable" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  write_hooks "${work}/exclude-uncompilable" "${LOCK_ALPHA}" "${NOLOCK_BETA}" '' '' \
+    '    excludes = [ "^(unclosed" ];'
+  expect 'tooling: an exclude pattern that does not compile is a could-not-run' \
+    "${work}/exclude-uncompilable" 2 \
+    'hook beta-fresh: its exclude pattern does not compile under Python re'
+
+  # (ah) GOOD: ephemeral-refs-gap-fresh is lock-triggered but exempt — its
+  # generator's output does not depend on lock content — so a workflow
+  # that does not run it has no gap. The summary counts it apart from the
+  # bound hooks.
+  write_tree "${work}/exempt-hook" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  write_hooks "${work}/exempt-hook" "${LOCK_ALPHA}" "${NOLOCK_BETA}" '' '' '' \
+    "$(exempt_block "${EXEMPT_LOCK_FILES}")"
+  exempt_override='ephemeral-refs-gap-fresh'
+  expect 'agree: an exempt lock-triggered hook needs no generator in the workflow' \
+    "${work}/exempt-hook" 0 '2 lock-triggered (1 exempt)'
+
+  # (ai) BAD: the exempt hook no longer declares flake.lock a trigger, so
+  # its exemption excuses nothing and would silently excuse the next
+  # trigger change instead.
+  write_tree "${work}/exempt-stale" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  write_hooks "${work}/exempt-stale" "${LOCK_ALPHA}" "${NOLOCK_BETA}" '' '' '' \
+    "$(exempt_block "${EXEMPT_NOLOCK_FILES}")"
+  expect 'bad: an exemption for a hook not lock-triggered fails' \
+    "${work}/exempt-stale" 1 \
+    'hook ephemeral-refs-gap-fresh is exempt from LOCK_DERIVED_GENERATORS but does not declare flake.lock a trigger'
+
+  # (aj) BAD: the exemption names a hook the module no longer has, so it
+  # excuses nothing today and would excuse the next hook given that name.
+  write_tree "${work}/exempt-absent" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' \
+    $'    flake.lock\n    docs/reference/alpha.md'
+  expect 'bad: an exemption naming no hook block fails' \
+    "${work}/exempt-absent" 1 \
+    'hook ephemeral-refs-gap-fresh is exempt from LOCK_DERIVED_GENERATORS but no hook block in nix/hooks/freshness.nix has that name'
+  exempt_override=''
 
   harness_assert_verify || failures=$((failures + 1))
 
