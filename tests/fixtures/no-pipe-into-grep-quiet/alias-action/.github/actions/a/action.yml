@@ -1,0 +1,12 @@
+name: a
+description: a
+x-anchor: &body |
+  set -Eeuo pipefail
+  value=a
+  printf '%s\n' "${value}" |
+    grep -q a
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: *body

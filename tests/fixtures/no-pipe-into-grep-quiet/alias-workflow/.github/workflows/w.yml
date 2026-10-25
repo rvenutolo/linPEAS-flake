@@ -1,0 +1,10 @@
+name: w
+on: push
+x-anchor: &body |
+  set -Eeuo pipefail
+  printf 'a\n' | grep --quiet a
+jobs:
+  anchored:
+    runs-on: ubuntu-latest
+    steps:
+      - run: *body

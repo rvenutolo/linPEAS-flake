@@ -85,6 +85,12 @@ expect workflow-hit "${FIXTURES}/bad-workflow" 1 \
 # The `run: |` key line ends in a pipe and the body opens with a quiet
 # grep: only the extracted body is read, so this is clean.
 expect run-scalar "${FIXTURES}/good-workflow" 0 'scanned 0 shell file(s) and 1 run: block(s)'
+# A run: body given as an alias to an anchored block scalar is the
+# anchored text: the scan reads it, not the literal alias name.
+expect workflow-alias-run-body "${FIXTURES}/alias-workflow" 1 \
+  '.github/workflows/w.yml: job anchored step[0] run: line 2: '"${HIT_DIAG}"
+expect composite-alias-run-body "${FIXTURES}/alias-action" 1 \
+  '.github/actions/a/action.yml: composite step[0] run: line 4: '"${HIT_DIAG}"
 
 # The tracked tree itself: every shell file and run: body this lint
 # guards is clean. The file counts drift with the tree, so only the exit
