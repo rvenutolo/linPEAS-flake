@@ -1061,8 +1061,9 @@ flake or an explicit commit pin.
 
 ### scripts/check-no-opaque-procsub.sh
 
-Lint: no script anywhere under `scripts/` feeds a
-redirection from a process substitution. A substitution runs in its own subshell, so `set -Eeuo pipefail` only ever sees the status of the command the redirection
+Lint: no script anywhere under `scripts/` and no workflow
+or composite-action `run:` body feeds a redirection from a process
+substitution. A substitution runs in its own subshell, so `set -Eeuo pipefail` only ever sees the status of the command the redirection
 feeds — never the producer's. A failed producer hands the consumer
 empty output to score as data: either a clean pass that flags nothing
 (fail-open) or a substantive violation the input never showed (a
@@ -1077,13 +1078,25 @@ no status is lost.
 Use the capture-into-variable idiom (or a temp file for NUL-delimited
 output) so a producer failure aborts loudly.
 
-The scan recurses. A shared library under `scripts/lib/` runs inside
-whichever caller sources it, so a lost producer status there is lost
-for every script in the tree at once — the widest blast radius the
+The script scan recurses. A shared library under `scripts/lib/` runs
+inside whichever caller sources it, so a lost producer status there is
+lost for every script in the tree at once — the widest blast radius the
 banned shape has, and the one a top-level-only glob never reads.
 
-Honors SCRIPTS_DIR_OVERRIDE (default: scripts) for fixtures.
-Exit 0 clean, 1 on any hit, 2 on operational error.
+Workflow and composite-action YAML is matched on each step's extracted
+`run:` body, never on raw YAML, so the line a hit names is the line
+within that body. The YAML scan set is `.github/workflows/*.yml` (or
+`.yaml`) — the top level only, the one GitHub reads — and every
+`.github/actions/**/action.yml` (or `.yaml`), less any action path with
+a `fixtures/` segment. Neither root reaches `tests/fixtures/`, whose
+trees exist to hold violations.
+
+Honors SCRIPTS_DIR_OVERRIDE (default: scripts), WORKFLOWS_DIR_OVERRIDE
+(default: .github/workflows) and ACTIONS_DIR_OVERRIDE (default:
+.github/actions) for fixtures.
+Exit 0 clean, 1 on any hit, 2 on operational error: `yq` is missing, a
+scan set is empty, or `yq` cannot read a workflow or action file or one
+of its steps.
 
 ### scripts/check-no-pipe-into-grep-quiet.sh
 

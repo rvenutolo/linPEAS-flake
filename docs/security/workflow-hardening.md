@@ -159,7 +159,7 @@ Enforced by `scripts/check-lib-source-tool-free.sh`. Wired as the `lint-script-h
 
 ## no-opaque-procsub
 
-No script anywhere under `scripts/`, sourced libraries included, feeds a redirection from a process substitution — `done < <(yq eval '.x' "$f")`, `mapfile -t rules < <(jq --raw-output '.rules[].type' <<<"${json}")`, `done < <(find . -name '*.sh')`, `done < <(parse_blocks)` and every variant of the shape. There is no exemption marker and no allowlist.
+No script anywhere under `scripts/`, sourced libraries included, and no workflow or composite-action `run:` body feeds a redirection from a process substitution — `done < <(yq eval '.x' "$f")`, `mapfile -t rules < <(jq --raw-output '.rules[].type' <<<"${json}")`, `done < <(find . -name '*.sh')`, `done < <(parse_blocks)` and every variant of the shape. There is no exemption marker and no allowlist.
 
 A process substitution's exit status is invisible to `set -Eeuo pipefail`: the substitution runs in its own subshell, and the shell only ever sees the exit status of the command the redirection feeds (here, the `while`/`done` loop or `mapfile`), not the producer's. When the producer fails, the substitution produces empty output and the consumer scores that emptiness as data. Which way that lands depends on what the consumer does with an empty result, and both landings are wrong:
 
@@ -175,6 +175,8 @@ A tooling failure caught this way exits 2, keeping exit 1 for the drift the chec
 The ban covers redirections only. `diff <(jq …) <(jq …)` and `diff <(expected_keys) <(actual_keys)` stay legal: `diff` consumes both substitutions as file arguments and its own status is what the script acts on.
 
 The lint skips comment lines (lines whose first non-whitespace character is `#`) so a script is free to document the banned idiom by name — e.g. explaining why it uses the capture idiom instead — without tripping the check on its own documentation.
+
+A `run:` body runs under the same `set -Eeuo pipefail` and loses a producer's status the same way, so the rule covers it too. The scan set is every `scripts/**/*.sh`, every `.github/workflows/*.yml` (or `.yaml`) at the top level of that directory, and every `.github/actions/**/action.yml` (or `.yaml`), less any action path with a `fixtures/` segment; none of these roots reaches `tests/fixtures/`, whose trees exist to hold violations. Workflow and composite-action YAML is read through each step's extracted `run:` body, never as raw YAML, and a hit names the job (or `composite`), the step index and the line within the body.
 
 Enforced by `scripts/check-no-opaque-procsub.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-opaque-procsub`) and as a pre-commit hook.
 
