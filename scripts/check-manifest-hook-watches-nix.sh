@@ -3,15 +3,18 @@
 #
 # @description Lint: every pre-commit hook that reaches the flake hook
 # manifest — by running a manifest-reading script, or by building a flake
-# attribute a manifest-reading module assigns — includes `nix/hooks` in
-# its `files` regex.
+# attribute a manifest-reading module assigns — admits `nix/hooks` paths
+# through its `files` and `excludes` filters, evaluated as pre-commit
+# evaluates them, with Python `re.search`; a filter that does not
+# compile is a could-not-run.
 
 # Lint: a freshness/cross-check hook that regenerates or validates a
 # doc by reading the Nix pre-commit hook manifest must watch
-# `nix/hooks/**` in its pre-commit `files` filter. Otherwise a commit
-# that edits only a hook definition under `nix/hooks/*.nix` changes the
-# manifest yet never triggers the freshness hook on the per-changed-file
-# `git commit` path, so a stale generated doc can slip through locally.
+# `nix/hooks/**` through its pre-commit `files` and `excludes` filters.
+# Otherwise a commit that edits only a hook definition under
+# `nix/hooks/*.nix` changes the manifest yet never triggers the freshness
+# hook on the per-changed-file `git commit` path, so a stale generated
+# doc can slip through locally.
 #
 # Two hook shapes reach the manifest, and both are subjects here.
 #
@@ -30,9 +33,15 @@
 # hook is not a source of the attribute it builds.
 #
 # Hook blocks are source-parsed from `nix/hooks/*.nix` rather than
-# `nix eval`-ed: `files` and `entry` are literal in source, and `nix eval`
-# is the known local-commit-path long-pole — no reason to add another
-# eval-bound hook.
+# `nix eval`-ed: `files`, `excludes` and `entry` are literal in source,
+# and `nix eval` is the known local-commit-path long-pole — no reason to
+# add another eval-bound hook.
+#
+# Whether a filter admits `nix/hooks` is decided by `hook_filter_admits`
+# (scripts/lib/hook-filter.sh): Python `re.search`, the engine pre-commit
+# runs filters with, and pre-commit's rule that `files` matches and the
+# joined `excludes` do not. Never POSIX ERE: hook filters use
+# lookaheads, which ERE lacks.
 #
 # Guard-the-guard: if the parser finds no subject hook block of either
 # class, it fails loud — we know at least one such hook exists, so an
@@ -53,6 +62,8 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/awk-path.sh
 source "${_lib_dir}/lib/awk-path.sh"
+# shellcheck source=scripts/lib/hook-filter.sh
+source "${_lib_dir}/lib/hook-filter.sh"
 
 readonly DEFAULT_HOOKS_DIR="nix/hooks"
 readonly DEFAULT_SCRIPTS_DIR="scripts"
@@ -127,12 +138,15 @@ for f in "${repo_scripts[@]}"; do
 done
 
 # Step 2/3 — parse every hook block in HOOKS_DIR. For each block capture
-# its name, its `files = "...";` string, every scripts/<name>.sh token
-# referenced anywhere in the block (the entry), and the flake attribute
-# the entry names. Emit one record per block, fields separated by an ASCII
-# unit separator (octal \037):
-#   <name>\037<files-string>\037<space-separated script basenames>\037
-#   <attr-namespace>\037<attr-leaf>\037<attr-reference-seen>
+# its name, its `files = "...";` string, its joined `excludes` pattern,
+# every scripts/<name>.sh token referenced anywhere in the block (the
+# entry), and the flake attribute the entry names. The two filter fields
+# are read by `HOOK_FILTER_AWK` (scripts/lib/hook-filter.sh). Emit one
+# record per block, fields separated by an ASCII unit separator (octal
+# \037):
+#   <name>\037<files-string>\037<exclude-pattern>\037
+#   <space-separated script basenames>\037<attr-namespace>\037<attr-leaf>\037
+#   <attr-reference-seen>
 #
 # The attrpath a hook entry names carries a `${…system…}` interpolation
 # mid-path, so its namespace is the first dot-separated component and its
@@ -160,12 +174,12 @@ parse_blocks() {
   glob_into hook_modules 'hook modules' "${HOOKS_DIR}/*.nix"
   for nix in "${hook_modules[@]}"; do
     [[ -f ${nix} ]] || continue
-    awk '
+    awk "${HOOK_FILTER_AWK}"'
       # Block opens on the treefmt-stable 2-space shape: "  name = {"
       /^  [A-Za-z0-9_-]+ = \{/ {
         name = $1
         in_block = 1
-        files = ""
+        hook_filter_reset()
         scripts = ""
         attr_ns = ""
         attr_leaf = ""
@@ -174,19 +188,15 @@ parse_blocks() {
       }
       # Block closes on "  };"
       in_block && /^  \};/ {
-        printf "%s\037%s\037%s\037%s\037%s\037%s\n", \
-          name, files, scripts, attr_ns, attr_leaf, attr_seen
+        printf "%s\037%s\037%s\037%s\037%s\037%s\037%s\n", \
+          name, hook_filter_files, hook_filter_exclude(), scripts, \
+          attr_ns, attr_leaf, attr_seen
         in_block = 0
         next
       }
       in_block {
-        # Capture the files filter string value.
-        if (match($0, /files = "[^"]*"/)) {
-          s = substr($0, RSTART, RLENGTH)
-          sub(/^files = "/, "", s)
-          sub(/"$/, "", s)
-          files = s
-        }
+        # Capture the files and excludes filters.
+        hook_filter_scan($0)
         # Capture the flake attrpath the entry names, and separately the
         # looser evidence that it names one at all.
         if (attr_leaf == "" &&
@@ -257,20 +267,24 @@ function manifest_reading_assigner() {
   done
 }
 
-# Does a hook's `files` regex re-trigger it on a hook-definition edit?
-# Asked by matching a representative `nix/hooks` path against the regex
-# rather than by looking for that text inside it: a filter can cover the
-# directory without naming it (`^(.*\.nix|scripts/.*\.sh)$`), and can name
-# it while never matching it (`^docs/nix/hooks-notes\.md$`). An empty
-# filter is an empty ERE, which matches every path, so it is rejected up
-# front rather than being read as total coverage.
-function filter_covers_hooks_dir() {
-  local -r filter="$1"
-  [[ -n ${filter} ]] || return 1
-  # Nix string literal: "\\." in source is the ERE "\.".
-  local ere
-  ere="$(printf '%s' "${filter}" | sed 's/\\\\/\\/g')"
-  grep --quiet --extended-regexp -- "${ere}" <<<"${DEFAULT_HOOKS_DIR}/example.nix"
+# Does a hook's filter re-trigger it on a hook-definition edit? Asked by
+# matching a representative `nix/hooks` path against the filter rather
+# than by looking for that text inside it: a filter can cover the
+# directory without naming it (`^(.*\.nix|scripts/.*\.sh)$`), can name it
+# while never matching it (`^docs/nix/hooks-notes\.md$`), and can admit it
+# in `files` only for `excludes` to drop it again.
+readonly HOOKS_DIR_PROBE="${DEFAULT_HOOKS_DIR}/example.nix"
+
+# One query per hook block, in block order, every block included: a
+# filter that does not compile is one pre-commit cannot run either, so it
+# is a could-not-run whether or not the block turns out to be a subject.
+function coverage_queries() {
+  local name files exclude rest
+  while IFS=$'\037' read -r name files exclude rest; do
+    [[ -n ${name} ]] || continue
+    printf '%s\037%s\037%s\037%s\0' \
+      "${name}" "${files}" "${exclude}" "${HOOKS_DIR_PROBE}"
+  done <<<"${blocks}"
 }
 
 failed=0
@@ -293,7 +307,18 @@ if ! blocks="$(parse_blocks)"; then
   exit 2
 fi
 
-while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
+# Captured with its status checked for the reason the parse is: inside an
+# `if`, errexit is suppressed, and a matcher that could not run would
+# otherwise arrive as an empty verdict list.
+if ! verdicts="$(coverage_queries | hook_filter_admits manifest-hook-watches-nix)"; then
+  printf 'manifest-hook-watches-nix: could not evaluate the hook filters in %s\n' \
+    "${HOOKS_DIR}" >&2
+  exit 2
+fi
+declare -a coverage_verdicts=()
+[[ -z ${verdicts} ]] || mapfile -t coverage_verdicts <<<"${verdicts}"
+
+while IFS=$'\037' read -r name files exclude scripts attr_ns attr_leaf attr_seen; do
   [[ -n ${name} ]] || continue
   total_blocks=$((total_blocks + 1))
 
@@ -343,8 +368,13 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
     script_subject_blocks=$((script_subject_blocks + 1))
   fi
 
-  covers_hooks_dir=1
-  filter_covers_hooks_dir "${files}" || covers_hooks_dir=0
+  # An empty `files` is pre-commit's match-everything default, which says
+  # nothing about which edits the hook is meant to re-run on, so it does
+  # not count as watching nix/hooks.
+  covers_hooks_dir=0
+  if [[ -n ${files} && ${coverage_verdicts[total_blocks - 1]:-} == 'true' ]]; then
+    covers_hooks_dir=1
+  fi
 
   if ((references_manifest)) && ((covers_hooks_dir == 0)); then
     printf 'hook %s: files filter missing nix/hooks\n' "${name}" >&2
@@ -357,6 +387,15 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
     failed=$((failed + 1))
   fi
 done <<<"${blocks}"
+
+# The matcher answers one query per block. Any other count means the
+# queries and the answers fell out of step, and every pairing above would
+# then have scored one hook on another's filter.
+if ((total_blocks != ${#coverage_verdicts[@]})); then
+  printf 'manifest-hook-watches-nix: the filter matcher returned %d verdict(s) for %d hook block(s)\n' \
+    "${#coverage_verdicts[@]}" "${total_blocks}" >&2
+  exit 2
+fi
 
 shopt -u nullglob
 

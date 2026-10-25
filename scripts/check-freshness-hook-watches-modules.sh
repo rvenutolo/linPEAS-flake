@@ -2,12 +2,15 @@
 # scripts/check-freshness-hook-watches-modules.sh
 #
 # @description Lint: every pre-commit hook whose entry runs a generator
-# that evaluates `devTooling.<system>.<attr>` names, in its `files`
-# regex, every nix module that attribute is defined or transposed by.
+# that evaluates `devTooling.<system>.<attr>` admits, through its `files`
+# and `excludes` filters, every nix module that attribute is defined or
+# transposed by. Filters are evaluated as pre-commit evaluates them, with
+# Python `re.search`; a filter that does not compile is a could-not-run.
 
 # Lint: a freshness hook regenerates a doc from an evaluated flake
-# attribute and refuses a stale commit. Its `files` regex decides which
-# changed paths re-trigger it on the per-changed-file `git commit` path.
+# attribute and refuses a stale commit. Its `files` and `excludes`
+# filters decide which changed paths re-trigger it on the
+# per-changed-file `git commit` path.
 # A filter that misses a module the generator evaluates leaves the doc
 # stale locally with the guard silent — CI's --all-files mirror still
 # catches it, but the local fast-path defense is lost.
@@ -37,9 +40,15 @@
 # restricted to `*.nix`, because a module that embeds a script by path
 # depends on that script's contents.
 #
-# Source-parsed rather than `nix eval`-ed: `files` and `entry` are literal
-# in source, and `nix eval` is the known local-commit-path long pole — no
-# reason to add another eval-bound hook.
+# Source-parsed rather than `nix eval`-ed: `files`, `excludes` and
+# `entry` are literal in source, and `nix eval` is the known
+# local-commit-path long pole — no reason to add another eval-bound hook.
+#
+# Whether a filter admits a path is decided by `hook_filter_admits`
+# (scripts/lib/hook-filter.sh): Python `re.search`, the engine pre-commit
+# runs filters with, and pre-commit's rule that `files` matches and the
+# joined `excludes` do not. Never POSIX ERE: hook filters use
+# lookaheads, which ERE lacks.
 #
 # Honors ROOT_OVERRIDE for fixtures (default: the repo root). Exits 0 on
 # full coverage, 1 on any uncovered module, 2 when a producer the
@@ -57,6 +66,8 @@ source "${_lib_dir}/lib/awk-path.sh"
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
+# shellcheck source=scripts/lib/hook-filter.sh
+source "${_lib_dir}/lib/hook-filter.sh"
 
 root="${ROOT_OVERRIDE:-$(repo_toplevel)}"
 readonly ROOT="${root}"
@@ -239,9 +250,12 @@ fi
 # adjacent delimiters and silently drops the empty field instead of
 # preserving it — exactly the shape that would let the empty-filter guard
 # below never see an empty filter. \037 carries no such special casing and
-# never appears in a `files` regex or a `scripts/*.sh` path.
-#   <name>\037<files-string>\037<space-separated script basenames>\037
-#   <attr-namespace>\037<attr-leaf>\037<attr-reference-seen>
+# never appears in a `files` regex or a `scripts/*.sh` path. The two filter
+# fields are read by `HOOK_FILTER_AWK` (scripts/lib/hook-filter.sh), and
+# the exclude field is the joined pattern pre-commit receives.
+#   <name>\037<files-string>\037<exclude-pattern>\037
+#   <space-separated script basenames>\037<attr-namespace>\037<attr-leaf>\037
+#   <attr-reference-seen>
 #
 # The attrpath a hook entry names carries a `${…system…}` interpolation
 # mid-path, so its namespace is the first dot-separated component and its
@@ -261,11 +275,11 @@ function parse_blocks() {
   glob_into hook_modules 'freshness hook modules' "${ROOT}/nix/hooks/*.nix"
   for nix in "${hook_modules[@]}"; do
     [[ -f ${nix} ]] || continue
-    awk '
+    awk "${HOOK_FILTER_AWK}"'
       /^  [A-Za-z0-9_-]+ = \{/ {
         name = $1
         in_block = 1
-        files = ""
+        hook_filter_reset()
         scripts = ""
         attr_ns = ""
         attr_leaf = ""
@@ -273,18 +287,14 @@ function parse_blocks() {
         next
       }
       in_block && /^  \};/ {
-        printf "%s\037%s\037%s\037%s\037%s\037%s\n", \
-          name, files, scripts, attr_ns, attr_leaf, attr_seen
+        printf "%s\037%s\037%s\037%s\037%s\037%s\037%s\n", \
+          name, hook_filter_files, hook_filter_exclude(), scripts, \
+          attr_ns, attr_leaf, attr_seen
         in_block = 0
         next
       }
       in_block {
-        if (match($0, /files = "[^"]*"/)) {
-          s = substr($0, RSTART, RLENGTH)
-          sub(/^files = "/, "", s)
-          sub(/"$/, "", s)
-          files = s
-        }
+        hook_filter_scan($0)
         if (attr_leaf == "" &&
             match($0, /\.#[A-Za-z0-9_-]+\.\$\{[^}]*system[^}]*\}\.[A-Za-z0-9_-]+/)) {
           ref = substr($0, RSTART, RLENGTH)
@@ -405,29 +415,48 @@ function attr_source_paths() {
   sorted_keys_into "${out_name}" paths
 }
 
-# Report every path in the derived set named `$4` that the hook's `files`
-# value `$2` fails to match, naming the hook `$1` and what makes the path
-# required (`$3`). Increments the shared failure count.
+# Report every path in the derived set named `$5` that the hook's filters
+# — `files` value `$2`, joined exclude pattern `$3` — do not admit, naming
+# the hook `$1` and what makes the path required (`$4`). Increments the
+# shared failure count. A path is handed to the matcher whole, in a
+# NUL-terminated query, so one carrying an embedded newline is judged as
+# the one path it is. A filter that does not compile ends the run as a
+# could-not-run: no verdict about the hook would be anything but a guess.
 function assert_filter_covers() {
   local -r name="$1"
   local -r files="$2"
-  local -r subject="$3"
-  local -n __afc_derived="$4"
-  # Nix string literal: "\\." in source is the ERE "\.".
-  local ere p
-  ere="$(printf '%s' "${files}" | sed 's/\\\\/\\/g')"
+  local -r exclude="$3"
+  local -r subject="$4"
+  local -n __afc_derived="$5"
+  ((${#__afc_derived[@]} > 0)) || return 0
+  local -a queries=()
+  local p
   for p in "${__afc_derived[@]}"; do
-    # `grep` is line-oriented, so this match cannot itself see a `p` whose
-    # embedded newline splits it across two lines as one contiguous path.
-    # Relying on no tracked `*.nix` carrying one is not quite blanket
-    # coverage: `check-path-hygiene.sh` enumerates with `--exclude-standard`,
-    # so a gitignored newline-named `*.nix` under the scan root is invisible
-    # to it while `nix_modules` (a plain filesystem walk) still picks it up.
-    if ! grep --quiet --extended-regexp -- "${ere}" <<<"${p}"; then
-      printf 'hook %s: files filter does not cover %s (%s)\n' \
-        "${name}" "${p}" "${subject}" >&2
-      failed=$((failed + 1))
-    fi
+    queries+=("${name}" "${files}" "${exclude}" "${p}")
+  done
+  local verdicts
+  if ! verdicts="$(printf '%s\037%s\037%s\037%s\0' "${queries[@]}" |
+    hook_filter_admits freshness-hook-watches-modules)"; then
+    printf 'freshness-hook-watches-modules: could not evaluate the filters of hook %s\n' \
+      "${name}" >&2
+    exit 2
+  fi
+  local -a verdict_list=()
+  [[ -z ${verdicts} ]] || mapfile -t verdict_list <<<"${verdicts}"
+  # One verdict per path. Any other count means the queries and the
+  # answers fell out of step, and pairing them would score one path on
+  # another's verdict.
+  if ((${#verdict_list[@]} != ${#__afc_derived[@]})); then
+    printf 'freshness-hook-watches-modules: the filter matcher returned %d verdict(s) for %d path(s) of hook %s\n' \
+      "${#verdict_list[@]}" "${#__afc_derived[@]}" "${name}" >&2
+    exit 2
+  fi
+  local i
+  for ((i = 0; i < ${#__afc_derived[@]}; i++)); do
+    [[ ${verdict_list[i]} == 'true' ]] && continue
+    printf 'hook %s: files filter does not cover %s (%s)\n' \
+      "${name}" "${__afc_derived[i]}" "${subject}" >&2
+    failed=$((failed + 1))
   done
 }
 
@@ -452,7 +481,7 @@ if ! blocks="$(parse_blocks)"; then
   exit 2
 fi
 
-while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
+while IFS=$'\037' read -r name files exclude scripts attr_ns attr_leaf attr_seen; do
   [[ -n ${name} ]] || continue
   total_blocks=$((total_blocks + 1))
 
@@ -517,8 +546,8 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
     fi
   fi
 
-  # An empty filter would become an empty ERE, which matches every path and
-  # would report full coverage for a hook that watches nothing.
+  # An empty `files` is pre-commit's match-everything default, which would
+  # report full coverage for a hook that names nothing it watches.
   if [[ -z ${files} ]]; then
     printf 'hook %s: empty files filter — nothing re-triggers it\n' "${name}" >&2
     failed=$((failed + 1))
@@ -541,7 +570,8 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
         "${attr}" >&2
       exit 2
     fi
-    assert_filter_covers "${name}" "${files}" "evaluates ${attr}" required
+    assert_filter_covers "${name}" "${files}" "${exclude}" \
+      "evaluates ${attr}" required
   fi
 
   if [[ -n ${attr_leaf} ]]; then
@@ -555,7 +585,7 @@ while IFS=$'\037' read -r name files scripts attr_ns attr_leaf attr_seen; do
         "${attr_ns}" "${attr_leaf}" >&2
       exit 2
     fi
-    assert_filter_covers "${name}" "${files}" \
+    assert_filter_covers "${name}" "${files}" "${exclude}" \
       "builds ${attr_ns}.${attr_leaf}" required
   fi
 done <<<"${blocks}"

@@ -82,6 +82,7 @@ readonly -a HARNESSES=(
   'lib-job-keys|lib-job-keys.test.sh|'
   'lib-md-fence|lib-md-fence.test.sh|'
   'lib-parallel|lib-parallel.test.sh|'
+  'lib-hook-filter|lib-hook-filter.test.sh|'
   'md-fence-shapes|md-fence-shapes.test.sh|'
   'glob-scan-breadth|glob-scan-breadth.test.sh|'
   'repo-root-guard|repo-root-guard.test.sh|'

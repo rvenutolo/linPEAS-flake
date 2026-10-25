@@ -471,7 +471,8 @@
   # doc a lock-writing workflow skips reaches its PR stale, and the
   # freshness gate then blocks a branch the automation owns. The lint
   # matches trigger patterns with Python `re`, as pre-commit does, so
-  # python3 is on its path. See docs/architecture/flake-input-bumps.md.
+  # python3 is on its path, and the library that holds the matcher is a
+  # trigger. See docs/architecture/flake-input-bumps.md.
   lock-derived-docs = {
     enable = true;
     name = "lock-derived-docs";
@@ -483,7 +484,7 @@
       export PATH="${pkgs-unstable.yq-go}/bin:${pkgs-unstable.python3}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-lock-derived-docs.sh
     ''}";
-    files = "^(nix/hooks/freshness\\.nix|\\.github/workflows/.*\\.ya?ml|scripts/check-lock-derived-docs\\.sh)$";
+    files = "^(nix/hooks/freshness\\.nix|\\.github/workflows/.*\\.ya?ml|scripts/check-lock-derived-docs\\.sh|scripts/lib/hook-filter\\.sh)$";
     pass_filenames = false;
     language = "system";
   };
