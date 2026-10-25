@@ -3154,6 +3154,44 @@ one output without a parity exemption, or if nothing was recorded at
 all. The census names every group of scenarios sharing one output before
 reporting the counts.
 
+### scripts/lib/hook-filter.sh
+
+Read a git-hooks.nix hook block's `files` and `excludes`
+filters from source, and decide whether they admit a path the way
+pre-commit decides it: with Python `re.search`, admitting a path when
+`files` matches it and the `exclude` pattern pre-commit receives does
+not. Never POSIX ERE: the hook modules use lookaheads, which ERE lacks,
+and grep reads such a pattern as one that matches nothing, a verdict
+about a hook pre-commit does run. Source after `set -Eeuo pipefail`.
+
+#### hook_filter_admits()
+
+Decide, for each query on stdin, whether a hook's filters
+admit a path, as pre-commit decides it. A query is one NUL-terminated
+record of four fields separated by an ASCII unit separator (`\037`):
+hook name, `files` value as written in the Nix source, the joined
+exclude pattern (`hook_filter_exclude()` in `HOOK_FILTER_AWK`), and the
+path. The path is the last field and NUL ends the record, so a path may
+hold any other byte, a newline included.
+
+The verdicts are all or nothing: when any pattern does not compile,
+each such hook is named on stderr and nothing is printed, so a caller
+cannot score part of a set. python3 is guarded here rather than at
+each call site, so a caller that lacks it learns that by name.
+
+**Args:**
+
+- `$1` — diagnostic prefix, conventionally the caller's lint name
+
+**Exit codes:**
+
+- `0` — every query was decided
+- `2` — python3 is missing, a query is malformed, or a pattern does not compile
+
+**Stdout:**
+
+- one line per query, in query order: `true` when the hook's filters admit the path, `false` when they do not
+
 ### scripts/lib/job-keys.sh
 
 Shared reading rules for the `jobs:` map of a workflow.

@@ -37,13 +37,13 @@
 #
 # Source-parsed rather than evaluated: `files`, `excludes` and
 # `entry` are literal in the hook module, and each workflow's lists are
-# literal YAML. The patterns are matched with Python `re.search`, the
-# engine pre-commit runs them with, and never with POSIX ERE: the hook
-# module uses lookaheads, which ERE lacks, and grep reads such a pattern
-# as one that matches nothing, a verdict about a hook pre-commit does
-# run on the lock. A path triggers a hook when `files` matches it and
-# the `exclude` pattern pre-commit receives does not, which is
-# pre-commit's own rule.
+# literal YAML. The patterns are matched by `hook_filter_admits`
+# (scripts/lib/hook-filter.sh) with Python `re.search`, the engine
+# pre-commit runs them with, and never with POSIX ERE: the hook module
+# uses lookaheads, which ERE lacks, and grep reads such a pattern as one
+# that matches nothing, a verdict about a hook pre-commit does run on the
+# lock. A path triggers a hook when `files` matches it and the `exclude`
+# pattern pre-commit receives does not, which is pre-commit's own rule.
 #
 # A workflow's `jobs:` and `env:` are read as GitHub Actions reads a root
 # key written as an alias (`ROOT_KEY_NODE` in scripts/lib/job-keys.sh);
@@ -72,6 +72,8 @@ source "${_lib_dir}/lib/generates.sh"
 source "${_lib_dir}/lib/repo.sh"
 # shellcheck source=scripts/lib/job-keys.sh
 source "${_lib_dir}/lib/job-keys.sh"
+# shellcheck source=scripts/lib/hook-filter.sh
+source "${_lib_dir}/lib/hook-filter.sh"
 
 root="${ROOT_OVERRIDE:-$(repo_toplevel)}"
 readonly ROOT="${root}"
@@ -91,50 +93,27 @@ fi
 # block>. The delimiter is an ASCII unit separator rather than a tab: a
 # block with an empty `files` value puts two delimiters back to back, and
 # bash's `read` treats a tab as IFS whitespace, which collapses the pair
-# and drops the empty field instead of preserving it.
-#
-# The exclude field is what pre-commit receives: the `excludes` list
-# joined the way git-hooks.nix joins it, `(a|b)`, else pre-commit's
-# default `^$`. git-hooks.nix has no singular `exclude` option. A list
-# may span lines, and its end is a `]` outside every quoted entry, since
-# an entry can hold a bracket expression of its own.
+# and drops the empty field instead of preserving it. The two filter
+# fields are read by `HOOK_FILTER_AWK` (scripts/lib/hook-filter.sh), and
+# the exclude field is the joined pattern pre-commit receives.
 #
 # An awk fault is returned explicitly: the caller captures this in a
 # command substitution inside an `if`, where errexit is suppressed, so a
 # bare non-zero awk would leave the function returning 0 with a short
 # block list.
 function parse_hooks() {
-  awk '
+  awk "${HOOK_FILTER_AWK}"'
     /^  [A-Za-z0-9_-]+ = \{/ {
-      name = $1; in_block = 1; files = ""; scripts = ""
-      excludes = ""; in_excludes = 0
+      name = $1; in_block = 1; scripts = ""
+      hook_filter_reset()
       next
     }
     in_block && /^  \};/ {
-      exclude = (excludes == "" ? "^$" : "(" excludes ")")
-      printf "%s\037%s\037%s\037%s\n", name, files, exclude, scripts
+      printf "%s\037%s\037%s\037%s\n", name, hook_filter_files, hook_filter_exclude(), scripts
       in_block = 0; next
     }
     in_block {
-      if (match($0, /files = "[^"]*"/)) {
-        s = substr($0, RSTART, RLENGTH)
-        sub(/^files = "/, "", s); sub(/"$/, "", s)
-        files = s
-      }
-      list = ""
-      if (in_excludes) {
-        list = $0
-      } else if (match($0, /excludes = \[/)) {
-        list = substr($0, RSTART + RLENGTH); in_excludes = 1
-      }
-      if (in_excludes) {
-        while (match(list, /"[^"]*"/)) {
-          tok = substr(list, RSTART + 1, RLENGTH - 2)
-          excludes = (excludes == "" ? tok : excludes "|" tok)
-          list = substr(list, RSTART + RLENGTH)
-        }
-        if (list ~ /\]/) in_excludes = 0
-      }
+      hook_filter_scan($0)
       line = $0
       while (match(line, /scripts\/[A-Za-z0-9._-]+\.sh/)) {
         tok = substr(line, RSTART, RLENGTH)
@@ -150,63 +129,48 @@ if ! blocks="$(parse_hooks)"; then
   exit 2
 fi
 
-# Reads the parsed records on stdin and prints, per block,
-# <name>\037<triggers on argv[1]>\037<triggers on argv[2]>\037<scripts>,
-# each verdict `true` or `false`. A pattern is a Nix string literal, so
-# its escapes are undone first, which turns the source's `\\.` into the
-# `\.` pre-commit receives. Every pattern that does not compile is named
-# before the program exits 2, and then nothing is printed: a verdict
-# about such a hook would be a guess.
-readonly MATCH_PROGRAM='
-import re
-import sys
-
-NIX_ESCAPES = {"n": "\n", "r": "\r", "t": "\t"}
-
-
-def unescape(literal):
-    return re.sub(r"\\(.)", lambda m: NIX_ESCAPES.get(m.group(1), m.group(1)), literal)
-
-
-targets = sys.argv[1:]
-failed = False
-rows = []
-for record in sys.stdin.read().split("\n"):
-    if not record:
-        continue
-    name, files, exclude, scripts = record.split("\x1f")
-    compiled = {}
-    for key, literal in (("files", files), ("exclude", exclude)):
-        try:
-            compiled[key] = re.compile(unescape(literal))
-        except re.error as err:
-            print(
-                f"lock-derived-docs: hook {name}: its {key} pattern does not compile under Python re: {err}",
-                file=sys.stderr,
-            )
-            failed = True
-    if len(compiled) < 2:
-        continue
-    verdicts = [
-        "true"
-        if compiled["files"].search(t) and not compiled["exclude"].search(t)
-        else "false"
-        for t in targets
-    ]
-    rows.append("\x1f".join([name, *verdicts, scripts]))
-if failed:
-    sys.exit(2)
-for row in rows:
-    print(row)
-'
-
 readonly CI_WORKFLOW='.github/workflows/ci.yml'
+
+# Two trigger queries per hook block, in block order: does it admit
+# flake.lock, and does it admit ci.yml.
+function trigger_queries() {
+  local name files exclude scripts
+  while IFS=$'\037' read -r name files exclude scripts; do
+    [[ -n ${name} ]] || continue
+    printf '%s\037%s\037%s\037%s\0' \
+      "${name}" "${files}" "${exclude}" 'flake.lock' \
+      "${name}" "${files}" "${exclude}" "${CI_WORKFLOW}"
+  done <<<"${blocks}"
+}
 
 # Captured with its status checked for the reason parse_hooks is: inside
 # an `if`, errexit is suppressed, and a failed match run would otherwise
-# arrive as an empty block list.
-if ! matched="$(python3 -I -c "${MATCH_PROGRAM}" 'flake.lock' "${CI_WORKFLOW}" <<<"${blocks}")"; then
+# arrive as an empty verdict list.
+if ! verdicts="$(trigger_queries | hook_filter_admits lock-derived-docs)"; then
   printf 'lock-derived-docs: could not evaluate the hook trigger patterns in %s\n' "${HOOKS}" >&2
+  exit 2
+fi
+declare -a trigger_verdicts=()
+[[ -z ${verdicts} ]] || mapfile -t trigger_verdicts <<<"${verdicts}"
+
+# Per block: <name>\037<admits flake.lock>\037<admits ci.yml>\037<scripts>,
+# pairing each block with its two verdicts. A verdict count other than
+# two per block means the queries and the answers fell out of step, and
+# pairing them anyway would score one hook on another's filter.
+matched=''
+verdict_index=0
+while IFS=$'\037' read -r name files exclude scripts; do
+  [[ -n ${name} ]] || continue
+  if ((verdict_index + 2 > ${#trigger_verdicts[@]})); then
+    verdict_index=$((verdict_index + 2))
+    continue
+  fi
+  matched+="${name}"$'\037'"${trigger_verdicts[verdict_index]}"$'\037'"${trigger_verdicts[verdict_index + 1]}"$'\037'"${scripts}"$'\n'
+  verdict_index=$((verdict_index + 2))
+done <<<"${blocks}"
+if ((verdict_index != ${#trigger_verdicts[@]})); then
+  printf 'lock-derived-docs: the trigger matcher returned %d verdict(s) for %d queries in %s\n' \
+    "${#trigger_verdicts[@]}" "${verdict_index}" "${HOOKS}" >&2
   exit 2
 fi
 
