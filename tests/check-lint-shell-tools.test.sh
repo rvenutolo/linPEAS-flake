@@ -37,4 +37,25 @@ if [[ ${out} != *"::error::lint shell missing tool on PATH: actionlint"* ]]; the
 fi
 printf 'OK   missing tool detected and named\n'
 
+# python3 is required: the hook-filter lints run `python3 -I` through
+# scripts/lib/hook-filter.sh. With every other tool present and only python3
+# absent, the guard must still fail and name it, so a shell that stops
+# providing python3 is caught here rather than mid-lint in CI.
+farm="$(mktemp -d)"
+for t in bash cat yq jq gh git shellcheck shfmt actionlint check-jsonschema sed grep awk find; do
+  ln -s "$(command -v "${t}")" "${farm}/${t}"
+done
+got_exit=0
+out="$(env --unset=BASH_ENV PATH="${farm}" bash "${SCRIPT}" 2>&1)" || got_exit=$?
+rm -rf -- "${farm}"
+if ((got_exit != 1)); then
+  printf 'FAIL: missing python3 must exit 1, got %d\n  output: %s\n' "${got_exit}" "${out}" >&2
+  exit 1
+fi
+if [[ ${out} != *"::error::lint shell missing tool on PATH: python3"* ]]; then
+  printf 'FAIL: missing ::error:: line for python3\n  output: %s\n' "${out}" >&2
+  exit 1
+fi
+printf 'OK   missing python3 detected and named\n'
+
 printf 'all tests passed\n'
