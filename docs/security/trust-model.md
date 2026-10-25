@@ -231,7 +231,7 @@ The block-mode contract is enforced by `scripts/check-harden-runner-block.sh` vi
 
 ### Egress allowlist matches tool inventory
 
-A hand-authored `allowed-endpoints:` list has nothing binding it to what the job's tooling actually reaches. A tool version bumps, a URL changes, or a fallback path activates, and the list is not updated — the resulting failure is latent: it surfaces only when the blocked path is finally exercised, sometimes long after the change that broke it. `scripts/check-egress-allowlist.sh` binds each job's allowlist to its tool inventory with seven assertions, keyed off the job's `uses:` and `run:` text:
+A hand-authored `allowed-endpoints:` list has nothing binding it to what the job's tooling actually reaches. A tool version bumps, a URL changes, or a fallback path activates, and the list is not updated — the resulting failure is latent: it surfaces only when the blocked path is finally exercised, sometimes long after the change that broke it. `scripts/check-egress-allowlist.sh` binds each job's allowlist to its tool inventory with seven assertions, keyed off the job's `uses:` and `run:` text, where a `run:` written as an alias (`run: *body`) is read as its anchored text:
 
 1. **Forward rules**, mechanical and exact. A rule keyed on a remote action matches its owner and repository with their ASCII letters in either case:
     - `github/codeql-action/init` requires `release-assets.githubusercontent.com` — the CodeQL bundle falls back to a release asset when the toolcache misses, and a `github.com` release-download URL 302s there unconditionally.
