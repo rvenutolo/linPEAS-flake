@@ -1039,8 +1039,10 @@ tag.
 
 Lint: every pre-commit hook that reaches the flake hook
 manifest — by running a manifest-reading script, or by building a flake
-attribute a manifest-reading module assigns — includes `nix/hooks` in
-its `files` regex.
+attribute a manifest-reading module assigns — admits `nix/hooks` paths
+through its `files` and `excludes` filters, evaluated as pre-commit
+evaluates them, with Python `re.search`; a filter that does not
+compile is a could-not-run.
 
 ### scripts/check-min-permissions.sh
 

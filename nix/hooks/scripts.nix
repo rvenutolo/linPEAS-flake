@@ -107,8 +107,9 @@ in
   # Every hook that reaches the Nix hook manifest — through the script its
   # entry runs or through a flake attribute its entry evaluates — watches
   # nix/hooks in its files filter, so a hook-definition edit re-triggers the
-  # freshness check on the per-changed-file git commit path. See
-  # docs/security/workflow-hardening.md.
+  # freshness check on the per-changed-file git commit path. The lint
+  # matches filters with Python `re`, as pre-commit does, so python3 is on
+  # its path. See docs/security/workflow-hardening.md.
   manifest-hook-watches-nix = {
     enable = true;
     name = "manifest-hook-watches-nix";
@@ -117,6 +118,7 @@ in
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.python3}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-manifest-hook-watches-nix.sh
     ''}";
     # Resolving an attribute-evaluating hook's subject reads every nix module
