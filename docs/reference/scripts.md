@@ -2374,7 +2374,7 @@ The head ref is a branch name anyone with push access chooses, and git
 allows characters that change the cache listing query it is placed in:
 `&` or `?` adds query parameters that select other refs' caches, which
 the job then deletes, and `{owner}`, `{repo}` or `{branch}` is a
-placeholder `gh api` expands. A head ref outside the allowed set is
+placeholder the gh CLI expands in an API path. A head ref outside the allowed set is
 skipped with a notice on stderr rather than escaped; its caches age out
 in the daily sweep. The match runs under `C.UTF-8`, where the ranges
 hold ASCII only, so a non-ASCII letter or digit is skipped in every
