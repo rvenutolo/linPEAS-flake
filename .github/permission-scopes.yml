@@ -9,6 +9,7 @@
 actions-cache-prune.yml:
   prune-stale: [actions]
   prune-on-pr-close: [actions]
+  notify: [issues]
 ci-watchdog.yml:
   retry: [actions, issues]
   # Files the ci-watchdog-failure issue when a sweep fails, and closes it
@@ -24,7 +25,10 @@ dependency-review.yml:
   dependency-review: [pull-requests]
 docs-audit-reminder.yml:
   pressure: [issues]
+  notify: [issues]
 dockerhub-sync.yml:
+  notify: [issues]
+gitleaks.yml:
   notify: [issues]
 image-cve-scan.yml:
   image-cve-scan-trivy: [security-events]
@@ -37,7 +41,7 @@ labeler.yml:
   label: [pull-requests]
   size: [pull-requests]
 links.yml:
-  lychee: [issues]
+  notify: [issues]
 octoscan.yml:
   scan: [security-events]
   notify-finding: [issues]
@@ -56,12 +60,14 @@ release-on-bump.yml:
 renovate-flake-lock-refresh.yml:
   notify: [issues]
 reproducibility-check.yml:
-  compare: [issues]
+  notify: [issues]
 scorecard-drift-check.yml:
   notify: [issues]
 flake-lock-staleness-check.yml:
   notify: [issues]
 stale-pin-check.yml:
+  notify: [issues]
+trufflehog.yml:
   notify: [issues]
 update-flake-lock.yml:
   notify: [issues]

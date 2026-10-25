@@ -21,7 +21,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      issues: write
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
@@ -50,3 +49,49 @@ jobs:
         with:
           args: --config lychee.toml --no-progress --verbose './**/*.md' '.github/**/*.md' '.claude/**/*.md'
           fail: true
+
+  notify:
+    name: notify
+    needs: lychee
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      checks: read
+      issues: write
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
+        with:
+          # Raw job result: the composite files cancelled runs as
+          # infrastructure failures and is inert on skipped.
+          result: ${{ needs.lychee.result }}
+          label: links-failure
+          title: "links: broken Markdown link(s), or the link check could not run"
+          label-description: weekly lychee link check found broken links, or the check could not run
+          body: |
+            The weekly `links` workflow failed: either `lychee` found one
+            or more broken links in the tracked Markdown, or a step before
+            the check (harden-runner, checkout) failed. The job log says
+            which: lychee lists each failing URL with the file it is in.
+
+            Run:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            To resolve: fix or remove each failing link, or, when the
+            target is reachable and lychee is wrong about it, exclude it in
+            `lychee.toml`. A host the check reaches for the first time also
+            needs adding to the job's harden-runner allowlist. This issue
+            auto-closes on the next clean run.
+          github-token: ${{ secrets.GITHUB_TOKEN }}

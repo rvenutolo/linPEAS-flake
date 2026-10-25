@@ -307,7 +307,10 @@ exemption.
 
 `gitleaks.yml` scans the full git history (`fetch-depth: 0`) on push to
 main, every PR, a weekly Friday cron, and manual dispatch. Required
-check named `gitleaks` in the `protect-main` ruleset.
+check named `gitleaks` in the `protect-main` ruleset. A failed run
+outside a pull request (a push to main, the cron, or a dispatch) files
+a deduped `gitleaks-failure` issue through its `notify` job, and the next
+passing run closes it; a pull request run's failure shows on the PR.
 
 - Uses only `secrets.GITHUB_TOKEN` — PR-triggered workflow secret
     allowlist invariant holds.
@@ -329,14 +332,16 @@ to main, every PR, a weekly Friday cron, and manual dispatch. Required
 check named `trufflehog` in the `protect-main` ruleset. It runs with
 `extra_args: --only-verified`, so a finding is a credential TruffleHog
 reached the issuing provider to confirm is live — not a pattern match.
+Like gitleaks, a failed run outside a pull request files a deduped
+`trufflehog-failure` issue through its `notify` job.
 
 Gitleaks and TruffleHog are a deliberate pair: they carry different
 detector sets, and a secret shape one misses is the reason the other
 runs. Neither substitutes for the other, and dropping either needs a
 [security-review entry](https://github.com/rvenutolo/linPEAS-flake/blob/main/CONTRIBUTING.md#security-review-entries).
 
-- References no secret — PR-triggered workflow secret
-    allowlist invariant holds.
+- Uses only `secrets.GITHUB_TOKEN`, in its `notify` job — PR-triggered
+    workflow secret allowlist invariant holds.
 - A verified finding is a live credential and therefore a security
     incident. Triage is the same as for gitleaks:
     rotate → purge with `git filter-repo` → force-push behind a
