@@ -221,10 +221,10 @@ else
   # must survive: a sibling doc in the same skill, the fixtures' own README
   # one level up, and an ordinary doc.
   seeded_paths=(
-    '.claude/skills/docs-correctness-audit/evals/seeded-defects/fixtures/all-hit.md'
+    '.claude/skills/docs-audit/evals/seeded-defects/fixtures/all-hit.md'
     '.claude/skills/second-skill/evals/seeded-defects/fixtures/f.md'
-    '.claude/skills/docs-correctness-audit/evals/seeded-defects/README.md'
-    '.claude/skills/docs-correctness-audit/references/repo-map.md'
+    '.claude/skills/docs-audit/evals/seeded-defects/README.md'
+    '.claude/skills/docs-audit/references/repo-map.md'
     'docs/development/linting.md'
   )
   collector_sel="$(printf '%s\n' "${seeded_paths[@]}" | grep -E "^${RE_SEEDED_FIXTURES}" || true)"

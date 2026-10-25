@@ -3,7 +3,7 @@ description: Read-only documentation correctness audit — severity-ranked findi
 ---
 
 Run a documentation correctness audit of this repository using the
-`docs-correctness-audit` skill. Invoke that skill and follow it exactly:
+`docs-audit` skill. Invoke that skill and follow it exactly:
 
 1. Read the skill's `references/repo-map.md` in full before dispatching
     anything.

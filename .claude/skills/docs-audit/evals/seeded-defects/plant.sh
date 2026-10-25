@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Plant one defect per category into a disposable clone of the repo so the
-# docs-correctness-audit skill's recall can be measured. The seeds are
+# docs-audit skill's recall can be measured. The seeds are
 # committed into a rewrite of the clone's whole history, each in the commit
 # that first holds its anchor, so `git status` names none of them and no
 # commit exists only to carry them. What stays visible is listed in the

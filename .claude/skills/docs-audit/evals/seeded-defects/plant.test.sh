@@ -37,7 +37,7 @@ manifest="$results/manifest-resolved.json"
 seed_count="$(jq '.seeds | length' "$here/seeds.json")"
 check "seeds.json is non-empty" "[ '$seed_count' -gt 0 ]"
 check "worktree exists" "[ -d '$wt' ]"
-check "skill present in worktree" "[ -f '$wt/.claude/skills/docs-correctness-audit/SKILL.md' ]"
+check "skill present in worktree" "[ -f '$wt/.claude/skills/docs-audit/SKILL.md' ]"
 check "manifest has $seed_count seeds" "[ \"\$(jq 'length' '$manifest')\" = $seed_count ]"
 check "every seed has a numeric line" \
   "[ \"\$(jq '[.[] | select((.line|type)==\"number\" and .line>0)] | length' '$manifest')\" = $seed_count ]"

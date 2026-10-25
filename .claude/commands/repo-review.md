@@ -3,9 +3,9 @@ description: Multi-agent refute-all review across 8 fixed dimensions — severit
 ---
 
 Run a multi-agent, refute-all review of this repository using the
-`multi-agent-review` skill. Invoke that skill and follow it exactly:
+`repo-review` skill. Invoke that skill and follow it exactly:
 
-1. Read its [`references/dimensions.md`](../skills/multi-agent-review/references/dimensions.md)
+1. Read its [`references/dimensions.md`](../skills/repo-review/references/dimensions.md)
     for the 8 hardcoded dimensions, their finder slices, and per-dimension
     refuter guidance.
 1. Scope the review with the user via `AskUserQuestion`: per-dimension

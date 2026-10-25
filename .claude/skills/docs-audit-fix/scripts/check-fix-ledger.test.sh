@@ -2611,7 +2611,7 @@ EOF
   d="$(new_repo)"
   seed_files "${d}" CHANGELOG.md 'Beta paragraph. old' \
     tests/fixtures/x/a.md 'Beta paragraph. fixture' flake.lock '{"n": "Beta paragraph."}' \
-    .claude/skills/docs-correctness-audit/evals/seeded-defects/fixtures/s.md 'Beta paragraph. seeded' \
+    .claude/skills/docs-audit/evals/seeded-defects/fixtures/s.md 'Beta paragraph. seeded' \
     .claude/skills/other/evals/seeded-defects/fixtures/s.md 'Beta paragraph. seeded elsewhere' \
     docs/c.md 'Beta paragraph. in scope'
   beta_fixed "${d}"

@@ -1,17 +1,14 @@
 ---
-name: docs-correctness-audit
+name: docs-audit
 description: >-
   Read-only documentation correctness audit for this repo: cross-checks every
   tracked Markdown doc (README, docs/**, SECURITY, CONTRIBUTING,
   tests/README.md, the PR template, CHANGELOG (verify-only), and the tracked
   `.claude/` tooling) plus the issue-body prose workflows write and the
-  issue-template prompts
-  against the actual code, CI, config, and workflows, then emits one
-  severity-ranked findings report without editing anything. Invoke ONLY via the
-  /docs-audit slash command. Do NOT auto-trigger on natural-language mentions of
-  docs, reviews, audits, staleness, or "are the docs up to date" — this skill
-  runs on explicit request only.
-user-invocable: false
+  issue-template prompts against the actual code, CI, config, and workflows,
+  then emits one severity-ranked findings report without editing anything.
+argument-hint: '[subset, e.g. a cluster such as security/]'
+disable-model-invocation: true
 ---
 
 # Documentation correctness audit

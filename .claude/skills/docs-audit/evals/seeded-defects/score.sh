@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Score docs-correctness-audit reports against the planted seed manifest.
+# Score docs-audit reports against the planted seed manifest.
 # Usage: score.sh <report.md> [<report.md> ...]
 # Reads $SEEDED_RESULTS_DIR/manifest-resolved.json (default: ./results).
 set -euo pipefail
@@ -109,7 +109,7 @@ pct=0
 [ "$total_cells" -gt 0 ] && pct=$((100 * total_hits / total_cells))
 
 {
-  echo "# Seeded-defect recall — docs-correctness-audit"
+  echo "# Seeded-defect recall — docs-audit"
   echo
   echo "Runs: M=$n | base: $base_sha"
   echo

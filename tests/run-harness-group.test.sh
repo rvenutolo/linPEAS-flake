@@ -157,7 +157,7 @@ function seed() {
   local -r work="$1"
   local -r tests_dir="${work}/tests" scripts_dir="${work}/scripts"
   local -r root_dir="${work}/root"
-  local -r plant_rel='.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh'
+  local -r plant_rel='.claude/skills/docs-audit/evals/seeded-defects/plant.test.sh'
   mkdir -p "${tests_dir}" "${scripts_dir}" "${root_dir}"
   make_stub "${tests_dir}/check-ratchet-pin-audit.test.sh" "$2"
   make_stub "${scripts_dir}/check-ratchet-pin-audit.sh" "$3" "${8:-}"
@@ -376,10 +376,10 @@ function main() {
   forbidden_bump="${work}/ran-bump"
   forbidden_backfill="${work}/ran-backfill"
   seed "${work}" 0 0 0 0 "${forbidden_bump}" "${forbidden_backfill}"
-  rm --force -- "${work}/root/.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh"
+  rm --force -- "${work}/root/.claude/skills/docs-audit/evals/seeded-defects/plant.test.sh"
   run_scenario 'missing root-relative harness names its path' \
     "${work}/tests" "${work}/scripts" 1 \
-    "missing test harness: ${work}/root/.claude/skills/docs-correctness-audit/evals/seeded-defects/plant.test.sh" \
+    "missing test harness: ${work}/root/.claude/skills/docs-audit/evals/seeded-defects/plant.test.sh" \
     "${forbidden_bump}" "${forbidden_backfill}"
   rm --recursive --force -- "${work}"
 
