@@ -36,8 +36,8 @@
 # (default: .github/workflows) and ACTIONS_DIR_OVERRIDE (default:
 # .github/actions) for fixtures.
 # Exit 0 clean, 1 on any hit, 2 on operational error: `yq` is missing, a
-# scan set is empty, or `yq` cannot read a workflow or action file or one
-# of its steps.
+# scan set is empty, `grep` cannot read a shell script, or `yq` cannot
+# read a workflow or action file or one of its steps.
 set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"
@@ -73,10 +73,18 @@ readonly HIT_DIAG='process substitution feeds a redirection (producer exit statu
 # @description Print every live-code line of the input that feeds a
 # redirection from a substitution, as `<line>:<text>`.
 # @arg $1 file to read, or `-` for stdin
-# @exitcode the pipeline's status under pipefail
+# @exitcode 0 on a hit, 1 on none, above 1 when the input could not be read
 function procsub_hits() {
-  grep --extended-regexp --line-number -- "${REDIR_PATTERN}" "$1" |
-    grep --invert-match --extended-regexp -- "${COMMENT_LINE}"
+  # The matching grep is captured on its own: piped into the comment
+  # filter, a read failure (2) leaves the filter empty input, and the
+  # filter's own 1 would become the status, scoring an unread file as
+  # one with no hit.
+  local matches status=0
+  matches="$(grep --extended-regexp --line-number -- "${REDIR_PATTERN}" "$1")" || status=$?
+  if ((status != 0)); then
+    return "${status}"
+  fi
+  grep --invert-match --extended-regexp -- "${COMMENT_LINE}" <<<"${matches}"
 }
 
 # Emits one `<shape>|<document>|<job position>|<step index>` row per step
