@@ -25,7 +25,9 @@
 # Exits 0 on match, 1 on drift. Fixture overrides honored.
 # Exits 2 when the scripts directory to scan is absent: with nothing to
 # scan there is no writer to count, and reporting that as "no script
-# writes the pin" would blame the tree for a missing input.
+# writes the pin" would blame the tree for a missing input. Exits 2 too
+# when grep cannot read a file or directory under it: a writer there
+# would go uncounted.
 #
 # Env overrides (test-only):
 #   SCRIPTS_DIR_OVERRIDE — path to scripts directory to scan
@@ -62,21 +64,30 @@ fi
 readonly LITERAL_REGEX='(^|[[:space:]])(mv|cp|tee)[[:space:]].*linpeas-pin\.json|>[[:space:]]*"?[^"[:space:]]*linpeas-pin\.json'
 readonly VAR_REGEX='(^|[[:space:]])(mv|cp|tee)[[:space:]].*\$\{?(pin_file|PIN_FILE|pin_path|PIN_PATH)\}?|>[[:space:]]*"?\$\{?(pin_file|PIN_FILE|pin_path|PIN_PATH)\}?'
 
-# The enumeration is captured rather than piped into `mapfile` through a
-# process substitution: a substitution runs in its own subshell, so its
-# producer's status never reaches this shell and a grep that could not
-# read the tree would look exactly like a tree with no writer in it.
+# Each search is captured on its own and its status read three ways: a
+# grep that could not read a file or directory under the tree (2) would
+# otherwise look exactly like a tree with no writer in it, whether its
+# status is dropped by `|| true`, lost to a pipeline's later stage, or
+# left in the subshell of a process substitution. No file matching (1) is
+# the clean answer for one pattern.
+candidates=''
+for regex in "${LITERAL_REGEX}" "${VAR_REGEX}"; do
+  search_status=0
+  search_out="$(grep --recursive --files-with-matches --extended-regexp \
+    --include='*.sh' "${regex}" "${SCRIPTS_DIR}")" || search_status=$?
+  if ((search_status > 1)); then
+    printf 'could not search %s for writers of %s\n' "${SCRIPTS_DIR}" "${PIN_FILENAME}" >&2
+    exit 2
+  fi
+  candidates+="${search_out}"$'\n'
+done
+
 # The trailing `grep --invert-match` legitimately exits 1 when it filters
 # every candidate away, so status 1 means "no writers" and only a higher
 # status is a could-not-run.
 writers_status=0
 writers_out="$(
-  {
-    grep --recursive --files-with-matches --extended-regexp \
-      --include='*.sh' "${LITERAL_REGEX}" "${SCRIPTS_DIR}" 2>/dev/null || true
-    grep --recursive --files-with-matches --extended-regexp \
-      --include='*.sh' "${VAR_REGEX}" "${SCRIPTS_DIR}" 2>/dev/null || true
-  } |
+  printf '%s' "${candidates}" |
     while IFS= read -r line; do
       # Strip the scripts-dir prefix using bash parameter expansion to avoid
       # regex-special characters in the path (e.g. '+' in worktree names)
