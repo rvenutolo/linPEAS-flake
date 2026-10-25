@@ -113,13 +113,30 @@ jobs:
             github.com:443
             objects.githubusercontent.com:443
             release-assets.githubusercontent.com:443
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
+      # No checkout: nothing in this job reads the repository tree, and a
+      # tree with `.git/` in it is somewhere git could be pointed at. The
+      # artifact goes to the runner's temp directory and is read by
+      # absolute path.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: bump-result
+          path: ${{ runner.temp }}/bump-result
+
+      # download-artifact's own path-traversal protection keeps entries
+      # inside the target directory; this checks the target itself sits
+      # outside the workspace, where the steps below run.
+      - name: assert the artifact sits outside the workspace
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/bump-result
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          workspace="$(realpath -- "${GITHUB_WORKSPACE}")"
+          artifact="$(realpath -- "${ARTIFACT_DIR}")"
+          if [[ "${artifact}/" == "${workspace}/"* ]]; then
+            printf 'artifact directory %s is inside the workspace - aborting\n' "${artifact}" >&2
+            exit 1
+          fi
 
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: app-token
@@ -138,13 +155,12 @@ jobs:
         # this step re-validates the artifact inside the credential-
         # holding job so a compromised compute-pin cannot ship a malformed
         # pin past the boundary. Mirrors flake.nix's eager invariant asserts.
+        # The pin-differs-from-main check is in the commit step, which
+        # reads main's blob over the API.
+        working-directory: ${{ runner.temp }}/bump-result
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          if git diff --quiet linpeas-pin.json; then
-            printf 'artifact produced no diff in linpeas-pin.json - aborting\n' >&2
-            exit 1
-          fi
           # Re-validate pin invariants (mirrors flake.nix assertions).
           pin_version="$(jq --raw-output .version linpeas-pin.json)"
           pin_url="$(jq --raw-output .url linpeas-pin.json)"
@@ -168,6 +184,16 @@ jobs:
         env:
           BUMP_APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Pins gh's repository context, so an `{owner}`-style placeholder
+          # in an endpoint resolves from this variable and never from
+          # `git remote`.
+          GH_REPO: ${{ github.repository }}
+          # `gh pr create` and `gh pr merge` run git themselves (remote and
+          # branch lookups) even with GH_REPO set. A GIT_DIR that does not
+          # exist makes each of those calls fail without reading any
+          # repository, wherever the step's working directory is.
+          GIT_DIR: /nonexistent
+          ARTIFACT_DIR: ${{ runner.temp }}/bump-result
           NEW: ${{ needs.compute-pin.outputs.new }}
           OLD: ${{ needs.compute-pin.outputs.old }}
           REPO: ${{ github.repository }}
@@ -241,13 +267,49 @@ jobs:
               ;;
           esac
 
-          # Resolve main HEAD sha (for branch creation/rebase) and per-file
-          # blob SHAs on main (required by PUT /contents to identify the
-          # file being replaced).
+          # Resolve main HEAD sha. Both base blob SHAs below are read at
+          # this commit, the one the work branch is created from, so each
+          # PUT names the blob it replaces on that branch.
           base_sha="$(gh api "repos/${REPO}/git/refs/heads/main" \
             --jq .object.sha --header "${api_header}")"
-          pin_blob_sha="$(git rev-parse "origin/main:linpeas-pin.json")"
-          flake_outputs_blob_sha="$(git rev-parse "origin/main:docs/reference/flake-outputs.md")"
+          if [[ ! "${base_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            printf 'unexpected main HEAD sha %q - aborting\n' "${base_sha}" >&2
+            exit 1
+          fi
+
+          # The git blob SHA the contents API reports, computed without
+          # git: git run against the artifact would read a `.git/config`
+          # and `.gitattributes` it carries, and a configured clean filter
+          # would run as a command while GH_TOKEN is in the environment.
+          # Only a regular file whose resolved path is exactly the
+          # expected one is hashed, so a symlink anywhere on the path, which
+          # would read and then commit content from outside the artifact,
+          # aborts. Called inside `$(...)`, where errexit is off, so each
+          # failure returns explicitly and the caller's assignment aborts.
+          artifact="$(realpath -- "${ARTIFACT_DIR}")"
+          function artifact_blob_sha() {
+            local file="${artifact}/$1" size
+            if [[ ! -f "${file}" || -L "${file}" ]] ||
+              [[ "$(realpath -- "${file}")" != "${file}" ]]; then
+              printf '%s is not a regular file in the artifact - aborting\n' "$1" >&2
+              return 1
+            fi
+            size="$(stat --format=%s -- "${file}")" || return 1
+            { printf 'blob %d\0' "${size}"; cat -- "${file}"; } | sha1sum | cut --delimiter=' ' --fields=1
+          }
+
+          # Both files are checked before the work branch exists, so a
+          # refused file aborts with nothing pushed.
+          pin_sha="$(artifact_blob_sha linpeas-pin.json)"
+          artifact_blob_sha docs/reference/flake-outputs.md >/dev/null
+          pin_blob_sha="$(gh api "repos/${REPO}/contents/linpeas-pin.json?ref=${base_sha}" \
+            --jq .sha --header "${api_header}")"
+          flake_outputs_blob_sha="$(gh api "repos/${REPO}/contents/docs/reference/flake-outputs.md?ref=${base_sha}" \
+            --jq .sha --header "${api_header}")"
+          if [[ "${pin_sha}" == "${pin_blob_sha}" ]]; then
+            printf 'artifact linpeas-pin.json is identical to main - aborting\n' >&2
+            exit 1
+          fi
 
           # The commits are written to work_branch, created fresh from
           # main HEAD. For a new PR that is the bump branch itself. An
@@ -279,7 +341,7 @@ jobs:
             --header "${api_header}" >/dev/null
 
           # Commit 1: linpeas-pin.json. Web-flow signs this commit.
-          pin_b64="$(base64 --wrap=0 linpeas-pin.json)"
+          pin_b64="$(base64 --wrap=0 -- "${artifact}/linpeas-pin.json")"
           gh api --method PUT "repos/${REPO}/contents/linpeas-pin.json" \
             --field message="chore: bump linpeas to ${NEW}" \
             --field content="${pin_b64}" \
@@ -290,7 +352,7 @@ jobs:
           # Commit 2: docs/reference/flake-outputs.md (flake-show block refresh).
           # The doc's blob SHA on the bump branch still equals main's (only
           # linpeas-pin changed in commit 1), so reuse flake_outputs_blob_sha.
-          flake_outputs_b64="$(base64 --wrap=0 docs/reference/flake-outputs.md)"
+          flake_outputs_b64="$(base64 --wrap=0 -- "${artifact}/docs/reference/flake-outputs.md")"
           tip_sha="$(gh api --method PUT "repos/${REPO}/contents/docs/reference/flake-outputs.md" \
             --field message="chore: refresh flake-show for linpeas ${NEW}" \
             --field content="${flake_outputs_b64}" \

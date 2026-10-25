@@ -546,9 +546,26 @@ input:
     `actions/create-github-app-token`. Nix-evaluating actions confined here.
 - `push-and-merge` job uses only `actions/*` SHAs plus the repo-wide
     `step-security/harden-runner` pin
-    (`actions/checkout`, `actions/download-artifact`,
-    `actions/create-github-app-token`, `step-security/harden-runner`). No
-    third-party action without a security-review entry.
+    (`actions/download-artifact`, `actions/create-github-app-token`,
+    `step-security/harden-runner`). No third-party action without a
+    security-review entry.
+- `push-and-merge` has no checkout and runs no git against the
+    artifact. The artifact is downloaded into the runner's temp
+    directory, a step asserts that directory resolves outside the
+    workspace, and every file is read by absolute path. Each path's blob
+    SHA is computed with `sha1sum` rather than `git hash-object`, and the
+    base blob SHA comes from the contents API at the main commit the work
+    branch is created from, so an artifact-supplied `.git/config` and
+    `.gitattributes` never get a git to configure. Only a regular file
+    whose resolved path is exactly the expected one is hashed: a symlink
+    anywhere on the path aborts the job. All paths are checked before the
+    work branch is created, so a refused path pushes nothing. The commit
+    step sets `GH_REPO`, so `gh api` never resolves an `{owner}`-style
+    placeholder through `git remote`, and sets `GIT_DIR` to a path that
+    does not exist: `gh pr create` and `gh pr merge` run git lookups of
+    their own even with `GH_REPO` set, and those then fail without
+    reading any repository. `update-linpeas.yml`'s `push-and-merge` has
+    the same layout.
 - Lock updates run via `nix flake update` in the read-only job, not
     via any third-party flake-lock-bumping action.
 - App installation token flows only to `gh api` / `gh pr` via `GH_TOKEN`.

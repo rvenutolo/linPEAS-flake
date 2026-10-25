@@ -158,13 +158,30 @@ jobs:
             api.github.com:443
             github.com:443
             objects.githubusercontent.com:443
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
+      # No checkout: nothing in this job reads the repository tree, and a
+      # tree with `.git/` in it is somewhere git could be pointed at. The
+      # artifact goes to the runner's temp directory and is read by
+      # absolute path.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: flake-lock-result
+          path: ${{ runner.temp }}/flake-lock-result
+
+      # download-artifact's own path-traversal protection keeps entries
+      # inside the target directory; this checks the target itself sits
+      # outside the workspace, where the steps below run.
+      - name: assert the artifact sits outside the workspace
+        env:
+          ARTIFACT_DIR: ${{ runner.temp }}/flake-lock-result
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          workspace="$(realpath -- "${GITHUB_WORKSPACE}")"
+          artifact="$(realpath -- "${ARTIFACT_DIR}")"
+          if [[ "${artifact}/" == "${workspace}/"* ]]; then
+            printf 'artifact directory %s is inside the workspace - aborting\n' "${artifact}" >&2
+            exit 1
+          fi
 
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: app-token
@@ -179,13 +196,10 @@ jobs:
           permission-pull-requests: write
 
       - name: sanity-check artifact
+        working-directory: ${{ runner.temp }}/flake-lock-result
         run: |
           set -Eeuo pipefail
           IFS=$'\n\t'
-          if git diff --quiet flake.lock; then
-            printf 'artifact produced no diff in flake.lock - aborting\n' >&2
-            exit 1
-          fi
           # JSON shape check: flake.lock must be valid JSON with a "nodes" object.
           # Defense-in-depth vs a compromised compute-lock writing garbage.
           jq -e '.nodes | type == "object"' flake.lock >/dev/null
@@ -208,6 +222,16 @@ jobs:
         env:
           BUMP_APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Pins gh's repository context, so an `{owner}`-style placeholder
+          # in an endpoint resolves from this variable and never from
+          # `git remote`.
+          GH_REPO: ${{ github.repository }}
+          # `gh pr create` and `gh pr merge` run git themselves (remote and
+          # branch lookups) even with GH_REPO set. A GIT_DIR that does not
+          # exist makes each of those calls fail without reading any
+          # repository, wherever the step's working directory is.
+          GIT_DIR: /nonexistent
+          ARTIFACT_DIR: ${{ runner.temp }}/flake-lock-result
           REPO: ${{ github.repository }}
         run: |
           set -Eeuo pipefail
@@ -277,9 +301,63 @@ jobs:
             ;;
           esac
 
-          # Resolve main HEAD sha.
+          # Resolve main HEAD sha. Every base blob SHA below is read at
+          # this commit, the one the work branch is created from, so each
+          # PUT names the blob it replaces on that branch.
           base_sha="$(gh api "repos/${REPO}/git/refs/heads/main" \
             --jq .object.sha --header "${api_header}")"
+          if [[ ! "${base_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            printf 'unexpected main HEAD sha %q - aborting\n' "${base_sha}" >&2
+            exit 1
+          fi
+
+          # The git blob SHA the contents API reports, computed without
+          # git: git run against the artifact would read a `.git/config`
+          # and `.gitattributes` it carries, and a configured clean filter
+          # would run as a command while GH_TOKEN is in the environment.
+          # Only a regular file whose resolved path is exactly the
+          # expected one is hashed, so a symlink anywhere on the path, which
+          # would read and then commit content from outside the artifact,
+          # aborts. Called inside `$(...)`, where errexit is off, so each
+          # failure returns explicitly and the caller's assignment aborts.
+          artifact="$(realpath -- "${ARTIFACT_DIR}")"
+          function artifact_blob_sha() {
+            local file="${artifact}/$1" size
+            if [[ ! -f "${file}" || -L "${file}" ]] ||
+              [[ "$(realpath -- "${file}")" != "${file}" ]]; then
+              printf '%s is not a regular file in the artifact - aborting\n' "$1" >&2
+              return 1
+            fi
+            size="$(stat --format=%s -- "${file}")" || return 1
+            { printf 'blob %d\0' "${size}"; cat -- "${file}"; } | sha1sum | cut --delimiter=' ' --fields=1
+          }
+
+          # Two passes, so a refused path aborts the job before the work
+          # branch exists and before any PUT: a half-pushed bump is the
+          # worse outcome. Pass one compares each committable path with its
+          # blob on main and keeps the ones that differ.
+          to_commit=()
+          to_sha=()
+          while IFS= read -r path; do
+            [[ -n "${path}" ]] || continue
+            if [[ ! -e "${artifact}/${path}" ]]; then
+              printf '%s is missing from the artifact - aborting\n' "${path}" >&2
+              exit 1
+            fi
+            local_sha="$(artifact_blob_sha "${path}")"
+            main_sha="$(gh api "repos/${REPO}/contents/${path}?ref=${base_sha}" \
+              --jq .sha --header "${api_header}")"
+            if [[ "${local_sha}" == "${main_sha}" ]]; then
+              if [[ "${path}" == 'flake.lock' ]]; then
+                printf 'artifact flake.lock is identical to main - aborting\n' >&2
+                exit 1
+              fi
+              printf 'skipping %s: identical to main\n' "${path}"
+              continue
+            fi
+            to_commit+=("${path}")
+            to_sha+=("${main_sha}")
+          done <<< "${COMMITTABLE_PATHS}"
 
           # The commits are written to work_branch, created fresh from
           # main HEAD. For a new PR that is the PR branch itself. An open
@@ -309,50 +387,30 @@ jobs:
             --field sha="${base_sha}" \
             --header "${api_header}" >/dev/null
 
-          # One signed commit per changed allowlisted path. Each PUT names
-          # the file's blob SHA on main: the commits touch disjoint paths,
-          # so an earlier commit in this loop never invalidates a later
-          # file's base SHA. flake.lock goes first, so a partial failure
-          # leaves the lock without its docs — which the freshness gate
-          # then reports — rather than docs describing an absent lock.
-          committed=0
-          while IFS= read -r path; do
-            [[ -n "${path}" ]] || continue
-            if [[ ! -f "${path}" ]]; then
-              printf 'skipping %s: not in artifact\n' "${path}"
-              continue
-            fi
-            blob_sha="$(git rev-parse "origin/main:${path}")"
-            if [[ "$(git hash-object -- "${path}")" == "${blob_sha}" ]]; then
-              printf 'skipping %s: identical to main\n' "${path}"
-              continue
-            fi
+          # One signed commit per changed path. Each PUT names the file's
+          # blob SHA at base_sha: the commits touch disjoint paths, so an
+          # earlier commit in this loop never invalidates a later file's
+          # base SHA. flake.lock goes first, so a partial failure leaves
+          # the lock without its docs — which the freshness gate then
+          # reports — rather than docs describing an absent lock.
+          for i in "${!to_commit[@]}"; do
+            path="${to_commit[i]}"
             # The lock's own commit keeps the PR title's wording so the PR
             # and its first commit agree.
             msg="chore: update ${path} for flake.lock bump"
             if [[ "${path}" == 'flake.lock' ]]; then
               msg='chore: update flake.lock'
             fi
-            content_b64="$(base64 --wrap=0 "${path}")"
+            content_b64="$(base64 --wrap=0 -- "${artifact}/${path}")"
             tip_sha="$(gh api --method PUT "repos/${REPO}/contents/${path}" \
               --field message="${msg}" \
               --field content="${content_b64}" \
-              --field sha="${blob_sha}" \
+              --field sha="${to_sha[i]}" \
               --field branch="${work_branch}" \
               --jq .commit.sha \
               --header "${api_header}")"
             printf 'committed %s\n' "${path}"
-            committed=$((committed + 1))
-          done <<< "${COMMITTABLE_PATHS}"
-
-          # The sanity check already proved flake.lock differs from main,
-          # so a zero-commit walk means the loop's skip logic swallowed
-          # every path. Aborting beats opening an empty PR that auto-merge
-          # would then land as a no-op.
-          if ((committed == 0)); then
-            printf 'no files committed - aborting\n' >&2
-            exit 1
-          fi
+          done
 
           if [[ "${open_pr}" == true ]]; then
             printf 'rebasing open PR for %s onto main HEAD %s (new tip %s)\n' \
