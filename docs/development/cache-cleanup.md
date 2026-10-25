@@ -52,7 +52,10 @@ Both prune jobs declare `actions: write` (cache deletion) and
 `contents: read`, the scope GitHub documents for the branch listing
 `prune-stale` does (on this public repository neither that listing nor
 the open-PR one needs any token permission) and the checkout
-`prune-on-pr-close` does to run `scripts/classify-pr-cache-refs.sh`. The `actions: write` grant is what
+`prune-on-pr-close` does to run `scripts/classify-pr-cache-refs.sh`.
+That checkout is the default branch, not the event's ref: GitHub deletes
+`refs/pull/<n>/merge` when a PR closes, so the event's ref may no longer
+resolve when the job runs. The `actions: write` grant is what
 `scripts/check-permission-scopes.sh` pins, via the per-job allowlist in
 `.github/permission-scopes.yml`; read scopes are outside that lint. The
 `notify` job declares `issues: write` for the failure issue it files and
