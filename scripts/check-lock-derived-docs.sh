@@ -7,10 +7,15 @@
 # freshness hook that declares `.github/workflows/ci.yml` a trigger, and
 # may commit exactly the lock plus the outputs both generator lists
 # declare with `@generates` / `@generates-block`, and uploads exactly
-# that committable set from the job that writes the lock.
+# that committable set from the job that writes the lock. A hook's
+# trigger is its `files` and `exclude` patterns evaluated as pre-commit
+# evaluates them, with Python `re.search`; a pattern that does not
+# compile is a could-not-run. `ephemeral-refs-gap-fresh` is exempt from
+# the generator list, because its generator's output does not depend on
+# lock content.
 
-# A freshness hook whose `files` regex names `flake.lock` is a
-# declaration that bumping the lock can leave its doc stale. A workflow
+# A freshness hook whose trigger admits `flake.lock` is a declaration
+# that bumping the lock can leave its doc stale. A workflow
 # that writes a lock therefore owns regenerating exactly that set: a doc
 # it skips reaches the PR stale, the required freshness gate fails, and
 # the change cannot merge without a human touching a branch the
@@ -30,8 +35,14 @@
 # lock update in a run block — so a new lock-writing workflow is governed
 # without editing this lint.
 #
-# Source-parsed rather than evaluated: `files` and `entry` are literal in
-# the hook module, and each workflow's lists are literal YAML.
+# Source-parsed rather than evaluated: `files`, `exclude`/`excludes` and
+# `entry` are literal in the hook module, and each workflow's lists are
+# literal YAML. The patterns are matched with Python `re.search`, the
+# engine pre-commit runs them with, and never with POSIX ERE: the hook
+# module uses lookaheads, which ERE lacks, and grep reads such a pattern
+# as one that matches nothing, a verdict about a hook pre-commit does
+# run on the lock. A path triggers a hook when `files` matches it and
+# `exclude` does not, which is pre-commit's own rule.
 #
 # A workflow's `jobs:` and `env:` are read as GitHub Actions reads a root
 # key written as an alias (`ROOT_KEY_NODE` in scripts/lib/job-keys.sh);
@@ -64,19 +75,25 @@ readonly HOOKS="${ROOT}/nix/hooks/freshness.nix"
 
 require_tool yq
 require_tool awk
-require_tool grep
+require_tool python3
 
 if [[ ! -f ${HOOKS} ]]; then
   printf 'lock-derived-docs: %s not found\n' "${HOOKS}" >&2
   exit 2
 fi
 
-# One record per hook block: <name>\037<files regex>\037<space-separated
-# scripts/*.sh paths named anywhere in the block>. The delimiter is an
-# ASCII unit separator rather than a tab: a block with an empty `files`
-# value puts two delimiters back to back, and bash's `read` treats a tab
-# as IFS whitespace, which collapses the pair and drops the empty field
-# instead of preserving it.
+# One record per hook block: <name>\037<files regex>\037<exclude
+# regex>\037<space-separated scripts/*.sh paths named anywhere in the
+# block>. The delimiter is an ASCII unit separator rather than a tab: a
+# block with an empty `files` value puts two delimiters back to back, and
+# bash's `read` treats a tab as IFS whitespace, which collapses the pair
+# and drops the empty field instead of preserving it.
+#
+# The exclude field is what pre-commit receives: an `exclude` string as
+# written, else an `excludes` list joined the way git-hooks.nix joins it,
+# `(a|b)`, else pre-commit's default `^$`. A list may span lines, and its
+# end is a `]` outside every quoted entry, since an entry can hold a
+# bracket expression of its own.
 #
 # An awk fault is returned explicitly: the caller captures this in a
 # command substitution inside an `if`, where errexit is suppressed, so a
@@ -84,9 +101,14 @@ fi
 # block list.
 function parse_hooks() {
   awk '
-    /^  [A-Za-z0-9_-]+ = \{/ { name = $1; in_block = 1; files = ""; scripts = ""; next }
+    /^  [A-Za-z0-9_-]+ = \{/ {
+      name = $1; in_block = 1; files = ""; scripts = ""
+      exclude = ""; has_exclude = 0; excludes = ""; in_excludes = 0
+      next
+    }
     in_block && /^  \};/ {
-      printf "%s\037%s\037%s\n", name, files, scripts
+      if (!has_exclude) exclude = (excludes == "" ? "^$" : "(" excludes ")")
+      printf "%s\037%s\037%s\037%s\n", name, files, exclude, scripts
       in_block = 0; next
     }
     in_block {
@@ -94,6 +116,25 @@ function parse_hooks() {
         s = substr($0, RSTART, RLENGTH)
         sub(/^files = "/, "", s); sub(/"$/, "", s)
         files = s
+      }
+      if (match($0, /exclude = "[^"]*"/)) {
+        s = substr($0, RSTART, RLENGTH)
+        sub(/^exclude = "/, "", s); sub(/"$/, "", s)
+        exclude = s; has_exclude = 1
+      }
+      list = ""
+      if (in_excludes) {
+        list = $0
+      } else if (match($0, /excludes = \[/)) {
+        list = substr($0, RSTART + RLENGTH); in_excludes = 1
+      }
+      if (in_excludes) {
+        while (match(list, /"[^"]*"/)) {
+          tok = substr(list, RSTART + 1, RLENGTH - 2)
+          excludes = (excludes == "" ? tok : excludes "|" tok)
+          list = substr(list, RSTART + RLENGTH)
+        }
+        if (list ~ /\]/) in_excludes = 0
       }
       line = $0
       while (match(line, /scripts\/[A-Za-z0-9._-]+\.sh/)) {
@@ -110,9 +151,80 @@ if ! blocks="$(parse_hooks)"; then
   exit 2
 fi
 
-failed=0
+# Reads the parsed records on stdin and prints, per block,
+# <name>\037<triggers on argv[1]>\037<triggers on argv[2]>\037<scripts>,
+# each verdict `true` or `false`. A pattern is a Nix string literal, so
+# its escapes are undone first, which turns the source's `\\.` into the
+# `\.` pre-commit receives. Every pattern that does not compile is named
+# before the program exits 2, and then nothing is printed: a verdict
+# about such a hook would be a guess.
+readonly MATCH_PROGRAM='
+import re
+import sys
+
+NIX_ESCAPES = {"n": "\n", "r": "\r", "t": "\t"}
+
+
+def unescape(literal):
+    return re.sub(r"\\(.)", lambda m: NIX_ESCAPES.get(m.group(1), m.group(1)), literal)
+
+
+targets = sys.argv[1:]
+failed = False
+rows = []
+for record in sys.stdin.read().split("\n"):
+    if not record:
+        continue
+    name, files, exclude, scripts = record.split("\x1f")
+    compiled = {}
+    for key, literal in (("files", files), ("exclude", exclude)):
+        try:
+            compiled[key] = re.compile(unescape(literal))
+        except re.error as err:
+            print(
+                f"lock-derived-docs: hook {name}: its {key} pattern does not compile under Python re: {err}",
+                file=sys.stderr,
+            )
+            failed = True
+    if len(compiled) < 2:
+        continue
+    verdicts = [
+        "true"
+        if compiled["files"].search(t) and not compiled["exclude"].search(t)
+        else "false"
+        for t in targets
+    ]
+    rows.append("\x1f".join([name, *verdicts, scripts]))
+if failed:
+    sys.exit(2)
+for row in rows:
+    print(row)
+'
 
 readonly CI_WORKFLOW='.github/workflows/ci.yml'
+
+# Captured with its status checked for the reason parse_hooks is: inside
+# an `if`, errexit is suppressed, and a failed match run would otherwise
+# arrive as an empty block list.
+if ! matched="$(python3 -I -c "${MATCH_PROGRAM}" 'flake.lock' "${CI_WORKFLOW}" <<<"${blocks}")"; then
+  printf 'lock-derived-docs: could not evaluate the hook trigger patterns in %s\n' "${HOOKS}" >&2
+  exit 2
+fi
+
+# Lock-triggered hooks that no lock-writing workflow need regenerate.
+# The trigger of ephemeral-refs-gap-fresh admits every file type no
+# ephemeral-refs extractor claims, flake.lock among them, so that a file
+# of a new type reaches its check. Its generator renders the type labels
+# of those files that carry a full-line `#` comment, and nothing else of
+# their content: flake.lock is JSON that Nix writes, in which no line
+# starts with `#`, so a bump that rewrites the lock cannot change the
+# block. An exemption whose hook no longer admits the lock is reported,
+# so it cannot outlive its reason and excuse the next trigger instead.
+declare -Ar LOCK_TRIGGER_EXEMPT=(
+  ['ephemeral-refs-gap-fresh']=1
+)
+
+failed=0
 
 # Generator keyed by the hook block that declares the lock a trigger.
 declare -A hook_generators=()
@@ -120,15 +232,15 @@ declare -A hook_generators=()
 declare -A ci_hook_generators=()
 total_blocks=0
 lock_triggered=0
-while IFS=$'\037' read -r name files scripts; do
+lock_exempt=0
+while IFS=$'\037' read -r name lock_match ci_match scripts; do
   [[ -n ${name} ]] || continue
   total_blocks=$((total_blocks + 1))
-  # Nix string literal: "\\." in source is the ERE "\.".
-  ere="$(printf '%s' "${files}" | sed 's/\\\\/\\/g')"
-  lock_match='false'
-  ci_match='false'
-  grep --quiet --extended-regexp -- "${ere}" <<<'flake.lock' && lock_match='true'
-  grep --quiet --extended-regexp -- "${ere}" <<<"${CI_WORKFLOW}" && ci_match='true'
+  if [[ -n ${LOCK_TRIGGER_EXEMPT["${name}"]:-} && ${lock_match} != 'true' ]]; then
+    printf 'lock-derived-docs: hook %s is exempt from LOCK_DERIVED_GENERATORS but does not declare flake.lock a trigger\n' \
+      "${name}" >&2
+    failed=$((failed + 1))
+  fi
   [[ ${lock_match} == 'true' || ${ci_match} == 'true' ]] || continue
   # Split on spaces explicitly: the global IFS is newline+tab, so a block
   # naming its generator more than once would otherwise stay one
@@ -147,6 +259,10 @@ while IFS=$'\037' read -r name files scripts; do
   fi
   [[ ${lock_match} == 'true' ]] || continue
   lock_triggered=$((lock_triggered + 1))
+  if [[ -n ${LOCK_TRIGGER_EXEMPT["${name}"]:-} ]]; then
+    lock_exempt=$((lock_exempt + 1))
+    continue
+  fi
   # The block's two declarations disagree: its trigger regex says a lock
   # bump can leave this doc stale, but nothing in the block names a generator
   # the bumper could run. Dropping such a block would take it out of both
@@ -159,10 +275,10 @@ while IFS=$'\037' read -r name files scripts; do
     continue
   fi
   hook_generators["${generator}"]="${name}"
-done <<<"${blocks}"
+done <<<"${matched}"
 
 # Guard-the-guard: this repo has lock-derived docs, so an empty match set
-# means the block parser or the regex unescape broke rather than that
+# means the block parser or the pattern match broke rather than that
 # nothing is lock-derived. An empty-at-exit-0 producer reads exactly like
 # full agreement. Counted on blocks matched, not generators collected, so
 # a matched block whose generator is missing stays the drift reported just
@@ -520,8 +636,8 @@ fi
 # A clean run is otherwise silent about how much it checked, which reads
 # identically whether it compared real sets or two empty ones. State the
 # breadth covered, on both halves of the comparison.
-printf 'lock-derived-docs: ok — %d hook block(s) scanned, %d lock-triggered, %d ci.yml-triggered generator(s), %d workflow(s) scanned, %d lock-writing, %d committable path(s), %d generator declaration(s) resolved across %d listed generator(s), %d workflow-derived, %d upload path(s)\n' \
-  "${total_blocks}" "${lock_triggered}" "${#ci_hook_generators[@]}" \
+printf 'lock-derived-docs: ok — %d hook block(s) scanned, %d lock-triggered (%d exempt), %d ci.yml-triggered generator(s), %d workflow(s) scanned, %d lock-writing, %d committable path(s), %d generator declaration(s) resolved across %d listed generator(s), %d workflow-derived, %d upload path(s)\n' \
+  "${total_blocks}" "${lock_triggered}" "${lock_exempt}" "${#ci_hook_generators[@]}" \
   "${workflows_scanned}" "${#lock_writing[@]}" "${committable_total}" \
   "${declarations_total}" "${generators_declaring}" "${workflow_derived_total}" \
   "${upload_total}"

@@ -467,10 +467,11 @@
     language = "system";
   };
   # Asserts every workflow that writes a flake.lock runs a generator for
-  # each freshness hook that names `flake.lock` a trigger. A lock-derived
+  # each freshness hook whose trigger admits `flake.lock`. A lock-derived
   # doc a lock-writing workflow skips reaches its PR stale, and the
-  # freshness gate then blocks a branch the automation owns.
-  # See docs/architecture/flake-input-bumps.md.
+  # freshness gate then blocks a branch the automation owns. The lint
+  # matches trigger patterns with Python `re`, as pre-commit does, so
+  # python3 is on its path. See docs/architecture/flake-input-bumps.md.
   lock-derived-docs = {
     enable = true;
     name = "lock-derived-docs";
@@ -479,7 +480,7 @@
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
-      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      export PATH="${pkgs-unstable.yq-go}/bin:${pkgs-unstable.python3}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-lock-derived-docs.sh
     ''}";
     files = "^(nix/hooks/freshness\\.nix|\\.github/workflows/.*\\.ya?ml|scripts/check-lock-derived-docs\\.sh)$";

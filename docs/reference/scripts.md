@@ -1022,7 +1022,12 @@ trigger, runs each generator it lists as workflow-derived from a
 freshness hook that declares `.github/workflows/ci.yml` a trigger, and
 may commit exactly the lock plus the outputs both generator lists
 declare with `@generates` / `@generates-block`, and uploads exactly
-that committable set from the job that writes the lock.
+that committable set from the job that writes the lock. A hook's
+trigger is its `files` and `exclude` patterns evaluated as pre-commit
+evaluates them, with Python `re.search`; a pattern that does not
+compile is a could-not-run. `ephemeral-refs-gap-fresh` is exempt from
+the generator list, because its generator's output does not depend on
+lock content.
 
 ### scripts/check-manifest-digest-pinned.sh
 
