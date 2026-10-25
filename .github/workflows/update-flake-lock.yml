@@ -117,6 +117,10 @@ jobs:
           done < "${changed}"
           exit "${status}"
 
+      # The path list is written out rather than read from `env` because
+      # octoscan flags any `env.*` expression in a `with:` value;
+      # scripts/check-lock-derived-docs.sh requires it to equal
+      # COMMITTABLE_PATHS as a set.
       - name: upload lock artifact
         if: steps.diff.outputs.changed == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

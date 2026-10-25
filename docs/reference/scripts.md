@@ -1021,7 +1021,8 @@ generator for each freshness hook that declares `flake.lock` a
 trigger, runs each generator it lists as workflow-derived from a
 freshness hook that declares `.github/workflows/ci.yml` a trigger, and
 may commit exactly the lock plus the outputs both generator lists
-declare with `@generates` / `@generates-block`.
+declare with `@generates` / `@generates-block`, and uploads exactly
+that committable set from the job that writes the lock.
 
 ### scripts/check-manifest-digest-pinned.sh
 
