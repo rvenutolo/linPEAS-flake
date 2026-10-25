@@ -23,6 +23,11 @@
         shfmt
         actionlint
         check-jsonschema
+        # scripts/lib/hook-filter.sh runs `python3 -I`. Declared rather
+        # than left to check-jsonschema's propagation; the same `python3`
+        # attribute keeps it one interpreter, not a second one shadowing
+        # the env check-jsonschema imports from.
+        python3
       ];
     in
     {
