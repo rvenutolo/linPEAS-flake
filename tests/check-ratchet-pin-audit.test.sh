@@ -80,11 +80,21 @@ expect_unparsable
 # @arg $4 text appended to the file, printf-style (may be empty)
 # @arg $5 expected exit code
 # @arg $6 expected stderr
+# @arg $7 root keys inserted after the first line, printf-style, where
+#   the anchors a replacement aliases are defined (optional). With them,
+#   yq's merge-key warning is not dropped: an aliased read passes the
+#   merge specification, so stderr must hold no warning at all.
 function expect_shape() {
-  local -r name="$1" old="$2" new="$3" tail="$4" want_exit="$5" want="$6"
+  local -r name="$1" old="$2" new="$3" tail="$4" want_exit="$5" want="$6" anchors="${7:-}"
   local dir content got_exit=0 got_stderr replacement appended
   dir="$(mktemp --directory)"
   content="$(<"${FIXTURES}/good.yml")"
+  if [[ -n ${anchors} ]]; then
+    local anchor_text
+    # shellcheck disable=SC2059 # the anchor text is the format
+    printf -v anchor_text -- "${anchors}"
+    content="${content%%$'\n'*}"$'\n'"${anchor_text}${content#*$'\n'}"
+  fi
   # printf -v keeps a trailing line break a substitution would drop.
   # shellcheck disable=SC2059 # the replacement is the format
   printf -v replacement -- "${new}"
@@ -103,11 +113,12 @@ function expect_shape() {
   local expected="${want//%W/${dir}/wf.yml}"
   rm --recursive --force -- "${dir}"
   # yq's own lines are not the lint's: its timestamped merge-key warning
-  # is dropped, and `YQ_ERROR` on a line of its own stands for one line of
-  # yq's error, which must open with `Error: `.
+  # is dropped (except under anchors, see $7), and `YQ_ERROR` on a line of
+  # its own stands for one line of yq's error, which must open with
+  # `Error: `.
   local line kept=''
   while IFS= read -r line; do
-    [[ ${line} == 'time='*' level=WARN '* ]] && continue
+    [[ -z ${anchors} && ${line} == 'time='*' level=WARN '* ]] && continue
     kept+="${kept:+$'\n'}${line}"
   done <<<"${got_stderr}"
   got_stderr="${kept}"
@@ -471,5 +482,149 @@ expect_shape 'a checkout step spelled in mixed case that keeps credentials is co
   "${CHECK_STEPS}" "${CHECK_HR}"'      - uses: Actions/Checkout@34e114876b0b11c390a56381ad16ebd13914f8d5\n        with:\n          persist-credentials: true\n'"${CHECK_NIX}" '' 1 \
   "actions/checkout: 2 steps total, only 1 set persist-credentials: false
 ${ONE_FAILED}"
+
+# --- values written as aliases, built from good.yml at run time ---
+# Each value the lint reads, written as an alias, gets the verdict and
+# the diagnostic of the same value written inline. The anchors are root
+# keys the lint never reads.
+readonly HR_PIN='step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5'
+readonly CHECKOUT_PIN='actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5'
+readonly OTHER_PIN='actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830'
+readonly CHECK_TIMEOUT=$'    timeout-minutes: 15\n'
+readonly CHECK_PERMS=$'    permissions:\n      contents: read\n'
+readonly CONC_GROUP=$'  group: ratchet-pin-audit\n'
+readonly NOTIFY_USES=$'      - uses: ./.github/actions/notify-workflow-result\n'
+readonly BODY_HEAD=$'          body: |\n'
+# shellcheck disable=SC2016 # backticks are literal Markdown in the body
+readonly ALL_TOKENS='"`drift-detected` `upstream-api-failure` `ratchet-tool-failure` `unknown`"'
+# shellcheck disable=SC2016 # backticks are literal Markdown in the body
+readonly THREE_TOKENS='"`drift-detected` `upstream-api-failure` `ratchet-tool-failure`"'
+readonly TIMEOUT_MISSING="job check: timeout-minutes missing
+${ONE_FAILED}"
+readonly CREDENTIALS_KEPT="actions/checkout: 2 steps total, only 1 set persist-credentials: false
+${ONE_FAILED}"
+readonly OTHER_FIRST="job check: first step must be step-security/harden-runner (got: ${OTHER_PIN})
+${ONE_FAILED}"
+readonly OTHER_GROUP="concurrency.group must be \"ratchet-pin-audit\" (got: \"other\")
+${ONE_FAILED}"
+readonly NULL_GROUP="concurrency.group must be \"ratchet-pin-audit\" (got: \"\")
+${ONE_FAILED}"
+readonly TOKEN_MISSING="notify body missing reason token: unknown
+${ONE_FAILED}"
+readonly WRITE_PERMS="job check: permissions must be exactly { contents: read } (got: contents:write)
+${ONE_FAILED}"
+readonly NESTED_PERMS="job check: permissions must be exactly { contents: read } (got: contents:[[[[[read]]]]])
+${ONE_FAILED}"
+
+# timeout-minutes: an alias of null is a missing timeout, as null is.
+expect_shape 'a timeout-minutes of null is missing' \
+  "${CHECK_TIMEOUT}" '    timeout-minutes: null\n' '' 1 "${TIMEOUT_MISSING}"
+expect_shape 'a timeout-minutes written as an alias of null is missing' \
+  "${CHECK_TIMEOUT}" '    timeout-minutes: *t\n' '' 1 "${TIMEOUT_MISSING}" \
+  'x-t: &t null\n'
+expect_shape 'a timeout-minutes written as an alias of a number is set' \
+  "${CHECK_TIMEOUT}" '    timeout-minutes: *t\n' '' 0 '' \
+  'x-t: &t 15\n'
+
+# The first step's uses: is read as its anchored text.
+expect_shape 'a first step written as an alias of harden-runner is harden-runner' \
+  "${CHECK_STEPS}" "      - uses: *u\\n        with:\\n          egress-policy: audit\\n${CHECK_CHECKOUT}${CHECK_NIX}" '' 0 '' \
+  "x-u: &u ${HR_PIN}\\n"
+expect_shape 'a first step of another action is named' \
+  "${CHECK_STEPS}" "      - uses: ${OTHER_PIN}\\n${CHECK_CHECKOUT}${CHECK_NIX}" '' 1 "${OTHER_FIRST}"
+expect_shape 'a first step written as an alias of another action is named by its text' \
+  "${CHECK_STEPS}" "      - uses: *u\\n${CHECK_CHECKOUT}${CHECK_NIX}" '' 1 "${OTHER_FIRST}" \
+  "x-u: &u ${OTHER_PIN}\\n"
+
+# A checkout step is found through an aliased uses:, and its
+# persist-credentials: is read through an alias.
+expect_shape 'a checkout step that keeps credentials is counted' \
+  "${CHECK_STEPS}" "${CHECK_HR}      - uses: ${CHECKOUT_PIN}\\n        with:\\n          persist-credentials: true\\n${CHECK_NIX}" '' 1 \
+  "${CREDENTIALS_KEPT}"
+expect_shape 'a checkout step written as an alias that keeps credentials is counted' \
+  "${CHECK_STEPS}" "${CHECK_HR}      - uses: *u\\n        with:\\n          persist-credentials: true\\n${CHECK_NIX}" '' 1 \
+  "${CREDENTIALS_KEPT}" "x-u: &u ${CHECKOUT_PIN}\\n"
+expect_shape 'a persist-credentials written as an alias of false is false' \
+  "${CHECK_STEPS}" "${CHECK_HR}      - uses: ${CHECKOUT_PIN}\\n        with:\\n          persist-credentials: *f\\n${CHECK_NIX}" '' 0 '' \
+  'x-f: &f false\n'
+expect_shape 'a persist-credentials written as an alias of true keeps credentials' \
+  "${CHECK_STEPS}" "${CHECK_HR}      - uses: ${CHECKOUT_PIN}\\n        with:\\n          persist-credentials: *f\\n${CHECK_NIX}" '' 1 \
+  "${CREDENTIALS_KEPT}" 'x-f: &f true\n'
+
+# concurrency.group is read as its anchored text, an alias of null as
+# null is.
+expect_shape 'a concurrency group written as an alias is read as its text' \
+  "${CONC_GROUP}" '  group: *g\n' '' 0 '' \
+  'x-g: &g ratchet-pin-audit\n'
+expect_shape 'a concurrency group of null is empty' \
+  "${CONC_GROUP}" '  group: null\n' '' 1 "${NULL_GROUP}"
+expect_shape 'a concurrency group written as an alias of null is empty' \
+  "${CONC_GROUP}" '  group: *g\n' '' 1 "${NULL_GROUP}" \
+  'x-g: &g null\n'
+expect_shape 'a concurrency group of another name is named' \
+  "${CONC_GROUP}" '  group: other\n' '' 1 "${OTHER_GROUP}"
+expect_shape 'a concurrency group written as an alias of another name is named by its text' \
+  "${CONC_GROUP}" '  group: *g\n' '' 1 "${OTHER_GROUP}" 'x-g: &g other\n'
+
+# The notify step is found through an aliased uses:, and its body is
+# read as its anchored text. The checked-in body moves to a key the lint
+# never reads.
+expect_shape 'a notify step written as an alias is the notify step' \
+  "${NOTIFY_USES}" '      - uses: *n\n' '' 0 '' \
+  'x-n: &n ./.github/actions/notify-workflow-result\n'
+expect_shape 'a notify body holding every reason token passes' \
+  "${BODY_HEAD}" "          body: ${ALL_TOKENS}\\n          x-body: |\\n" '' 0 ''
+expect_shape 'a notify body written as an alias is read as its text' \
+  "${BODY_HEAD}" '          body: *b\n          x-body: |\n' '' 0 '' \
+  "x-b: &b ${ALL_TOKENS}\\n"
+expect_shape 'a notify body missing a reason token names it' \
+  "${BODY_HEAD}" "          body: ${THREE_TOKENS}\\n          x-body: |\\n" '' 1 "${TOKEN_MISSING}"
+expect_shape 'a notify body written as an alias missing a reason token names it' \
+  "${BODY_HEAD}" '          body: *b\n          x-body: |\n' '' 1 "${TOKEN_MISSING}" \
+  "x-b: &b ${THREE_TOKENS}\\n"
+
+# A job's permissions are read through an alias of the map, a merge key
+# and an alias of a value, however deep the nest, up to sixteen passes.
+expect_shape 'a check permission written as an alias is read as its text' \
+  "${CHECK_PERMS}" '    permissions:\n      contents: *r\n' '' 0 '' \
+  'x-r: &r read\n'
+expect_shape 'a check permission of write is named' \
+  "${CHECK_PERMS}" '    permissions:\n      contents: write\n' '' 1 "${WRITE_PERMS}"
+expect_shape 'a check permission written as an alias of write is named by its text' \
+  "${CHECK_PERMS}" '    permissions:\n      contents: *w\n' '' 1 "${WRITE_PERMS}" \
+  'x-w: &w write\n'
+expect_shape 'check permissions written as an alias are read as their map' \
+  "${CHECK_PERMS}" '    permissions: *p\n' '' 0 '' \
+  'x-p: &p {contents: read}\n'
+expect_shape 'check permissions written as a merge key are read as the merged map' \
+  "${CHECK_PERMS}" '    permissions: {<<: *p}\n' '' 0 '' \
+  'x-p: &p {contents: read}\n'
+expect_shape 'check permissions written as a merge key of a writer are named' \
+  "${CHECK_PERMS}" '    permissions: {<<: *p}\n' '' 1 "${WRITE_PERMS}" \
+  'x-p: &p {contents: write}\n'
+expect_shape 'check permissions three aliases deep are read as their text' \
+  "${CHECK_PERMS}" '    permissions: *q\n' '' 0 '' \
+  'x-r: &r read\nx-p: &p {contents: *r}\nx-q: &q {<<: *p}\n'
+expect_shape 'a check permission nested five lists deep is named' \
+  "${CHECK_PERMS}" '    permissions:\n      contents: [[[[[read]]]]]\n' '' 1 "${NESTED_PERMS}"
+expect_shape 'a check permission nested five aliases deep is named by its text' \
+  "${CHECK_PERMS}" '    permissions:\n      contents: *a4\n' '' 1 "${NESTED_PERMS}" \
+  'x-a0: &a0 [read]\nx-a1: &a1 [*a0]\nx-a2: &a2 [*a1]\nx-a3: &a3 [*a2]\nx-a4: &a4 [*a3]\n'
+
+# A permission value still holding an alias after sixteen passes has no
+# text to judge, so the run stops on it; the same nest anywhere the lint
+# never reads leaves the verdict alone. Each anchor holds a list holding
+# an alias of the one before.
+perm_deep='x-a0: &a0 [read]\n'
+for i in $(seq 1 17); do
+  perm_deep+="x-a${i}: &a${i} [*a$((i - 1))]\\n"
+done
+readonly perm_deep
+expect_shape 'a check permission nested deeper than sixteen aliases stops the run' \
+  "${CHECK_PERMS}" '    permissions:\n      contents: *a17\n' '' 2 \
+  "Error: jobs.check.permissions holds an alias nested too deep to resolve
+cannot read the permissions of job check from %W" "${perm_deep}"
+expect_shape 'an alias nested deeper than sixteen in a value the lint never reads is not read' \
+  $'          label: ratchet-drift\n' '          label: *a17\n' '' 0 '' "${perm_deep}"
 
 printf 'all tests passed\n'
