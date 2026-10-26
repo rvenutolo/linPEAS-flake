@@ -64,8 +64,8 @@ this repo allowlists. Remove that label from `.github/actionlint.yaml`
 docs/development/linting.md#runner-label-allowlist.
 
 A label written as an alias is read as its anchored text, as
-actionlint reads it; a label that still holds an alias after resolving
-is refused with exit 2.
+actionlint reads it; a label that still holds an alias after sixteen
+resolving passes is refused with exit 2.
 
 Env overrides (test-only):
 

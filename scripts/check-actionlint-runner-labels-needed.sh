@@ -14,8 +14,8 @@
 # docs/development/linting.md#runner-label-allowlist.
 #
 # A label written as an alias is read as its anchored text, as
-# actionlint reads it; a label that still holds an alias after resolving
-# is refused with exit 2.
+# actionlint reads it; a label that still holds an alias after sixteen
+# resolving passes is refused with exit 2.
 #
 # Env overrides (test-only):
 #   ACTIONLINT_CONFIG_OVERRIDE — alternate config path
@@ -57,11 +57,15 @@ fi
 # actionlint reads a label written as an alias as its anchored text, so
 # each label is read through its alias; `.[]` already follows a list
 # written as one. One `explode` pass resolves one level of an alias
-# chain, and an anchor cannot sit on an alias, so a scalar label always
-# resolves. A label that is itself a collection holding an alias does
-# not, and the canary has no text to probe for it.
+# chain. A scalar label resolves in one, since an anchor cannot sit on an
+# alias, but a label that is itself a collection can nest an alias inside
+# the text an alias stands for, so each goes through sixteen passes, as
+# `ON_NODE` in scripts/check-workflow-on-branches.sh resolves `on:`. A
+# label still holding an alias after them has no text to probe.
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+readonly LABELS='.self-hosted-runner.labels // [] | .[] | (. as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)))'
 label_aliases=""
-if ! label_aliases="$(yq '[.self-hosted-runner.labels // [] | .[] | explode(.) | .. | select(kind == "alias")] | length' "${CONFIG}")"; then
+if ! label_aliases="$(yq "[${LABELS} | ... | select(kind == \"alias\")] | length" "${CONFIG}")"; then
   printf 'ERROR: cannot read self-hosted-runner.labels from %s\n' "${CONFIG}" >&2
   exit 2
 fi
@@ -70,7 +74,7 @@ if [[ ${label_aliases} != 0 ]]; then
   exit 2
 fi
 labels_raw=""
-if ! labels_raw="$(yq '.self-hosted-runner.labels // [] | .[] | explode(.)' "${CONFIG}")"; then
+if ! labels_raw="$(yq "${LABELS}" "${CONFIG}")"; then
   printf 'ERROR: cannot read self-hosted-runner.labels from %s\n' "${CONFIG}" >&2
   exit 2
 fi
