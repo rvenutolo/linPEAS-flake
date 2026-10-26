@@ -95,6 +95,9 @@ as reviewable change). Drift in one direction lets a regeneration mask
 a legitimately-large change behind a spuriously-small size label; drift
 in the other scores a hand-authored file's every edit at zero.
 
+A size step's `uses:` and its `IGNORED` list written as an alias
+(`uses: *action`) are read as their anchored text.
+
 ### Label bootstrap
 
 The five `size/*` labels are tracked in `.github/labels.yml`. The
