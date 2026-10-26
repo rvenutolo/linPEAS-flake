@@ -438,7 +438,13 @@ function expect_jobs_block() {
 readonly CAFE_STEPS=$'    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            api.github.com:443\n            cafe.github.com:443\n'
 readonly CLEAN_STEPS=$'    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            api.github.com:443\n'
 readonly CAFE_FINDING="which no tool in this repo reaches"
+# A job key written as an alias is named by its anchored text, as the
+# same job written inline is.
 expect_jobs_block job-key-alias $'  *ka :\n'"${CAFE_STEPS}" \
+  "@F@: job 'named' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n1 egress-allowlist violation(s)'
+expect_jobs_block job-key-inline $'  named:\n'"${CAFE_STEPS}" \
+  "@F@: job 'named' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n1 egress-allowlist violation(s)'
+expect_jobs_block job-key-literal-star $'  "*ka":\n'"${CAFE_STEPS}" \
   "@F@: job '*ka' allowlists cafe.github.com, ${CAFE_FINDING}"$'\n1 egress-allowlist violation(s)'
 expect_jobs_block job-key-twice $'  a:\n'"${CLEAN_STEPS}"$'  a:\n'"${CAFE_STEPS}" \
   "@F@: job key 'a' is written more than once, so which job is read is ambiguous"$'\n1 egress-allowlist violation(s)'
@@ -476,14 +482,13 @@ expect_text_has merge-list-first-wins-runs $'p: &P\n  steps:\n'"${CAFE_HR}"$'   
   "runs 'gh release upload' but does not allowlist uploads.github.com"
 
 # `jobs:` written as an alias is read through: its job's allowlist is
-# checked as if the map were written out. A job key written as an alias
-# keeps the name the job list prints, so the `# egress-nix-exempt:`
-# comment in its block is found under that name and a stale one is a
-# finding.
+# checked as if the map were written out. The `# egress-nix-exempt:`
+# comment in the block of a job key written as an alias is found, and a
+# stale one is a finding naming the key's anchored text.
 expect_text_has jobs-map-alias $'x-jobs: &js\n'"${CAFE_JOB}"$'jobs: *js\n' "allowlists cafe.github.com"
 readonly STALE_KEY_JOB=$'  *ka :\n    # egress-nix-exempt: no longer needed\n    runs-on: ubuntu-latest\n    steps:\n      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3\n        with:\n          egress-policy: block\n          allowed-endpoints: >\n            api.github.com:443\n'
-expect_text_has job-key-alias-stale-marker $'x-name: &ka named\njobs:\n'"${STALE_KEY_JOB}" "job '*ka' carries a stale 'egress-nix-exempt:' marker"
-expect_text_has jobs-map-alias-key-alias-stale-marker $'x-name: &ka named\nx-jobs: &js\n'"${STALE_KEY_JOB}"$'jobs: *js\n' "job '*ka' carries a stale 'egress-nix-exempt:' marker"
+expect_text_has job-key-alias-stale-marker $'x-name: &ka named\njobs:\n'"${STALE_KEY_JOB}" "job 'named' carries a stale 'egress-nix-exempt:' marker"
+expect_text_has jobs-map-alias-key-alias-stale-marker $'x-name: &ka named\nx-jobs: &js\n'"${STALE_KEY_JOB}"$'jobs: *js\n' "job 'named' carries a stale 'egress-nix-exempt:' marker"
 
 # A merge key inside an aliased `jobs:` map is refused like one written
 # under `jobs:`.
