@@ -14,6 +14,9 @@
 #
 # The generator FAILS if the two sources diverge in either direction.
 #
+# A category map key or value written as a YAML alias is read as its
+# anchored text.
+#
 # Usage:
 #   scripts/refresh-ci-summary.sh            # mutate README.md in place
 #   scripts/refresh-ci-summary.sh --check    # exit 1 if the doc would change;
@@ -107,7 +110,11 @@ function main() {
   # scanned artifact: one yq cannot parse is a run that read no categories,
   # not a run that read them and found the summary stale. Left bare, yq's
   # own 1 is exactly that second reading.
-  if ! yq 'keys | .[]' "${cat_map}" | sort --unique >"${map_keys_file}"; then
+  # A key or value written as an alias is an alias node, which `keys` and
+  # `+` read as its `*name` marker rather than its text, so the map is
+  # exploded before either reads it. Exploding the whole map resolves
+  # every alias in it, however deep, in one pass.
+  if ! yq 'explode(.) | keys | .[]' "${cat_map}" | sort --unique >"${map_keys_file}"; then
     log_err "cannot read category keys from ${cat_map}"
     exit 2
   fi
@@ -145,7 +152,7 @@ function main() {
     pairs_file="$(make_temp)"
     # Append pairs_file to the outer trap so it's cleaned up too.
     trap 'rm --force -- "${contexts_file:-}" "${map_keys_file:-}" "${block_file:-}" "${doc_new:-}" "${pairs_file:-}"' EXIT
-    if ! yq 'to_entries | .[] | .value + "\t" + .key' "${cat_map}" |
+    if ! yq 'explode(.) | to_entries | .[] | .value + "\t" + .key' "${cat_map}" |
       sort >"${pairs_file}"; then
       log_err "cannot read category pairs from ${cat_map}"
       exit 2
