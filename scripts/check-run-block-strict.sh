@@ -37,8 +37,7 @@
 #
 # A body written as an alias (`run: *body`) is judged by its anchored
 # text and that text's node style. A step list written as an alias
-# (`steps: *st`) is read as its anchored list; a step list that still
-# holds an alias after resolving is refused with exit 2.
+# (`steps: *st`) is read as its anchored list.
 #
 # Plain single-line `run:` invocations stay exempt — they are
 # already a single shell command whose exit status drives the step
@@ -56,9 +55,8 @@
 # Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
 # cannot run: `yq` is absent from PATH, the workflow and
 # composite-action globs match no file, WORKFLOW_FILE_FILTER selects
-# none of the files they matched, a read of one step's run: block or its
-# job's key fails once the file's steps have been listed, or a step list
-# still holds an alias after resolving. An empty
+# none of the files they matched, or a read of one step's run: block or
+# its job's key fails once the file's steps have been listed. An empty
 # scan set is a could-not-run rather than a clean tree;
 # LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
@@ -108,15 +106,12 @@ readonly MULTILINE_SELECT='select(.value.run != null and (.value.run | explode(.
 #
 # A step list written as an alias (`steps: *st`) is read as the anchored
 # list. `to_entries` does not follow an alias, so the list is resolved
-# first, in two `explode` passes: one pass leaves the aliases inside the
-# copy it makes (a step `- *s`, a body `run: *body`), and the second
-# resolves those. A list still holding an alias after both passes emits
-# one `job-alias` or `composite-alias` row in place of its steps, and the
-# run stops on it rather than read a list it has not resolved.
+# with one `explode` first; an anchor cannot sit on an alias, so that
+# pass always leaves a list. The aliases inside its copy (a step `- *s`,
+# a body `run: *body`) need no second pass: a path read follows an
+# aliased step, and each body is exploded where it is read.
 # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
-readonly STEPS_HOLD_ALIAS='([$s | .. | select(kind == "alias")] | length) > 0'
-# shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
-readonly ROWS_QUERY="document_index as \$d | ((((${JOBS_NODE}) // {}) | to_entries | to_entries[] as \$j | ((\$j.value.value.steps | explode(.) | explode(.)) // []) as \$s | if ${STEPS_HOLD_ALIAS} then \"job-alias|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" else (\$s | to_entries[] | ${MULTILINE_SELECT} | \"job|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" + (.key | tostring)) end), (((.runs.steps | explode(.) | explode(.)) // []) as \$s | if ${STEPS_HOLD_ALIAS} then \"composite-alias|\" + (\$d | tostring) + \"||\" else (\$s | to_entries[] | ${MULTILINE_SELECT} | \"composite|\" + (\$d | tostring) + \"||\" + (.key | tostring)) end))"
+readonly ROWS_QUERY="document_index as \$d | ((((${JOBS_NODE}) // {}) | to_entries | to_entries[] as \$j | ((\$j.value.value.steps | explode(.)) // []) | to_entries[] | ${MULTILINE_SELECT} | \"job|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" + (.key | tostring)), (((.runs.steps | explode(.)) // []) | to_entries[] | ${MULTILINE_SELECT} | \"composite|\" + (\$d | tostring) + \"||\" + (.key | tostring)))"
 
 # Return first non-blank, non-comment line of a run: block.
 # Args: run-body-on-stdin
@@ -188,10 +183,6 @@ for f in "${selected_files[@]}"; do
     # nothing was read from. The row's numbers reach `yq` as data, through
     # `env`. A body written as an alias is read as its anchored text, which
     # is what the runner executes.
-    if [[ ${shape} == composite-alias ]]; then
-      printf '%s: runs.steps still holds a YAML alias after resolving; cannot read it\n' "${f}" >&2
-      exit 2
-    fi
     if [[ ${shape} == composite ]]; then
       if ! body="$(DOC="${doc}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .runs.steps[env(IDX)].run | explode(.)' "${f}")"; then
         printf '%s: cannot read composite step[%s] run: block\n' "${f}" "${idx}" >&2
@@ -201,10 +192,6 @@ for f in "${selected_files[@]}"; do
     else
       if ! job="$(DOC="${doc}" JPOS="${jpos}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].key | explode(.)' "${f}")"; then
         printf '%s: cannot read the key of the job at position %s\n' "${f}" "${jpos}" >&2
-        exit 2
-      fi
-      if [[ ${shape} == job-alias ]]; then
-        printf '%s: jobs.%q.steps still holds a YAML alias after resolving; cannot read it\n' "${f}" "${job}" >&2
         exit 2
       fi
       if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].value.steps[env(IDX)].run | explode(.)' "${f}")"; then
