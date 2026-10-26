@@ -181,8 +181,7 @@ runs:
   steps: *st
 EOF
 # The anchored list holds aliases of its own (a step `- *s`, a body
-# `run: *body`): resolving the list once leaves them inside its copy,
-# and a second pass reads them.
+# `run: *body`), read through as the runner reads them.
 expect_yaml steps-alias-nested-workflow workflow 1 \
   "steps-alias-nested-workflow/workflows/w.yml: job a step[0] run: line 2: ${HIT_DIAG}: mapfile -t rows < <(echo" <<'EOF'
 name: w
@@ -236,15 +235,15 @@ jobs:
     runs-on: ubuntu-latest
     steps: *none
 EOF
-# Three levels of aliases (list, step, body) leave one inside the list
-# after two passes: the list is not read, and the run stops.
-expect_yaml steps-alias-residual-workflow workflow 2 \
-  'steps-alias-residual-workflow/workflows/w.yml: jobs.a.steps still holds a YAML alias after resolving; cannot read it' <<'EOF'
+# Three levels of aliases (list, step, body) are read through to the
+# body, as the runner reads it.
+expect_yaml steps-alias-deep-workflow workflow 1 \
+  "steps-alias-deep-workflow/workflows/w.yml: job a step[0] run: line 2: ${HIT_DIAG}: mapfile -t rows < <(echo" <<'EOF'
 name: w
 on: push
 x-body: &body |
   set -Eeuo pipefail
-  echo PAYLOAD_RAN
+  mapfile -t rows < <(echo PAYLOAD_RAN)
 x-step: &s
   run: *body
 x-steps: &st
@@ -254,13 +253,13 @@ jobs:
     runs-on: ubuntu-latest
     steps: *st
 EOF
-expect_yaml steps-alias-residual-composite action 2 \
-  'steps-alias-residual-composite/actions/a/action.yml: runs.steps still holds a YAML alias after resolving; cannot read it' <<'EOF'
+expect_yaml steps-alias-deep-composite action 1 \
+  "steps-alias-deep-composite/actions/a/action.yml: composite step[0] run: line 2: ${HIT_DIAG}: mapfile -t rows < <(echo" <<'EOF'
 name: a
 description: a
 x-body: &body |
   set -Eeuo pipefail
-  echo PAYLOAD_RAN
+  mapfile -t rows < <(echo PAYLOAD_RAN)
 x-step: &s
   shell: bash
   run: *body
@@ -270,6 +269,31 @@ runs:
   using: composite
   steps: *st
 EOF
+# An alias the lint does not read, an `env:` value inside an aliased
+# step inside an aliased list, leaves the scan as the same file written
+# inline would. Read against the one-script tree so its count is its own.
+mkdir --parents -- "${scratch}/steps-alias-env-unread/workflows" "${scratch}/steps-alias-env-unread/actions"
+cat >"${scratch}/steps-alias-env-unread/workflows/w.yml" <<'EOF'
+name: w
+on: push
+x-value: &v PAYLOAD_RAN
+x-env: &e
+  MARK: *v
+x-step: &s
+  run: |
+    set -Eeuo pipefail
+    echo "${MARK}"
+  env: *e
+x-steps: &st
+  - *s
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: *st
+EOF
+expect steps-alias-env-unread "${FIXTURES}/good-diff" "${scratch}/steps-alias-env-unread/workflows" \
+  "${scratch}/steps-alias-env-unread/actions" 0 \
+  'no-opaque-procsub: ok — scanned 1 shell script(s) and 1 run: block(s)'
 
 # Generated here rather than committed: YAML that does not parse fails
 # the formatter.
