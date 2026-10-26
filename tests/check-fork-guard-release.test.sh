@@ -339,4 +339,15 @@ expect_body if-alias-guard.yml $'x-g: &g '"${ALIAS_GUARD_TEXT}"$'\njobs:\n  a:\n
 expect_body if-alias-other.yml $'x-g: &g other\njobs:\n  a:\n    if: *g\n    permissions:\n      contents: write\n'"${ALIAS_STEPS}" 1 \
   "DIR/if-alias-other.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL%\'\'}other${ONE_JOB}"
 
+# `permissions: write-all` is a scalar granting every scope, so its job
+# needs the guard exactly as a `contents: write` job does; `read-all`
+# grants none.
+expect_body perms-write-all.yml $'jobs:\n  a:\n    permissions: write-all\n'"${ALIAS_STEPS}" 1 \
+  "DIR/perms-write-all.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body perms-alias-write-all.yml $'x-w: &w write-all\njobs:\n  a:\n    permissions: *w\n'"${ALIAS_STEPS}" 1 \
+  "DIR/perms-alias-write-all.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body perms-write-all-guarded.yml $'jobs:\n  a:\n    if: '"${ALIAS_GUARD_TEXT}"$'\n    permissions: write-all\n'"${ALIAS_STEPS}" 0 ''
+expect_body perms-read-all.yml $'jobs:\n  a:\n    permissions: read-all\n'"${ALIAS_STEPS}" 0 ''
+expect_body perms-alias-read-all.yml $'x-r: &r read-all\njobs:\n  a:\n    permissions: *r\n'"${ALIAS_STEPS}" 0 ''
+
 printf 'all tests passed\n'

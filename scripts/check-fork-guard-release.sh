@@ -20,6 +20,9 @@
 #                             caches and re-running its failed jobs on a
 #                             schedule its owner never asked for
 #
+# A job written `permissions: write-all` holds all of them; `read-all`
+# holds none.
+#
 # A job that mints a GitHub App installation token also counts as
 # privileged even when it declares a read-only GITHUB_TOKEN: the App
 # token carries real write privilege, letting the job commit, open
@@ -166,6 +169,13 @@ function read_workflow() {
 # Detect a guard-required write scope on one job. Returns 0 if found.
 job_needs_fork_guard() {
   local -r file="$1" job="$2"
+  # `permissions: write-all` is a scalar, not a map, so no scope read
+  # below would see it; it grants every scope those reads look for.
+  local whole
+  if ! whole="$(read_workflow "${file}" "${JOB_BY_KEY} | (.permissions | explode(.)) // \"\"" "${job}" permissions)"; then
+    exit 2
+  fi
+  [[ ${whole} == "write-all" ]] && return 0
   for scope in contents packages id-token attestations actions; do
     local val
     if ! val="$(read_workflow "${file}" "${JOB_BY_KEY} | (.permissions.\"${scope}\" | explode(.)) // \"\"" "${job}" "${scope} permission")"; then
