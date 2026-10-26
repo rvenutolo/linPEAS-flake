@@ -119,12 +119,30 @@ run_scenario 'alias chain outside the labels → fires as inline' \
   "${fixture_dir}/alias-unread.yaml" 1 \
   'accepts runner label "ubuntu-24.04-arm"' ''
 
-# One pass resolves one level of an alias chain, and a label is a
-# scalar, so only an item that is itself a collection holding an alias
-# can stay one. The canary cannot probe that text, so it does not run.
+# A label nested in a list is probed as the text of that list, written
+# inline or through aliases; actionlint accepts the one label inside, so
+# the canary fires on it.
+printf 'self-hosted-runner:\n  labels:\n    - [ubuntu-24.04-arm]\n' \
+  >"${fixture_dir}/nested.yaml"
+run_scenario 'inline label nested in a list → fires on its text' \
+  "${fixture_dir}/nested.yaml" 1 \
+  'accepts runner label "[ubuntu-24.04-arm]"' ''
 printf 'x-dead: &dead ubuntu-24.04-arm\nx-chain: &chain [*dead]\nself-hosted-runner:\n  labels:\n    - *chain\n' \
+  >"${fixture_dir}/alias-nested.yaml"
+run_scenario 'aliased label nested in a list → fires on its text' \
+  "${fixture_dir}/alias-nested.yaml" 1 \
+  'accepts runner label "[ubuntu-24.04-arm]"' ''
+
+# One pass resolves one level of an alias chain, and the canary runs
+# sixteen, so a label nested seventeen lists deep still holds an alias
+# after them. The canary cannot probe that text, so it does not run.
+nest_anchors='x-n0: &n0 ubuntu-24.04-arm'
+for ((level = 1; level <= 17; level++)); do
+  nest_anchors+=$'\n'"x-n${level}: &n${level} [*n$((level - 1))]"
+done
+printf '%s\nself-hosted-runner:\n  labels:\n    - *n17\n' "${nest_anchors}" \
   >"${fixture_dir}/alias-residual.yaml"
-run_scenario 'label still holding an alias after resolving → could not run' \
+run_scenario 'label nested past the resolving passes → could not run' \
   "${fixture_dir}/alias-residual.yaml" 2 \
   'self-hosted-runner.labels still holds a YAML alias after resolving; cannot read it' ''
 
