@@ -50,6 +50,9 @@
 # a workflow giving one twice, plain and as an alias, is one that could
 # not be read.
 #
+# An env list written as an alias is read as its anchored text; a list
+# that still holds an alias after resolving is refused with exit 2.
+#
 # Honors ROOT_OVERRIDE for fixtures (default: the repo root), and
 # LOCK_TRIGGER_EXEMPT_OVERRIDE, a space-separated list of hook names that
 # replaces the exempt set when set, even to empty, so a fixture module
@@ -293,22 +296,46 @@ readonly ENV_NODE="${ROOT_KEY_NODE//@KEY@/env}"
 # key, so one written as an alias is read as GitHub Actions reads it, and
 # one given twice, plain and as an alias, fails the parse. A step's run:
 # written as an alias (`run: *body`) is exploded to its anchored text,
-# which is what the runner executes.
+# which is what the runner executes. An env list written as an alias is
+# read as its anchored text, so one aliased to an empty string or to null
+# declares nothing.
 function workflow_facts() {
   # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
   yq eval "${YQ_MERGE_SPEC[@]}" "(${ENV_NODE}) as \$env | (${JOBS_NODE}) as \$jobs"' | [
       ([$jobs | .[]?.steps[]? | (.run // "") | explode(.)] | map(select(test("nix flake update"))) | length > 0),
-      (($env.LOCK_DERIVED_GENERATORS // "") != ""),
-      (($env.COMMITTABLE_PATHS // "") != ""),
-      (($env.WORKFLOW_DERIVED_GENERATORS // "") != "")
+      ((($env.LOCK_DERIVED_GENERATORS | explode(.)) // "") != ""),
+      ((($env.COMMITTABLE_PATHS | explode(.)) // "") != ""),
+      ((($env.WORKFLOW_DERIVED_GENERATORS | explode(.)) // "") != "")
     ] | map(tostring) | join(",")' -- "$1"
 }
 
-# One workflow-level env list, as a newline-separated body. Only read for
-# a workflow whose fact line already reported the key non-empty, so an
-# empty result here is a parse fault rather than an absent key.
+# Stops the run on a workflow-level env list that still holds an alias
+# after resolving. A list written as an alias is read as its anchored
+# text, in one `explode` pass, which resolves one level of an alias
+# chain. An anchor cannot sit on an alias, so a scalar list always
+# resolves; a value that is itself a collection holding an alias does
+# not, and the run stops on it rather than score the alias marker as a
+# path. Runs in the caller's shell, so its exit ends the run.
+# Args: workflow file, env key, workflow path as reported
+function refuse_unresolved_list() {
+  local aliases
+  if ! aliases="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${ENV_NODE} | .${2} | explode(.) | .. | select(kind == \"alias\")] | length" -- "$1")"; then
+    printf 'lock-derived-docs: could not parse %s\n' "$3" >&2
+    exit 2
+  fi
+  if [[ ${aliases} != 0 ]]; then
+    printf 'lock-derived-docs: %s: env.%s still holds a YAML alias after resolving; cannot read it\n' "$3" "$2" >&2
+    exit 2
+  fi
+}
+
+# One workflow-level env list, as a newline-separated body, read as its
+# anchored text when written as an alias. Only read for a workflow whose
+# fact line already reported the key non-empty, and after
+# `refuse_unresolved_list` passed it, so an empty result here is a parse
+# fault rather than an absent key.
 function workflow_list() {
-  yq eval "${YQ_MERGE_SPEC[@]}" --exit-status "${ENV_NODE} | .${2} // \"\"" -- "$1"
+  yq eval "${YQ_MERGE_SPEC[@]}" --exit-status "${ENV_NODE} | (.${2} | explode(.)) // \"\"" -- "$1"
 }
 
 # The `actions/upload-artifact` steps of the jobs that run the lock
@@ -365,6 +392,7 @@ for wf in "${workflow_files[@]}"; do
     continue
   fi
 
+  refuse_unresolved_list "${wf}" LOCK_DERIVED_GENERATORS "${rel}"
   if ! generators_raw="$(workflow_list "${wf}" LOCK_DERIVED_GENERATORS)"; then
     printf 'lock-derived-docs: could not parse %s\n' "${rel}" >&2
     exit 2
@@ -418,6 +446,7 @@ for wf in "${workflow_files[@]}"; do
   # The optional second list. Absent and empty read alike: a workflow
   # with no ci.yml-derived docs to refresh lists nothing.
   if [[ ${has_workflow_generators} == 'true' ]]; then
+    refuse_unresolved_list "${wf}" WORKFLOW_DERIVED_GENERATORS "${rel}"
     if ! workflow_generators_raw="$(workflow_list "${wf}" WORKFLOW_DERIVED_GENERATORS)"; then
       printf 'lock-derived-docs: could not parse %s\n' "${rel}" >&2
       exit 2
@@ -456,6 +485,7 @@ for wf in "${workflow_files[@]}"; do
     continue
   fi
 
+  refuse_unresolved_list "${wf}" COMMITTABLE_PATHS "${rel}"
   if ! committable_raw="$(workflow_list "${wf}" COMMITTABLE_PATHS)"; then
     printf 'lock-derived-docs: could not parse %s\n' "${rel}" >&2
     exit 2
