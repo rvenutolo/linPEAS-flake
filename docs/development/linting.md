@@ -674,9 +674,9 @@ reads take one of four shapes:
     the `rules:` map of `check-commitlint-config-explicit.sh`, and the
     `concurrency:` map of `check-workflow-concurrency.sh`, whose single
     pass resolves a `group:` key or value written as an alias. Two
-    passes resolve a map whose entries are compared after the copy: a
-    job's `permissions:` in the stale-entry pass of
-    `check-permission-scopes.sh` and a job's `needs:` in
+    passes resolve a map or list whose entries are compared after the
+    copy: a job's `permissions:` map in the stale-entry pass of
+    `check-permission-scopes.sh` and a job's `needs:` list in
     `check-notify-arms.sh`.
 - **Bounded resolve.** A judged list or map value can nest an alias
     inside the text an alias stands for, one level per pass, so it goes
@@ -703,13 +703,13 @@ files the issue itself.
 
 A read of one node hands `explode` only that node, so aliases elsewhere
 in the file cost nothing. The name lookups described under "Text from
-files in yq expressions" that use `explode` are the exception: each hands it the whole map it searches, which is the
-workflow's `jobs:` for the stale-entry read of
-`check-permission-scopes.sh` and the job lookups of
-`check-notify-arms.sh`, and the whole file for the allowlist reads of
+files in yq expressions" that use `explode` are the exception: each
+hands it the whole map it searches, which is the workflow's `jobs:` for
+the stale-entry read of `check-permission-scopes.sh` and the job lookups
+of `check-notify-arms.sh`, and the whole file for the allowlist reads of
 `check-permission-scopes.sh`, the category map of `refresh-ci-dag.sh`
-and the manifest of `run-lint-group.sh`. An alias nest anywhere in such a
-map is expanded on every lookup. The root explode of
+and the manifest of `run-lint-group.sh`. An alias nest anywhere in such
+a map is expanded on every lookup. The root explode of
 `refresh-ci-summary.sh` likewise expands the whole category map, once
 per read.
 
