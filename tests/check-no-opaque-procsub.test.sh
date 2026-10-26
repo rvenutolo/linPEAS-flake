@@ -110,6 +110,167 @@ expect composite-alias-run-body "${FIXTURES}/good" "${GOOD_WORKFLOWS}" "${FIXTUR
 expect action-under-fixtures "${FIXTURES}/good" "${GOOD_WORKFLOWS}" "${FIXTURES}/bad-action-under-fixtures/.github/actions" 0 \
   'no-opaque-procsub: ok — scanned 2 shell script(s) and 2 run: block(s)'
 
+# @description Write stdin as the one workflow or composite action of a
+# scan root named for the scenario, beside an empty root of the other
+# kind, and run the lint over it with the clean scripts.
+# @arg $1 scenario label  @arg $2 `workflow` or `action`
+# @arg $3 wanted exit code  @arg $@ wanted output substrings
+function expect_yaml() {
+  local -r label="$1" kind="$2"
+  shift 2
+  mkdir --parents -- "${scratch}/${label}/workflows" "${scratch}/${label}/actions/a"
+  if [[ ${kind} == workflow ]]; then
+    cat >"${scratch}/${label}/workflows/w.yml"
+  else
+    cat >"${scratch}/${label}/actions/a/action.yml"
+  fi
+  expect "${label}" "${FIXTURES}/good" "${scratch}/${label}/workflows" "${scratch}/${label}/actions" "$@"
+}
+
+# A step list written as an alias (`steps: *st`) is the anchored list, as
+# the runner reads it: its run: bodies are scanned exactly as the same
+# list written inline, in a workflow job and in a composite action.
+expect_yaml steps-inline-workflow workflow 1 \
+  "steps-inline-workflow/workflows/w.yml: job a step[0] run: line 2: ${HIT_DIAG}: mapfile -t rows < <(echo" <<'EOF'
+name: w
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set -Eeuo pipefail
+          mapfile -t rows < <(echo PAYLOAD_RAN)
+EOF
+expect_yaml steps-alias-workflow workflow 1 \
+  "steps-alias-workflow/workflows/w.yml: job a step[0] run: line 2: ${HIT_DIAG}: mapfile -t rows < <(echo" <<'EOF'
+name: w
+on: push
+x-steps: &st
+  - run: |
+      set -Eeuo pipefail
+      mapfile -t rows < <(echo PAYLOAD_RAN)
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: *st
+EOF
+expect_yaml steps-inline-composite action 1 \
+  "steps-inline-composite/actions/a/action.yml: composite step[0] run: line 2: ${HIT_DIAG}: mapfile -t rows < <(echo" <<'EOF'
+name: a
+description: a
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -Eeuo pipefail
+        mapfile -t rows < <(echo PAYLOAD_RAN)
+EOF
+expect_yaml steps-alias-composite action 1 \
+  "steps-alias-composite/actions/a/action.yml: composite step[0] run: line 2: ${HIT_DIAG}: mapfile -t rows < <(echo" <<'EOF'
+name: a
+description: a
+x-steps: &st
+  - shell: bash
+    run: |
+      set -Eeuo pipefail
+      mapfile -t rows < <(echo PAYLOAD_RAN)
+runs:
+  using: composite
+  steps: *st
+EOF
+# The anchored list holds aliases of its own (a step `- *s`, a body
+# `run: *body`): resolving the list once leaves them inside its copy,
+# and a second pass reads them.
+expect_yaml steps-alias-nested-workflow workflow 1 \
+  "steps-alias-nested-workflow/workflows/w.yml: job a step[0] run: line 2: ${HIT_DIAG}: mapfile -t rows < <(echo" <<'EOF'
+name: w
+on: push
+x-step: &s
+  run: |
+    set -Eeuo pipefail
+    mapfile -t rows < <(echo PAYLOAD_RAN)
+x-steps: &st
+  - *s
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: *st
+EOF
+expect_yaml steps-alias-nested-composite action 1 \
+  "steps-alias-nested-composite/actions/a/action.yml: composite step[0] run: line 2: ${HIT_DIAG}: mapfile -t rows < <(echo" <<'EOF'
+name: a
+description: a
+x-body: &body |
+  set -Eeuo pipefail
+  mapfile -t rows < <(echo PAYLOAD_RAN)
+x-steps: &st
+  - shell: bash
+    run: *body
+runs:
+  using: composite
+  steps: *st
+EOF
+expect_yaml steps-alias-clean workflow 0 \
+  'no-opaque-procsub: ok — scanned 2 shell script(s) and 1 run: block(s)' <<'EOF'
+name: w
+on: push
+x-steps: &st
+  - run: |
+      set -Eeuo pipefail
+      echo PAYLOAD_RAN
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: *st
+EOF
+# A step list aliased to null holds no step, as an absent one does.
+expect_yaml steps-alias-null workflow 0 \
+  'no-opaque-procsub: ok — scanned 2 shell script(s) and 0 run: block(s)' <<'EOF'
+name: w
+on: push
+x-none: &none null
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: *none
+EOF
+# Three levels of aliases (list, step, body) leave one inside the list
+# after two passes: the list is not read, and the run stops.
+expect_yaml steps-alias-residual-workflow workflow 2 \
+  'steps-alias-residual-workflow/workflows/w.yml: jobs.a.steps still holds a YAML alias after resolving; cannot read it' <<'EOF'
+name: w
+on: push
+x-body: &body |
+  set -Eeuo pipefail
+  echo PAYLOAD_RAN
+x-step: &s
+  run: *body
+x-steps: &st
+  - *s
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: *st
+EOF
+expect_yaml steps-alias-residual-composite action 2 \
+  'steps-alias-residual-composite/actions/a/action.yml: runs.steps still holds a YAML alias after resolving; cannot read it' <<'EOF'
+name: a
+description: a
+x-body: &body |
+  set -Eeuo pipefail
+  echo PAYLOAD_RAN
+x-step: &s
+  shell: bash
+  run: *body
+x-steps: &st
+  - *s
+runs:
+  using: composite
+  steps: *st
+EOF
+
 # Generated here rather than committed: YAML that does not parse fails
 # the formatter.
 mkdir --parents -- "${scratch}/malformed"
