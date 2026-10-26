@@ -55,7 +55,8 @@
 #
 # The two configs are read as commitlint reads them: an aliased value is
 # read as its anchored text, and a rule value or `extends:` list that
-# still holds an alias after resolving is refused with exit 2.
+# still holds an alias after sixteen resolving passes is refused with
+# exit 2.
 #
 # Exits 0 on full coverage, 1 on any drift, 2 when yq is absent, the
 # scan set could not be enumerated, or a config cannot be read.
@@ -295,13 +296,16 @@ done
 # an alias, and each `explode` pass resolves one level of a chain. `rules:`
 # gets one pass: an anchor cannot sit on an alias, so it then holds a map,
 # with any merge key folded in. A rule's key gets one pass for the same
-# reason. A rule's value and `extends:` get two, because the text an alias
-# stands for can itself hold an alias. A chain deeper than that leaves an
-# alias in a rule value or an `extends:` entry, text this lint cannot
-# read, so the run stops on it.
+# reason. A rule's value and `extends:` can nest an alias inside the text
+# an alias stands for, so each goes through sixteen passes, as `ON_NODE`
+# in scripts/check-workflow-on-branches.sh resolves `on:`. A nest deeper
+# than that leaves an alias in a rule value or an `extends:` entry, text
+# this lint cannot read, so the run stops on it.
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+readonly RESOLVE='(. as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)))'
 readonly RULES_NODE='((.rules | explode(.)) // {})'
-readonly RULE_VALUE='(.value | explode(.) | explode(.))'
-readonly EXTENDS_LIST='([(.extends | explode(.) | explode(.)) // []] | flatten)'
+readonly RULE_VALUE="(.value | ${RESOLVE})"
+readonly EXTENDS_LIST="([(.extends | ${RESOLVE}) // []] | flatten)"
 
 if [[ -f ${merge_path} ]]; then
   # A config that does not parse is a file this lint could not read. Its
@@ -310,7 +314,7 @@ if [[ -f ${merge_path} ]]; then
     printf 'cannot read .rules from %s\n' "${merge_path}" >&2
     exit 2
   fi
-  if ! alias_rule="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${RULES_NODE}"' | to_entries[] | select(['"${RULE_VALUE}"' | .. | select(kind == "alias")] | length > 0) | .key | explode(.) | tostring] | .[0] // ""' "${merge_path}")"; then
+  if ! alias_rule="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${RULES_NODE}"' | to_entries[] | select(['"${RULE_VALUE}"' | ... | select(kind == "alias")] | length > 0) | .key | explode(.) | tostring] | .[0] // ""' "${merge_path}")"; then
     printf 'cannot read .rules from %s\n' "${merge_path}" >&2
     exit 2
   fi
