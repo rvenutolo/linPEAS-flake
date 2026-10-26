@@ -142,4 +142,32 @@ expect_exact 'a harden-runner step spelled in upper case with no endpoints is re
 expect_exact 'a harden-runner step spelled in mixed case in block mode passes (harden-runner block) as mixed-case' \
   'jobs:\n  a:\n    steps: [{uses: Step-Security/Harden-Runner@v2, with: {egress-policy: block, allowed-endpoints: "github.com:443"}}]\n' 0 ''
 
+# An aliased step `uses:`, `egress-policy` or `allowed-endpoints` is read
+# as its anchored text, so each verdict matches the inline spelling.
+readonly ALIASED_TAIL='1 harden-runner step(s) not in block mode with non-empty allowed-endpoints'
+expect_exact 'an aliased uses: naming harden-runner in audit mode is read (harden-runner block) as aliased-uses' \
+  'x: &u step-security/harden-runner@v2\njobs:\n  a:\n    steps: [{uses: *u, with: {egress-policy: audit}}]\n' 1 \
+  "DIR/built.yml: job a harden-runner egress-policy audit is not block
+${ALIASED_TAIL}"
+expect_exact 'an inline uses: naming harden-runner in audit mode is read (harden-runner block) as inline-uses' \
+  'jobs:\n  a:\n    steps: [{uses: step-security/harden-runner@v2, with: {egress-policy: audit}}]\n' 1 \
+  "DIR/built.yml: job a harden-runner egress-policy audit is not block
+${ALIASED_TAIL}"
+expect_exact 'an aliased empty allowed-endpoints is an empty list (harden-runner block) as aliased-empty-endpoints' \
+  'x: &h ""\njobs:\n  a:\n    steps: [{uses: step-security/harden-runner@v2, with: {egress-policy: block, allowed-endpoints: *h}}]\n' 1 \
+  "DIR/built.yml: job a has block mode but empty allowed-endpoints
+${ALIASED_TAIL}"
+expect_exact 'an aliased blank allowed-endpoints is an empty list (harden-runner block) as aliased-blank-endpoints' \
+  'x: &h "   "\njobs:\n  a:\n    steps: [{uses: step-security/harden-runner@v2, with: {egress-policy: block, allowed-endpoints: *h}}]\n' 1 \
+  "DIR/built.yml: job a has block mode but empty allowed-endpoints
+${ALIASED_TAIL}"
+expect_exact 'an aliased non-empty allowed-endpoints passes (harden-runner block) as aliased-endpoints' \
+  'x: &h "github.com:443"\njobs:\n  a:\n    steps: [{uses: step-security/harden-runner@v2, with: {egress-policy: block, allowed-endpoints: *h}}]\n' 0 ''
+expect_exact 'an aliased egress-policy block passes (harden-runner block) as aliased-policy-block' \
+  'x: &p block\njobs:\n  a:\n    steps: [{uses: step-security/harden-runner@v2, with: {egress-policy: *p, allowed-endpoints: "github.com:443"}}]\n' 0 ''
+expect_exact 'an aliased egress-policy audit is not block (harden-runner block) as aliased-policy-audit' \
+  'x: &p audit\njobs:\n  a:\n    steps: [{uses: step-security/harden-runner@v2, with: {egress-policy: *p}}]\n' 1 \
+  "DIR/built.yml: job a harden-runner egress-policy audit is not block
+${ALIASED_TAIL}"
+
 printf 'all tests passed\n'
