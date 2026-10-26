@@ -38,8 +38,10 @@
 #
 # Workflow and composite-action YAML is matched on each step's extracted
 # `run:` body, never on raw YAML: every `run: |` key line ends in a pipe,
-# so a body opening with a quiet `grep` would read as a hit. A body
-# written as an alias (`run: *body`) is read as its anchored text.
+# so a body opening with a quiet `grep` would read as a hit. A step list
+# or body written as an alias (`steps: *st`, `run: *body`) is read as its
+# anchored text; a step list that still holds an alias after resolving
+# is refused with exit 2.
 #
 # The scan set is every tracked `*.sh` file, every tracked
 # `.github/workflows/*.yml` (or `.yaml`) and every tracked
@@ -51,8 +53,9 @@
 # reported relative to it.
 #
 # Exits 0 when clean, 1 on any hit, 2 on operational error: a required
-# tool is missing, the scan set is empty, a file cannot be read, or `yq`
-# cannot read a workflow or one of its steps.
+# tool is missing, the scan set is empty, a file cannot be read, `yq`
+# cannot read a workflow or one of its steps, or a step list still holds
+# an alias after resolving.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -127,8 +130,18 @@ readonly HIT_PROGRAM='
 # `runs.steps` (composite action). The job position is empty for a
 # composite. A row holds only numbers and words `yq` prints, never a job
 # key: a key is free text and could hold the `|` separator.
+#
+# A step list written as an alias (`steps: *st`) is read as the anchored
+# list. `to_entries` does not follow an alias, so the list is resolved
+# first, in two `explode` passes: one pass leaves the aliases inside the
+# copy it makes (a step `- *s`, a body `run: *body`), and the second
+# resolves those. A list still holding an alias after both passes emits
+# one `job-alias` or `composite-alias` row in place of its steps, and the
+# run stops on it rather than read a list it has not resolved.
 # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
-readonly ROWS_QUERY="document_index as \$d | ((((${JOBS_NODE}) // {}) | to_entries | to_entries[] as \$j | (\$j.value.value.steps // []) | to_entries[] | select(.value.run != null) | \"job|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" + (.key | tostring)), ((.runs.steps // []) | to_entries[] | select(.value.run != null) | \"composite|\" + (\$d | tostring) + \"||\" + (.key | tostring)))"
+readonly STEPS_HOLD_ALIAS='([$s | .. | select(kind == "alias")] | length) > 0'
+# shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
+readonly ROWS_QUERY="document_index as \$d | ((((${JOBS_NODE}) // {}) | to_entries | to_entries[] as \$j | ((\$j.value.value.steps | explode(.) | explode(.)) // []) as \$s | if ${STEPS_HOLD_ALIAS} then \"job-alias|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" else (\$s | to_entries[] | select(.value.run != null) | \"job|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" + (.key | tostring)) end), (((.runs.steps | explode(.) | explode(.)) // []) as \$s | if ${STEPS_HOLD_ALIAS} then \"composite-alias|\" + (\$d | tostring) + \"||\" else (\$s | to_entries[] | select(.value.run != null) | \"composite|\" + (\$d | tostring) + \"||\" + (.key | tostring)) end))"
 
 declare -a candidates=()
 if [[ -n ${SCAN_ROOT_OVERRIDE:-} ]]; then
@@ -209,6 +222,10 @@ for path in ${yaml_files+"${yaml_files[@]}"}; do
     # The row numbers reach `yq` as data, through `env`. A body written as
     # an alias (`run: *body`) is resolved to its anchored text, which is
     # what the runner executes; read as is it would be the alias name.
+    if [[ ${shape} == composite-alias ]]; then
+      printf '%s: runs.steps still holds a YAML alias after resolving; cannot read it\n' "${rel}" >&2
+      exit 2
+    fi
     if [[ ${shape} == composite ]]; then
       if ! body="$(DOC="${doc}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | .runs.steps[env(IDX)].run | explode(.)' "${path}")"; then
         printf '%s: cannot read composite step[%s] run: block\n' "${rel}" "${idx}" >&2
@@ -218,6 +235,10 @@ for path in ${yaml_files+"${yaml_files[@]}"}; do
     else
       if ! job="$(DOC="${doc}" JPOS="${jpos}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].key | explode(.)' "${path}")"; then
         printf '%s: cannot read the key of the job at position %s\n' "${rel}" "${jpos}" >&2
+        exit 2
+      fi
+      if [[ ${shape} == job-alias ]]; then
+        printf '%s: jobs.%q.steps still holds a YAML alias after resolving; cannot read it\n' "${rel}" "${job}" >&2
         exit 2
       fi
       if ! body="$(DOC="${doc}" JPOS="${jpos}" IDX="${idx}" yq eval "${YQ_MERGE_SPEC[@]}" 'select(document_index == env(DOC)) | '"${JOBS_NODE}"' | to_entries | .[env(JPOS)].value.steps[env(IDX)].run | explode(.)' "${path}")"; then
