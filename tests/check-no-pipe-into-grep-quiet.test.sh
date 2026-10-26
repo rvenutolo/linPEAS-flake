@@ -104,8 +104,7 @@ expect steps-inline-composite "${FIXTURES}/steps-inline-composite" 1 \
 expect steps-alias-composite "${FIXTURES}/steps-alias-composite" 1 \
   '.github/actions/steps-alias-composite/action.yml: composite step[0] run: line 2: '"${HIT_DIAG}"
 # The anchored list holds aliases of its own (a step `- *s`, a body
-# `run: *body`): resolving the list once leaves them inside its copy,
-# and a second pass reads them.
+# `run: *body`), read through as the runner reads them.
 expect steps-alias-nested-workflow "${FIXTURES}/steps-alias-nested-workflow" 1 \
   '.github/workflows/steps-alias-nested-workflow.yml: job a step[0] run: line 2: '"${HIT_DIAG}"
 expect steps-alias-nested-composite "${FIXTURES}/steps-alias-nested-composite" 1 \
@@ -115,12 +114,17 @@ expect steps-alias-clean "${FIXTURES}/steps-alias-clean" 0 \
 # A step list aliased to null holds no step, as an absent one does.
 expect steps-alias-null "${FIXTURES}/steps-alias-null" 0 \
   'no-pipe-into-grep-quiet: ok — scanned 0 shell file(s) and 0 run: block(s)'
-# Three levels of aliases (list, step, body) leave one inside the list
-# after two passes: the list is not read, and the run stops.
-expect steps-alias-residual-workflow "${FIXTURES}/steps-alias-residual-workflow" 2 \
-  '.github/workflows/steps-alias-residual-workflow.yml: jobs.a.steps still holds a YAML alias after resolving; cannot read it'
-expect steps-alias-residual-composite "${FIXTURES}/steps-alias-residual-composite" 2 \
-  '.github/actions/steps-alias-residual-composite/action.yml: runs.steps still holds a YAML alias after resolving; cannot read it'
+# Three levels of aliases (list, step, body) are read through to the
+# body, as the runner reads it.
+expect steps-alias-deep-workflow "${FIXTURES}/steps-alias-deep-workflow" 1 \
+  '.github/workflows/steps-alias-deep-workflow.yml: job a step[0] run: line 2: '"${HIT_DIAG}"
+expect steps-alias-deep-composite "${FIXTURES}/steps-alias-deep-composite" 1 \
+  '.github/actions/steps-alias-deep-composite/action.yml: composite step[0] run: line 2: '"${HIT_DIAG}"
+# An alias the lint does not read, an `env:` value inside an aliased
+# step inside an aliased list, leaves the scan as the same file written
+# inline would.
+expect steps-alias-env-unread "${FIXTURES}/steps-alias-env-unread" 0 \
+  'no-pipe-into-grep-quiet: ok — scanned 0 shell file(s) and 3 run: block(s)'
 
 # The tracked tree itself: every shell file and run: body this lint
 # guards is clean. The file counts drift with the tree, so only the exit

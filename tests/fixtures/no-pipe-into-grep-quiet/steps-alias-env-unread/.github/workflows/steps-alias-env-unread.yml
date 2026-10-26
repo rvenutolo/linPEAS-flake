@@ -1,0 +1,18 @@
+name: w
+on: push
+x-value: &v PAYLOAD_RAN
+x-env: &e
+  MARK: *v
+x-step: &s
+  run: |
+    set -Eeuo pipefail
+    echo "${MARK}"
+  env: *e
+x-steps: &st
+  - *s
+  - run: echo PAYLOAD_RAN
+  - run: echo PAYLOAD_RAN
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: *st

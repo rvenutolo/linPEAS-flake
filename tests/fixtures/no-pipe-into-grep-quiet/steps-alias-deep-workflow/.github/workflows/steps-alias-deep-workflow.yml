@@ -2,7 +2,7 @@ name: w
 on: push
 x-body: &body |
   set -Eeuo pipefail
-  echo PAYLOAD_RAN
+  echo PAYLOAD_RAN | grep --quiet PAYLOAD
 x-step: &s
   run: *body
 x-steps: &st
