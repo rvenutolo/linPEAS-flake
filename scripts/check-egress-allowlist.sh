@@ -17,7 +17,8 @@
 # finally exercised, which can be months later. A `connection refused` against
 # a healthy public host is harden-runner's block signature, not an outage.
 # A step's `uses:`, `run:` and `with.allowed-endpoints` written as an alias is
-# read as its anchored text.
+# read as its anchored text, and a finding names a job whose key is written
+# as an alias by the key's anchored text.
 #
 # Seven assertions per job:
 #
@@ -378,6 +379,9 @@ readonly HARDEN_RUNNER_RE CHECKOUT_RE FLAKEHUB_CACHE_RE CODEQL_INIT_RE TRIVY_RE 
 # (`run: *body`, `uses: *action`) are exploded to their anchored text,
 # which is what the runner executes.
 readonly JOB_BY_KEY="${JOBS_NODE}"' | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
+# The anchored text of the key a job is listed by, found as JOB_BY_KEY
+# finds the job.
+readonly JOB_NAME_BY_KEY="${JOB_BY_KEY% | .value}"' | .key | explode(.)'
 
 # Resolved against this script's own location rather than the scan root:
 # the fixture harness repoints the scan root at tests/fixtures, and the
@@ -651,6 +655,16 @@ for f in "${selected_files[@]}"; do
   while IFS= read -r job; do
     [[ -z ${job} ]] && continue
 
+    # The job list prints a key written as an alias as the alias (`*k`),
+    # which the lookups and the line ranges are keyed on; a finding names
+    # the job by the key's anchored text instead. Only a key printed with
+    # a leading `*` can be an alias, so no other key is read again.
+    job_name="${job}"
+    if [[ ${job} == '*'* ]] && ! job_name="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_NAME_BY_KEY}" "${f}")"; then
+      printf '%s: cannot read the key of job %q\n' "${f}" "${job}" >&2
+      exit 2
+    fi
+
     # Every endpoint finding below is derived from this list. A yq that
     # dies on the step walk has read no allowlist at all, and its exit 1
     # would surface as an allowlist found wanting. Each read below
@@ -660,7 +674,7 @@ for f in "${selected_files[@]}"; do
       | select((.uses | explode(.)) // "" | test("'"${HARDEN_RUNNER_RE}"'"))
       | (.with."allowed-endpoints" | explode(.)) // ""
     ' "${f}" | tr ' ' '\n' | sed '/^$/d')"; then
-      printf '%s: cannot read allowed-endpoints for job %q\n' "${f}" "${job}" >&2
+      printf '%s: cannot read allowed-endpoints for job %q\n' "${f}" "${job_name}" >&2
       exit 2
     fi
 
@@ -668,11 +682,11 @@ for f in "${selected_files[@]}"; do
     [[ -z ${endpoints} ]] && continue
 
     if ! uses="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .steps[] | (.uses | explode(.)) // ""' "${f}")"; then
-      printf '%s: cannot read the step uses: list for job %q\n' "${f}" "${job}" >&2
+      printf '%s: cannot read the step uses: list for job %q\n' "${f}" "${job_name}" >&2
       exit 2
     fi
     if ! runs="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .steps[] | (.run | explode(.)) // ""' "${f}")"; then
-      printf '%s: cannot read the step run: list for job %q\n' "${f}" "${job}" >&2
+      printf '%s: cannot read the step run: list for job %q\n' "${f}" "${job_name}" >&2
       exit 2
     fi
 
@@ -692,64 +706,64 @@ for f in "${selected_files[@]}"; do
     # --- Assertion 1: forward rules -------------------------------------
 
     if [[ ${uses} =~ ${FLAKEHUB_CACHE_RE} ]]; then
-      fail "${f}: job '${job}' uses flakehub-cache-action; the action is banned (flakehub hosts are not part of this repo's egress allowlist)"
+      fail "${f}: job '${job_name}' uses flakehub-cache-action; the action is banned (flakehub hosts are not part of this repo's egress allowlist)"
     fi
 
     if [[ ${uses} =~ ${CODEQL_INIT_RE} ]]; then
       has_host "${endpoints}" "${RELEASE_ASSETS}" ||
-        fail "${f}: job '${job}' uses codeql-action/init but does not allowlist ${RELEASE_ASSETS} (the bundle falls back to a release asset, which 302s there)"
+        fail "${f}: job '${job_name}' uses codeql-action/init but does not allowlist ${RELEASE_ASSETS} (the bundle falls back to a release asset, which 302s there)"
     fi
 
     if [[ ${uses} =~ ${TRIVY_RE} ]]; then
       has_host "${endpoints}" "get.trivy.dev" ||
-        fail "${f}: job '${job}' uses trivy-action but does not allowlist get.trivy.dev (the action resolves the release tag against github.com but downloads the binary from get.trivy.dev; without it Trivy never installs and every later step is skipped)"
+        fail "${f}: job '${job_name}' uses trivy-action but does not allowlist get.trivy.dev (the action resolves the release tag against github.com but downloads the binary from get.trivy.dev; without it Trivy never installs and every later step is skipped)"
       has_host "${endpoints}" "mirror.gcr.io" ||
-        fail "${f}: job '${job}' uses trivy-action but does not allowlist mirror.gcr.io"
+        fail "${f}: job '${job_name}' uses trivy-action but does not allowlist mirror.gcr.io"
       has_host "${endpoints}" "ghcr.io" ||
-        fail "${f}: job '${job}' uses trivy-action but does not allowlist ghcr.io (the documented DB fallback; without it a mirror.gcr.io outage fails the scan instead of degrading)"
+        fail "${f}: job '${job_name}' uses trivy-action but does not allowlist ghcr.io (the documented DB fallback; without it a mirror.gcr.io outage fails the scan instead of degrading)"
     fi
 
     if [[ ${runs} == *"releases/download"* ]]; then
       has_host "${endpoints}" "${RELEASE_ASSETS}" ||
-        fail "${f}: job '${job}' downloads a GitHub release asset but does not allowlist ${RELEASE_ASSETS} (the github.com redirect is unconditional)"
+        fail "${f}: job '${job_name}' downloads a GitHub release asset but does not allowlist ${RELEASE_ASSETS} (the github.com redirect is unconditional)"
     fi
 
     if [[ ${uses} =~ ${SBOM_RE} ]]; then
       has_host "${endpoints}" "raw.githubusercontent.com" ||
-        fail "${f}: job '${job}' uses anchore/sbom-action but does not allowlist raw.githubusercontent.com (the syft-install path reaches it, non-deterministically across arches, so the gap is latent)"
+        fail "${f}: job '${job_name}' uses anchore/sbom-action but does not allowlist raw.githubusercontent.com (the syft-install path reaches it, non-deterministically across arches, so the gap is latent)"
       has_host "${endpoints}" "get.anchore.io" ||
-        fail "${f}: job '${job}' uses anchore/sbom-action but does not allowlist get.anchore.io (the syft install-script host)"
+        fail "${f}: job '${job_name}' uses anchore/sbom-action but does not allowlist get.anchore.io (the syft install-script host)"
     fi
 
     if [[ ${uses} =~ ${SCAN_RE} ]]; then
       has_host "${endpoints}" "get.anchore.io" ||
-        fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist get.anchore.io (the grype install-script host)"
+        fail "${f}: job '${job_name}' uses anchore/scan-action but does not allowlist get.anchore.io (the grype install-script host)"
       has_host "${endpoints}" "grype.anchore.io" ||
-        fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist grype.anchore.io (grype fetches its vulnerability DB there; without it the scan cannot run)"
+        fail "${f}: job '${job_name}' uses anchore/scan-action but does not allowlist grype.anchore.io (grype fetches its vulnerability DB there; without it the scan cannot run)"
       has_host "${endpoints}" "raw.githubusercontent.com" ||
-        fail "${f}: job '${job}' uses anchore/scan-action but does not allowlist raw.githubusercontent.com (the grype-install path reaches it, non-deterministically across arches, so the gap is latent)"
+        fail "${f}: job '${job_name}' uses anchore/scan-action but does not allowlist raw.githubusercontent.com (the grype-install path reaches it, non-deterministically across arches, so the gap is latent)"
     fi
 
     if [[ ${uses} =~ ${DOCKERHUB_DESCRIPTION_RE} ]]; then
       has_host "${endpoints}" "hub.docker.com" ||
-        fail "${f}: job '${job}' uses peter-evans/dockerhub-description but does not allowlist hub.docker.com (the action authenticates against and PATCHes the Docker Hub web API to publish the repository README; it never reaches a registry host)"
+        fail "${f}: job '${job_name}' uses peter-evans/dockerhub-description but does not allowlist hub.docker.com (the action authenticates against and PATCHes the Docker Hub web API to publish the repository README; it never reaches a registry host)"
     fi
 
     if [[ ${runs} == *"gh release upload"* ]]; then
       has_host "${endpoints}" "uploads.github.com" ||
-        fail "${f}: job '${job}' runs 'gh release upload' but does not allowlist uploads.github.com (asset bytes POST to the uploads host, not the REST API host)"
+        fail "${f}: job '${job_name}' runs 'gh release upload' but does not allowlist uploads.github.com (asset bytes POST to the uploads host, not the REST API host)"
     fi
 
     if [[ ${runs} == *"command scorecard"* || ${runs} == *"scorecard --repo"* ]]; then
       for h in 'api.securityscorecards.dev' 'api.deps.dev' 'api.osv.dev'; do
         has_host "${endpoints}" "${h}" ||
-          fail "${f}: job '${job}' runs the scorecard CLI but does not allowlist ${h} (scorecard queries its own API plus the OSV and deps.dev datasets while evaluating checks)"
+          fail "${f}: job '${job_name}' runs the scorecard CLI but does not allowlist ${h} (scorecard queries its own API plus the OSV and deps.dev datasets while evaluating checks)"
       done
     fi
 
     if [[ ${runs} == *"gh attestation verify"* ]]; then
       has_host "${endpoints}" "tuf-repo.github.com" ||
-        fail "${f}: job '${job}' runs 'gh attestation verify' but does not allowlist tuf-repo.github.com (verification refreshes GitHub's TUF root before checking the bundle)"
+        fail "${f}: job '${job_name}' runs 'gh attestation verify' but does not allowlist tuf-repo.github.com (verification refreshes GitHub's TUF root before checking the bundle)"
     fi
 
     # Checked per host rather than as a set, so a job carrying one nix host and
@@ -757,7 +771,7 @@ for f in "${selected_files[@]}"; do
     if ((has_setup_nix == 1)); then
       for h in 'releases.nixos.org' 'cache.nixos.org'; do
         has_host "${endpoints}" "${h}" ||
-          fail "${f}: job '${job}' uses ${NIX_SETUP_COMPOSITE} but does not allowlist ${h} (the composite downloads the installer from releases.nixos.org, and every nix command it enables substitutes from cache.nixos.org)"
+          fail "${f}: job '${job_name}' uses ${NIX_SETUP_COMPOSITE} but does not allowlist ${h} (the composite downloads the installer from releases.nixos.org, and every nix command it enables substitutes from cache.nixos.org)"
       done
     fi
 
@@ -765,7 +779,7 @@ for f in "${selected_files[@]}"; do
 
     if has_host "${endpoints}" "ghcr.io"; then
       has_host "${endpoints}" "pkg-containers.githubusercontent.com" ||
-        fail "${f}: job '${job}' allowlists ghcr.io but not pkg-containers.githubusercontent.com (ghcr.io serves manifests; layer blobs come from the pkg-containers host, so a pull or push stalls on the first blob)"
+        fail "${f}: job '${job_name}' allowlists ghcr.io but not pkg-containers.githubusercontent.com (ghcr.io serves manifests; layer blobs come from the pkg-containers host, so a pull or push stalls on the first blob)"
     fi
 
     # --- Assertion 3: Docker Hub host-set consistency --------------------
@@ -780,12 +794,12 @@ for f in "${selected_files[@]}"; do
     if ((dockerhub_any == 1)); then
       for h in "${DOCKERHUB_PULL[@]}"; do
         has_host "${endpoints}" "${h}" ||
-          fail "${f}: job '${job}' carries a Docker Hub registry host but not ${h} (pulling one image needs the token service, the registry API, and the layer CDN together)"
+          fail "${f}: job '${job_name}' carries a Docker Hub registry host but not ${h} (pulling one image needs the token service, the registry API, and the layer CDN together)"
       done
       if [[ ${runs} =~ docker[[:space:]]+(login|push) ]] ||
         [[ ${runs} == *"buildx imagetools create"* ]]; then
         has_host "${endpoints}" "${DOCKERHUB_PUSH}" ||
-          fail "${f}: job '${job}' logs in or pushes to Docker Hub but does not allowlist ${DOCKERHUB_PUSH} (the write path authenticates against the index host, not the pull registry host)"
+          fail "${f}: job '${job_name}' logs in or pushes to Docker Hub but does not allowlist ${DOCKERHUB_PUSH} (the write path authenticates against the index host, not the pull registry host)"
       fi
     fi
 
@@ -809,23 +823,23 @@ for f in "${selected_files[@]}"; do
       if ((signs == 1)); then
         # Signing needs all four.
         if ((has_fulcio == 0 || has_rekor == 0 || has_tuf == 0 || has_ts == 0)); then
-          fail "${f}: job '${job}' runs 'cosign sign' with an incomplete sigstore host set; signing requires ${FULCIO}, ${REKOR}, ${TUF}, and ${TIMESTAMP} (cosign 3.x requests an RFC3161 timestamp when producing a bundle)"
+          fail "${f}: job '${job_name}' runs 'cosign sign' with an incomplete sigstore host set; signing requires ${FULCIO}, ${REKOR}, ${TUF}, and ${TIMESTAMP} (cosign 3.x requests an RFC3161 timestamp when producing a bundle)"
         fi
       elif ((verifies == 1)); then
         # Verifying against a self-contained .sigstore bundle needs only the
         # TUF root refresh, and must NOT carry the signing-only TSA host.
         if ((has_tuf == 0)); then
-          fail "${f}: job '${job}' runs 'cosign verify' with an incomplete sigstore host set; verification requires at least ${TUF}"
+          fail "${f}: job '${job_name}' runs 'cosign verify' with an incomplete sigstore host set; verification requires at least ${TUF}"
         fi
         if ((has_ts == 1)); then
-          fail "${f}: job '${job}' runs 'cosign verify' but allowlists ${TIMESTAMP}; the TSA is signing-only — verification gets the TSA cert chain from the TUF root"
+          fail "${f}: job '${job_name}' runs 'cosign verify' but allowlists ${TIMESTAMP}; the TSA is signing-only — verification gets the TSA cert chain from the TUF root"
         fi
       else
         # No cosign detected, yet sigstore hosts are present. Either the job
         # reaches cosign indirectly (through a script) or the allowlist is
         # drifting. Demand at least the conservative signing-adjacent floor.
         if ((has_fulcio == 0 || has_rekor == 0 || has_tuf == 0)); then
-          fail "${f}: job '${job}' has an incomplete sigstore host set (${sigstore_total} of the 3 required); a job carrying any sigstore host must carry ${FULCIO}, ${REKOR}, and ${TUF}"
+          fail "${f}: job '${job_name}' has an incomplete sigstore host set (${sigstore_total} of the 3 required); a job carrying any sigstore host must carry ${FULCIO}, ${REKOR}, and ${TUF}"
         fi
       fi
     fi
@@ -838,7 +852,7 @@ for f in "${selected_files[@]}"; do
       for pattern in "${DENYLIST[@]}"; do
         # shellcheck disable=SC2053 # glob match on the denylist pattern is intended
         if [[ ${host} == ${pattern} ]]; then
-          fail "${f}: job '${job}' allowlists ${host}, which no tool in this repo reaches"
+          fail "${f}: job '${job_name}' allowlists ${host}, which no tool in this repo reaches"
         fi
       done
     done <<<"${endpoints}"
@@ -861,7 +875,7 @@ for f in "${selected_files[@]}"; do
 
       for h in "${DECLARED[@]}"; do
         has_host "${endpoints}" "${h%%:*}" ||
-          fail "${f}: job '${job}' runs the ${NOTIFY_COMPOSITE} composite but does not allowlist ${h}, which ${DECLARATION_LABEL} declares every such job reaches"
+          fail "${f}: job '${job_name}' runs the ${NOTIFY_COMPOSITE} composite but does not allowlist ${h}, which ${DECLARATION_LABEL} declares every such job reaches"
       done
 
       if ((pure_shape == 1)); then
@@ -874,7 +888,7 @@ for f in "${selected_files[@]}"; do
             fi
           done
           if ((declared_host == 0)); then
-            fail "${f}: job '${job}' runs the ${NOTIFY_COMPOSITE} composite and nothing else, yet allowlists ${e%%:*}, which ${DECLARATION_LABEL} does not declare; no step in that shape reaches it"
+            fail "${f}: job '${job_name}' runs the ${NOTIFY_COMPOSITE} composite and nothing else, yet allowlists ${e%%:*}, which ${DECLARATION_LABEL} does not declare; no step in that shape reaches it"
           fi
         done <<<"${endpoints}"
       fi
@@ -923,7 +937,7 @@ for f in "${selected_files[@]}"; do
         comment_expr="${JOB_BY_KEY}"' | [... | (head_comment, foot_comment)] | .[]'
         ((tail_to_eof)) && comment_expr='(foot_comment), ('"${comment_expr}"')'
         if ! job_comments="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${comment_expr}" "${f}")"; then
-          printf '%s: cannot read the comments of job %q\n' "${f}" "${job}" >&2
+          printf '%s: cannot read the comments of job %q\n' "${f}" "${job_name}" >&2
           exit 2
         fi
         comment_set=''
@@ -975,15 +989,15 @@ for f in "${selected_files[@]}"; do
       if ((has_setup_nix == 0 && invokes_nix == 0)); then
         if ((marker_present == 1)); then
           if [[ -z ${marker_reason} ]]; then
-            fail "${f}: job '${job}' carries a '${NIX_EXEMPT_MARKER}' marker with no reason (allowlists cache.nixos.org/releases.nixos.org, reaches nix through neither ${NIX_SETUP_COMPOSITE} nor a run: nix invocation)"
+            fail "${f}: job '${job_name}' carries a '${NIX_EXEMPT_MARKER}' marker with no reason (allowlists cache.nixos.org/releases.nixos.org, reaches nix through neither ${NIX_SETUP_COMPOSITE} nor a run: nix invocation)"
           fi
         else
-          fail "${f}: job '${job}' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ${NIX_SETUP_COMPOSITE} nor a run: nix invocation is detected, and no '# ${NIX_EXEMPT_MARKER} <reason>' marker justifies it"
+          fail "${f}: job '${job_name}' allowlists cache.nixos.org/releases.nixos.org but reaches no nix tooling — neither ${NIX_SETUP_COMPOSITE} nor a run: nix invocation is detected, and no '# ${NIX_EXEMPT_MARKER} <reason>' marker justifies it"
         fi
       fi
     else
       if ((marker_present == 1)); then
-        fail "${f}: job '${job}' carries a stale '${NIX_EXEMPT_MARKER}' marker; its allowlist carries neither cache.nixos.org nor releases.nixos.org, so this rule does not apply to it"
+        fail "${f}: job '${job_name}' carries a stale '${NIX_EXEMPT_MARKER}' marker; its allowlist carries neither cache.nixos.org nor releases.nixos.org, so this rule does not apply to it"
       fi
     fi
 
