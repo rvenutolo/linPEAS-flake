@@ -170,4 +170,42 @@ expect_exact 'an aliased egress-policy audit is not block (harden-runner block) 
   "DIR/built.yml: job a harden-runner egress-policy audit is not block
 ${ALIASED_TAIL}"
 
+# `egress-policy: audit` passes only while upstream harden-runner#708
+# keeps block mode unusable, and only when the key's own head comment
+# links that issue. The allowlist must still be non-empty.
+readonly MARK='# TODO: restore egress-policy block once block mode stops dropping allowed hosts on\n          # westus2 runners: https://github.com/step-security/harden-runner/issues/708\n'
+readonly HR_STEP='jobs:\n  a:\n    steps:\n      - uses: step-security/harden-runner@v2\n        with:\n'
+expect_exact 'a marked audit step with endpoints passes (harden-runner block) as marked-audit' \
+  "${HR_STEP}          ${MARK}          egress-policy: audit\n          allowed-endpoints: >\n            github.com:443\n" 0 ''
+expect_exact 'a marked audit step after another input passes (harden-runner block) as marked-audit-second-key' \
+  "${HR_STEP}          disable-sudo: true\n          ${MARK}          egress-policy: audit\n          allowed-endpoints: github.com:443\n" 0 ''
+expect_exact 'a marked audit step with no endpoints is named (harden-runner block) as marked-audit-empty' \
+  "${HR_STEP}          ${MARK}          egress-policy: audit\n" 1 \
+  "DIR/built.yml: job a has audit mode but empty allowed-endpoints
+${ALIASED_TAIL}"
+expect_exact 'an audit step under an unrelated comment is not block (harden-runner block) as unmarked-audit' \
+  "${HR_STEP}          # TODO: restore block later\n          egress-policy: audit\n          allowed-endpoints: github.com:443\n" 1 \
+  "DIR/built.yml: job a harden-runner egress-policy audit is not block
+${ALIASED_TAIL}"
+expect_exact 'the marker above another key does not mark the policy (harden-runner block) as marker-on-other-key' \
+  "${HR_STEP}          egress-policy: audit\n          ${MARK}          allowed-endpoints: github.com:443\n" 1 \
+  "DIR/built.yml: job a harden-runner egress-policy audit is not block
+${ALIASED_TAIL}"
+expect_exact 'the marker as a trailing comment does not mark the policy (harden-runner block) as marker-trailing' \
+  "${HR_STEP}          egress-policy: audit # https://github.com/step-security/harden-runner/issues/708\n          allowed-endpoints: github.com:443\n" 1 \
+  "DIR/built.yml: job a harden-runner egress-policy audit is not block
+${ALIASED_TAIL}"
+expect_exact 'the marker does not excuse a policy other than audit (harden-runner block) as marked-other-policy' \
+  "${HR_STEP}          ${MARK}          egress-policy: off\n          allowed-endpoints: github.com:443\n" 1 \
+  "DIR/built.yml: job a harden-runner egress-policy off is not block
+${ALIASED_TAIL}"
+expect_exact 'an empty-string allowed-endpoints in block mode is empty (harden-runner block) as empty-string-endpoints' \
+  "${HR_STEP}          egress-policy: block\n          allowed-endpoints: \"\"\n" 1 \
+  "DIR/built.yml: job a has block mode but empty allowed-endpoints
+${ALIASED_TAIL}"
+expect_exact 'an empty-string allowed-endpoints in marked audit mode is empty (harden-runner block) as marked-empty-string-endpoints' \
+  "${HR_STEP}          ${MARK}          egress-policy: audit\n          allowed-endpoints: \"\"\n" 1 \
+  "DIR/built.yml: job a has audit mode but empty allowed-endpoints
+${ALIASED_TAIL}"
+
 printf 'all tests passed\n'
