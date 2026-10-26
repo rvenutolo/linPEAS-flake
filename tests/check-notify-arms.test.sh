@@ -104,6 +104,33 @@ function gated_workflow() {
   printf 'A failed run <!-- notify-arms: %s/notify = failure -->.\n' "$1" >>"${ROOT}/${DOC}"
 }
 
+# @description Add a workflow outside the scanner set to ROOT with one
+# notify job whose pieces the caller gives, and a docs marker naming it.
+# The workflow runs on push and pull_request and its gate excludes
+# pull_request, so the derived arms are "failure cancelled non-pr"; a
+# marker declaring only "failure" therefore never matches, and the finding
+# names the workflow file and prints the derived set, which tells a read
+# value from an unread one.
+# @arg $1 workflow file name
+# @arg $2 top-level lines before `jobs:` (anchors), may be empty
+# @arg $3 the notify job's `if:` value
+# @arg $4 the first notify step's `uses:` value
+# @arg $5 the `result:` input value
+# @arg $6 extra lines appended to the notify job's steps, may be empty
+# @arg $7 the step's `with:` lines after `result:`, may be empty
+function anchored_workflow() {
+  {
+    printf '%s\n' "name: ${1%.*}" 'on: [push, pull_request]'
+    [[ -n $2 ]] && printf '%s\n' "$2"
+    printf '%s\n' 'jobs:' '  build:' '    runs-on: ubuntu-latest' '    steps:' '      - run: "true"' \
+      '  notify:' '    needs: build' "    if: $3" '    runs-on: ubuntu-latest' '    steps:' \
+      "      - uses: $4" '        with:' "          result: $5"
+    printf '%s\n' "${7:-          label: x}" '          title: x' '          body: x'
+    [[ -z ${6:-} ]] || printf '%s\n' "$6"
+  } >"${ROOT}/.github/workflows/$1"
+  printf 'A failed run <!-- notify-arms: %s/notify = failure -->.\n' "$1" >>"${ROOT}/${DOC}"
+}
+
 # @description Add a workflow outside the scanner set to ROOT whose jobs
 # are given verbatim, with a build job and a notify job under the keys the
 # text builds. The notify step's body is `PAYLOAD_RAN` text only.
@@ -780,6 +807,156 @@ on: [push]' '*n'
           body: twice
       - uses: ./.github/actions/notify-workflow-result'
   run_scenario two-notify-steps-exits-2 2 'job notify runs more than one notify-workflow-result step'
+
+  # --- aliased values are read as their anchored text ---
+
+  readonly NOTIFY_USES='./.github/actions/notify-workflow-result'
+  readonly NOTIFY_RESULT='${{ needs.build.result }}'
+  readonly NOTIFY_GATE="always() && github.event_name != 'pull_request'"
+  readonly ARMS_MISMATCH='declares "failure"; the workflow files on "failure cancelled non-pr"'
+  local twice_step
+  twice_step="      - uses: ${NOTIFY_USES}
+        with:
+          result: success
+          label: x
+          title: x
+          body: x"
+
+  fresh_root
+  anchored_workflow twice-inline.yml '' "${NOTIFY_GATE}" "${NOTIFY_USES}" "${NOTIFY_RESULT}" "${twice_step}"
+  run_scenario second-notify-step-inline-exits-2 2 'job notify runs more than one notify-workflow-result step'
+
+  fresh_root
+  anchored_workflow twice-alias.yml "x-u: &u ${NOTIFY_USES}" "${NOTIFY_GATE}" "${NOTIFY_USES}" "${NOTIFY_RESULT}" \
+    "${twice_step/"uses: ${NOTIFY_USES}"/uses: *u}"
+  run_scenario second-notify-step-aliased-uses-exits-2 2 'job notify runs more than one notify-workflow-result step'
+
+  fresh_root
+  anchored_workflow uses-inline.yml '' "${NOTIFY_GATE}" "${NOTIFY_USES}" "${NOTIFY_RESULT}"
+  run_scenario sole-notify-step-inline-uses-is-derived 1 "marker for uses-inline.yml/notify ${ARMS_MISMATCH}"
+
+  fresh_root
+  anchored_workflow uses-alias.yml "x-u: &u ${NOTIFY_USES}" "${NOTIFY_GATE}" '*u' "${NOTIFY_RESULT}"
+  run_scenario sole-notify-step-aliased-uses-is-derived 1 "marker for uses-alias.yml/notify ${ARMS_MISMATCH}"
+
+  fresh_root
+  anchored_workflow if-alias.yml "x-g: &g ${NOTIFY_GATE}" '*g' "${NOTIFY_USES}" "${NOTIFY_RESULT}"
+  run_scenario aliased-job-if-is-read 1 "marker for if-alias.yml/notify ${ARMS_MISMATCH}"
+
+  fresh_root
+  anchored_workflow result-alias.yml "x-r: &r ${NOTIFY_RESULT}" "${NOTIFY_GATE}" "${NOTIFY_USES}" '*r'
+  run_scenario aliased-result-input-is-read 1 "marker for result-alias.yml/notify ${ARMS_MISMATCH}"
+
+  # A step `if:` anchored on null is no `if:` at all, as inline.
+  fresh_root
+  anchored_workflow stepif-null.yml 'x-n: &n null' "${NOTIFY_GATE}" "${NOTIFY_USES}
+        if: *n" "${NOTIFY_RESULT}"
+  run_scenario aliased-null-step-if-is-no-if 1 "marker for stepif-null.yml/notify ${ARMS_MISMATCH}"
+
+  # Values several aliases deep, in a step list that is itself an alias
+  # inside a job that is an alias.
+  fresh_root
+  odd_workflow deep-alias.yml "x-u: &u ${NOTIFY_USES}
+x-g: &g ${NOTIFY_GATE}
+x-r: &r ${NOTIFY_RESULT}
+x-with: &with
+  result: *r
+  label: x
+  title: x
+  body: x
+x-step: &step
+  uses: *u
+  with: *with
+x-steps: &steps
+  - *step
+x-job: &job
+  needs: build
+  if: *g
+  runs-on: ubuntu-latest
+  steps: *steps
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: \"true\"
+  notify: *job"
+  printf 'A failed run <!-- notify-arms: deep-alias.yml/notify = failure -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario deep-aliased-notify-job-is-derived 1 'marker for deep-alias.yml/notify declares "failure"; the workflow files on "failure cancelled"'
+
+  # A needs: list is read against an aliased gate: the gate names the
+  # watched job, so it must be read as its text to be found to carry
+  # always() and to name exactly one job.
+  fresh_root
+  odd_workflow multi-needs-alias.yml "x-g: &g always() && needs.build.result == 'failure'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: \"true\"
+  other:
+    runs-on: ubuntu-latest
+    steps:
+      - run: \"true\"
+  notify:
+    needs: [build, other]
+    if: *g
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ${NOTIFY_USES}
+        with:
+          result: ${NOTIFY_RESULT}
+          label: x
+          title: x
+          body: x"
+  printf 'A failed run <!-- notify-arms: multi-needs-alias.yml/notify = failure cancelled -->.\n' >>"${ROOT}/${DOC}"
+  run_scenario multi-needs-aliased-gate-is-read 1 \
+    'marker for multi-needs-alias.yml/notify declares "failure cancelled"; the workflow files on "failure"'
+
+  # An aliased value in a position the lint never reads changes nothing.
+  fresh_root
+  anchored_workflow unread-alias.yml 'x-l: &l unread-label' "${NOTIFY_GATE}" "${NOTIFY_USES}" "${NOTIFY_RESULT}" '' \
+    '          label: *l'
+  run_scenario aliased-unread-label-is-ignored 1 "marker for unread-alias.yml/notify ${ARMS_MISMATCH}"
+
+  # A scanner job's steps, uses, body and watched job's outputs written as
+  # aliases are read as their anchored text: the body marker is found and
+  # compared, and a declared has-finding output counts.
+  fresh_root
+  edit "${CQ}" 'jobs:
+  analyze:' 'x-u: &u ./.github/actions/notify-workflow-result
+x-b: &b |
+  An infrastructure failure. <!-- notify-arms: codeql.yml/notify-infra = failure non-pr -->
+x-s: &s
+  - uses: *u
+    with:
+      result: ${{ needs.analyze.result }}
+      label: codeql-infra
+      title: "codeql: infrastructure failure"
+      body: *b
+jobs:
+  analyze:'
+  edit "${CQ}" '    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          result: ${{ needs.analyze.result }}
+          label: codeql-infra
+          title: "codeql: infrastructure failure"
+          body: |
+            An infrastructure failure. <!-- notify-arms: codeql.yml/notify-infra = failure cancelled non-pr -->' '    steps: *s'
+  run_scenario aliased-steps-uses-and-body-are-read 1 \
+    'codeql.yml (job notify-infra body):1: marker for codeql.yml/notify-infra declares "failure non-pr"; the workflow files on "failure cancelled non-pr"'
+
+  fresh_root
+  edit "${CQ}" 'jobs:
+  analyze:' 'x-o: &o
+  has-finding: ${{ steps.count.outputs.has-finding }}
+jobs:
+  analyze:'
+  edit "${CQ}" '    outputs:
+      has-finding: ${{ steps.count.outputs.has-finding }}' '    outputs: *o'
+  edit "${CQ}" 'notify-arms: codeql.yml/notify-finding = finding non-pr' 'notify-arms: codeql.yml/notify-finding = finding'
+  run_scenario aliased-outputs-declare-has-finding 1 \
+    'marker for codeql.yml/notify-finding declares "finding"; the workflow files on "finding non-pr"'
 
   # Steps after the notify step are not read, however many there are. The
   # list in long.yml is longer than a pipe buffer, so a reader that stops
