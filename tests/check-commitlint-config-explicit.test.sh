@@ -262,16 +262,40 @@ expect_configs 'an extra rule merged in from an alias is named' \
   "${BASE_OK}" "extends: [${CONV}]\nx-r: &r {body-max-line-length: [0], footer-max-line-length: [0], subject-case: [0]}\nrules: {<<: *r}\n" 1 "${EXTRA_RULE}"
 expect_configs 'an alias chain under a key the lint does not read is not refused' \
   "${BASE_OK}x-0: &zero 0\nx-a: &a [*zero]\nx-b: &b [*a]\nx-c: &c [*b]\nprompt: *c\n" "${MERGE_OK}" 0 ''
-# Each `explode` pass resolves one level of a chain, so a chain deeper
-# than the passes leaves an alias in a value the lint judges.
-expect_configs 'a rule value still holding an alias after resolving is refused' \
-  "${BASE_OK}" "extends: [${CONV}]\nx-0: &zero 0\nx-z: &z [*zero]\nx-w: &w [*z]\nx-r: &r {body-max-line-length: *w, footer-max-line-length: [0]}\nrules: *r\n" 2 \
+# Each `explode` pass resolves one level of a chain, and the lint runs
+# sixteen, so a value three aliases deep is judged as its expanded
+# text, as the same value written inline is.
+readonly NESTED_RULE='%M: rules must be exactly body-max-line-length=\[0\]\,footer-max-line-length=\[0\]; got body-max-line-length=\[\[0\]\]\,footer-max-line-length=\[0\]. The merge ruleset relaxes only the two GitHub-composed line-length rules
+'"${ONE}"
+expect_configs 'an inline nested rule value is judged as its text' \
+  "${BASE_OK}" "extends: [${CONV}]\nrules: {body-max-line-length: [[0]], footer-max-line-length: [0]}\n" 1 "${NESTED_RULE}"
+expect_configs 'a rule value three aliases deep is judged as its text' \
+  "${BASE_OK}" "extends: [${CONV}]\nx-0: &zero 0\nx-z: &z [*zero]\nx-w: &w [*z]\nx-r: &r {body-max-line-length: *w, footer-max-line-length: [0]}\nrules: *r\n" 1 "${NESTED_RULE}"
+expect_configs 'an inline nested extends list is read as its text' \
+  "extends: [[${CONV}]]\n" "${MERGE_OK}" 0 ''
+expect_configs 'an extends list three aliases deep is read as its text' \
+  "x-p: &p ${CONV}\nx-m: &m [*p]\nx-l: &l [*m]\nextends: *l\n" "${MERGE_OK}" 0 ''
+
+# @description Print, as printf format, a chain of anchors each holding
+# a one-item list of the one before, ending in anchor `n<depth>`.
+# @arg $1 depth  @arg $2 the innermost value
+function nest() {
+  local i
+  printf 'x-n0: &n0 %s\\n' "$2"
+  for ((i = 1; i <= $1; i++)); do
+    printf 'x-n%d: &n%d [*n%d]\\n' "${i}" "${i}" "$((i - 1))"
+  done
+}
+# A nest seventeen lists deep outlasts the sixteen passes, so an alias is
+# left in a value the lint judges and the run stops on it.
+expect_configs 'a rule value nested past the resolving passes is refused' \
+  "${BASE_OK}" "extends: [${CONV}]\n$(nest 17 0)x-r: &r {body-max-line-length: *n17, footer-max-line-length: [0]}\nrules: *r\n" 2 \
   '%M: rules.body-max-line-length still holds a YAML alias after resolving; cannot read it'
 expect_configs 'a refused rule value is named by the text of its aliased key' \
-  "${BASE_OK}" "extends: [${CONV}]\nx-k: &k footer-max-line-length\nx-0: &zero 0\nx-z: &z [*zero]\nx-w: &w [*z]\nx-r: &r {body-max-line-length: [0], *k : *w}\nrules: *r\n" 2 \
+  "${BASE_OK}" "extends: [${CONV}]\nx-k: &k footer-max-line-length\n$(nest 17 0)x-r: &r {body-max-line-length: [0], *k : *n17}\nrules: *r\n" 2 \
   '%M: rules.footer-max-line-length still holds a YAML alias after resolving; cannot read it'
-expect_configs 'an extends list still holding an alias after resolving is refused' \
-  "x-p: &p ${CONV}\nx-m: &m [*p]\nx-l: &l [*m]\nextends: *l\n" "${MERGE_OK}" 2 \
+expect_configs 'an extends list nested past the resolving passes is refused' \
+  "$(nest 17 "${CONV}")extends: *n17\n" "${MERGE_OK}" 2 \
   '%B: extends still holds a YAML alias after resolving; cannot read it'
 # A commitlint config that does not parse is a file this lint could not
 # read: yq exits 1 on it, and reporting that as the rule-set drift
