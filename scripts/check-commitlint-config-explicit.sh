@@ -53,8 +53,12 @@
 # base directory. Skips this script if it appears in the scan set.
 # LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set.
 #
-# Exits 0 on full coverage, 1 on any drift, 2 when yq is absent or the
-# scan set could not be enumerated.
+# The two configs are read as commitlint reads them: an aliased value is
+# read as its anchored text, and a rule value or `extends:` list that
+# still holds an alias after resolving is refused with exit 2.
+#
+# Exits 0 on full coverage, 1 on any drift, 2 when yq is absent, the
+# scan set could not be enumerated, or a config cannot be read.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -286,11 +290,32 @@ for p in "${base_path}" "${merge_path}"; do
   fi
 done
 
+# commitlint reads an aliased value as its anchored text, so the configs
+# are read through their aliases. `to_entries` and `flatten` do not follow
+# an alias, and each `explode` pass resolves one level of a chain. `rules:`
+# gets one pass: an anchor cannot sit on an alias, so it then holds a map,
+# with any merge key folded in. A rule's key gets one pass for the same
+# reason. A rule's value and `extends:` get two, because the text an alias
+# stands for can itself hold an alias. A chain deeper than that leaves an
+# alias in a rule value or an `extends:` entry, text this lint cannot
+# read, so the run stops on it.
+readonly RULES_NODE='((.rules | explode(.)) // {})'
+readonly RULE_VALUE='(.value | explode(.) | explode(.))'
+readonly EXTENDS_LIST='([(.extends | explode(.) | explode(.)) // []] | flatten)'
+
 if [[ -f ${merge_path} ]]; then
   # A config that does not parse is a file this lint could not read. Its
   # yq exit 1 must not surface as the rule-set drift verdict below.
-  if ! merge_rules="$(yq eval '.rules // {} | to_entries | map(.key + "=" + (.value | tostring)) | sort | join(",")' "${merge_path}")"; then
+  if ! merge_rules="$(yq eval "${YQ_MERGE_SPEC[@]}" "${RULES_NODE}"' | to_entries | map((.key | explode(.) | tostring) + "=" + ('"${RULE_VALUE}"' | tostring)) | sort | join(",")' "${merge_path}")"; then
     printf 'cannot read .rules from %s\n' "${merge_path}" >&2
+    exit 2
+  fi
+  if ! alias_rule="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${RULES_NODE}"' | to_entries[] | select(['"${RULE_VALUE}"' | .. | select(kind == "alias")] | length > 0) | .key | explode(.) | tostring] | .[0] // ""' "${merge_path}")"; then
+    printf 'cannot read .rules from %s\n' "${merge_path}" >&2
+    exit 2
+  fi
+  if [[ -n ${alias_rule} ]]; then
+    printf '%s: rules.%q still holds a YAML alias after resolving; cannot read it\n' "${merge_path}" "${alias_rule}" >&2
     exit 2
   fi
   readonly want_rules='body-max-line-length=[0],footer-max-line-length=[0]'
@@ -301,11 +326,21 @@ if [[ -f ${merge_path} ]]; then
 fi
 
 if [[ -f ${base_path} && -f ${merge_path} ]]; then
-  if ! base_extends="$(yq eval '[.extends // []] | flatten | join(",")' "${base_path}")"; then
+  for p in "${base_path}" "${merge_path}"; do
+    if ! extends_aliases="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${EXTENDS_LIST}"' | .[] | select(kind == "alias")] | length' "${p}")"; then
+      printf 'cannot read .extends from %s\n' "${p}" >&2
+      exit 2
+    fi
+    if [[ ${extends_aliases} != 0 ]]; then
+      printf '%s: extends still holds a YAML alias after resolving; cannot read it\n' "${p}" >&2
+      exit 2
+    fi
+  done
+  if ! base_extends="$(yq eval "${YQ_MERGE_SPEC[@]}" "${EXTENDS_LIST}"' | join(",")' "${base_path}")"; then
     printf 'cannot read .extends from %s\n' "${base_path}" >&2
     exit 2
   fi
-  if ! merge_extends="$(yq eval '[.extends // []] | flatten | join(",")' "${merge_path}")"; then
+  if ! merge_extends="$(yq eval "${YQ_MERGE_SPEC[@]}" "${EXTENDS_LIST}"' | join(",")' "${merge_path}")"; then
     printf 'cannot read .extends from %s\n' "${merge_path}" >&2
     exit 2
   fi
