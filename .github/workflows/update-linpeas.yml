@@ -345,25 +345,35 @@ jobs:
             --header "${api_header}" >/dev/null
 
           # Commit 1: linpeas-pin.json. Web-flow signs this commit.
-          pin_b64="$(base64 --wrap=0 -- "${artifact}/linpeas-pin.json")"
-          gh api --method PUT "repos/${REPO}/contents/linpeas-pin.json" \
-            --field message="chore: bump linpeas to ${NEW}" \
-            --field content="${pin_b64}" \
-            --field sha="${pin_blob_sha}" \
-            --field branch="${work_branch}" \
-            --header "${api_header}" >/dev/null
+          # The body reaches gh on stdin, not as a --field argument: Linux caps
+          # one argument at 128 KiB, and a base64 file body outgrows it.
+          pin_b64="$(mktemp)"
+          base64 --wrap=0 -- "${artifact}/linpeas-pin.json" >"${pin_b64}"
+          jq --null-input \
+            --arg message "chore: bump linpeas to ${NEW}" \
+            --rawfile content "${pin_b64}" \
+            --arg sha "${pin_blob_sha}" \
+            --arg branch "${work_branch}" \
+            '{message: $message, content: $content, sha: $sha, branch: $branch}' |
+            gh api --method PUT "repos/${REPO}/contents/linpeas-pin.json" \
+              --input - \
+              --header "${api_header}" >/dev/null
 
           # Commit 2: docs/reference/flake-outputs.md (flake-show block refresh).
           # The doc's blob SHA on the bump branch still equals main's (only
           # linpeas-pin changed in commit 1), so reuse flake_outputs_blob_sha.
-          flake_outputs_b64="$(base64 --wrap=0 -- "${artifact}/docs/reference/flake-outputs.md")"
-          tip_sha="$(gh api --method PUT "repos/${REPO}/contents/docs/reference/flake-outputs.md" \
-            --field message="chore: refresh flake-show for linpeas ${NEW}" \
-            --field content="${flake_outputs_b64}" \
-            --field sha="${flake_outputs_blob_sha}" \
-            --field branch="${work_branch}" \
-            --jq .commit.sha \
-            --header "${api_header}")"
+          flake_outputs_b64="$(mktemp)"
+          base64 --wrap=0 -- "${artifact}/docs/reference/flake-outputs.md" >"${flake_outputs_b64}"
+          tip_sha="$(jq --null-input \
+            --arg message "chore: refresh flake-show for linpeas ${NEW}" \
+            --rawfile content "${flake_outputs_b64}" \
+            --arg sha "${flake_outputs_blob_sha}" \
+            --arg branch "${work_branch}" \
+            '{message: $message, content: $content, sha: $sha, branch: $branch}' |
+            gh api --method PUT "repos/${REPO}/contents/docs/reference/flake-outputs.md" \
+              --input - \
+              --jq .commit.sha \
+              --header "${api_header}")"
 
           if [[ "${open_pr}" == true ]]; then
             printf 'rebasing open PR for %s onto main HEAD %s (new tip %s)\n' \

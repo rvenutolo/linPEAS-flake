@@ -1458,20 +1458,25 @@ jobs:
             --field sha="${base_sha}" \
             --header "${api_header}" >/dev/null
 
-          changelog_b64="$(base64 --wrap=0 CHANGELOG.md)"
-          put_args=(
-            --method PUT "repos/${REPO}/contents/CHANGELOG.md"
-            --field message="docs: update changelog for ${VERSION}"
-            --field content="${changelog_b64}"
-            --field branch="${work_branch}"
-            --jq .commit.sha
-            --header "${api_header}"
-          )
-          if blob_sha="$(gh api "repos/${REPO}/contents/CHANGELOG.md?ref=${work_branch}" \
+          # The body reaches gh on stdin, not as a --field argument: Linux caps
+          # one argument at 128 KiB, and a base64 file body outgrows it.
+          changelog_b64="$(mktemp)"
+          base64 --wrap=0 CHANGELOG.md >"${changelog_b64}"
+          if ! blob_sha="$(gh api "repos/${REPO}/contents/CHANGELOG.md?ref=${work_branch}" \
             --header "${api_header}" --jq .sha 2>/dev/null)"; then
-            put_args+=(--field sha="${blob_sha}")
+            blob_sha=''
           fi
-          tip_sha="$(gh api "${put_args[@]}")"
+          tip_sha="$(jq --null-input \
+            --arg message "docs: update changelog for ${VERSION}" \
+            --rawfile content "${changelog_b64}" \
+            --arg branch "${work_branch}" \
+            --arg sha "${blob_sha}" \
+            '{message: $message, content: $content, branch: $branch}
+              + (if $sha == "" then {} else {sha: $sha} end)' |
+            gh api --method PUT "repos/${REPO}/contents/CHANGELOG.md" \
+              --input - \
+              --jq .commit.sha \
+              --header "${api_header}")"
 
           if [[ "${open_pr}" == true ]]; then
             printf 'rebasing open PR for %s onto main HEAD %s (new tip %s)\n' \

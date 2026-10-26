@@ -806,14 +806,20 @@ jobs:
                 ;;
               *) msg="chore(flake): update ${path} for ${INPUT_NAME} lock refresh" ;;
             esac
-            content_b64="$(base64 --wrap=0 "${path}")"
-            gh api --method PUT \
-              --header "${api_header}" \
-              "repos/${REPO}/contents/${path}" \
-              --field message="${msg}" \
-              --field content="${content_b64}" \
-              --field sha="${to_sha[i]}" \
-              --field branch="${HEAD_BRANCH}" >/dev/null
+            # The body reaches gh on stdin, not as a --field argument: Linux caps
+            # one argument at 128 KiB, and a base64 file body outgrows it.
+            content_b64="$(mktemp)"
+            base64 --wrap=0 -- "${path}" >"${content_b64}"
+            jq --null-input \
+              --arg message "${msg}" \
+              --rawfile content "${content_b64}" \
+              --arg sha "${to_sha[i]}" \
+              --arg branch "${HEAD_BRANCH}" \
+              '{message: $message, content: $content, sha: $sha, branch: $branch}' |
+              gh api --method PUT \
+                --header "${api_header}" \
+                "repos/${REPO}/contents/${path}" \
+                --input - >/dev/null
             printf 'committed %s to %s\n' "${path}" "${HEAD_BRANCH}"
           done
 
