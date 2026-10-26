@@ -96,6 +96,38 @@ run_scenario 'unparsable config → could not run' "${fixture_dir}/malformed.yam
 run_scenario 'missing config → could not run' \
   '/nonexistent/actionlint.yaml' 2 'config not found' ''
 
+# actionlint reads a label written as an alias as its anchored text, so
+# each aliased allowlist below reaches the verdict of its inline twin
+# above. Each names its own config path, so no two outputs match.
+printf 'x-dead: &dead ubuntu-24.04-arm\nx-needed: &needed not-a-hosted-label\nself-hosted-runner:\n  labels:\n    - *dead\n    - *needed\n' \
+  >"${fixture_dir}/alias-mixed.yaml"
+run_scenario 'aliased mixed allowlist → names only the dead entry' \
+  "${fixture_dir}/alias-mixed.yaml" 1 \
+  'accepts runner label "ubuntu-24.04-arm"' 'not-a-hosted-label'
+
+# A list written as an alias whose item is an alias is read through both.
+printf 'x-dead: &dead ubuntu-24.04-arm\nx-labels: &labels [*dead]\nself-hosted-runner:\n  labels: *labels\n' \
+  >"${fixture_dir}/alias-deep.yaml"
+run_scenario 'aliased list of aliased labels → fires' \
+  "${fixture_dir}/alias-deep.yaml" 1 \
+  'accepts runner label "ubuntu-24.04-arm"' ''
+
+# An alias chain under a key the canary does not read changes nothing.
+printf 'x-dead: &dead ubuntu-24.04-arm\nx-chain: &chain [*dead]\nunread: [*chain]\nself-hosted-runner:\n  labels:\n    - ubuntu-24.04-arm\n' \
+  >"${fixture_dir}/alias-unread.yaml"
+run_scenario 'alias chain outside the labels → fires as inline' \
+  "${fixture_dir}/alias-unread.yaml" 1 \
+  'accepts runner label "ubuntu-24.04-arm"' ''
+
+# One pass resolves one level of an alias chain, and a label is a
+# scalar, so only an item that is itself a collection holding an alias
+# can stay one. The canary cannot probe that text, so it does not run.
+printf 'x-dead: &dead ubuntu-24.04-arm\nx-chain: &chain [*dead]\nself-hosted-runner:\n  labels:\n    - *chain\n' \
+  >"${fixture_dir}/alias-residual.yaml"
+run_scenario 'label still holding an alias after resolving → could not run' \
+  "${fixture_dir}/alias-residual.yaml" 2 \
+  'self-hosted-runner.labels still holds a YAML alias after resolving; cannot read it' ''
+
 harness_assert_verify || failures=$((failures + 1))
 
 if [[ ${failures} -ne 0 ]]; then
