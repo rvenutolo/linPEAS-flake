@@ -12,6 +12,9 @@
 # A step is a harden-runner step when its `uses:` holds
 # `step-security/harden-runner@`, its ASCII letters in either case.
 #
+# A step `uses:`, `egress-policy` or `allowed-endpoints` written as a
+# YAML alias is read as its anchored text.
+#
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
 # counted finding, and the file's jobs are not read.
 #
@@ -89,8 +92,8 @@ for f in "${selected_files[@]}"; do
   if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"'
     | to_entries[] as $j
     | $j.value.steps[]
-    | select(.uses // "" | test("'"${HARDEN_RUNNER_RE}"'"))
-    | ($j.key | explode(.) | tostring) + "\t" + (.with."egress-policy" // "null") + "\t" + ((.with."allowed-endpoints" // "null") | sub("\n"; " "))
+    | select((.uses | explode(.)) // "" | test("'"${HARDEN_RUNNER_RE}"'"))
+    | ($j.key | explode(.) | tostring) + "\t" + ((.with."egress-policy" | explode(.)) // "null") + "\t" + (((.with."allowed-endpoints" | explode(.)) // "null") | sub("\n"; " "))
   ' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed, or non-string allowed-endpoints?)\n' "${f}" >&2
     failed=$((failed + 1))

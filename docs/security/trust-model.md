@@ -227,7 +227,7 @@ Exception for a non-`GITHUB_TOKEN` secret requires documenting here BEFORE relax
 
 Enforced by `scripts/check-harden-runner-first.sh` via the `lint-workflow-security` CI job (member check `harden-runner-first`) and a pre-commit hook. Lint parses every job in `.github/workflows/*.yml` (or `.yaml`) with `yq` and rejects any job whose first step is not `step-security/harden-runner@<40-hex-sha>`. The owner and repository are matched with their ASCII letters in either case; the SHA is forty lower-case hex digits.
 
-The block-mode contract is enforced by `scripts/check-harden-runner-block.sh` via the same `lint-workflow-security` CI job (member check `harden-runner-block`) and a pre-commit hook: it rejects any harden-runner step that is not `egress-policy: block` with a non-empty `allowed-endpoints:`, and reads a step as harden-runner when its `uses:` holds `step-security/harden-runner@` with its ASCII letters in either case. A missed host surfaces as a blocked-egress CI failure and is fixed forward by adding the host to that job's allowlist.
+The block-mode contract is enforced by `scripts/check-harden-runner-block.sh` via the same `lint-workflow-security` CI job (member check `harden-runner-block`) and a pre-commit hook: it rejects any harden-runner step that is not `egress-policy: block` with a non-empty `allowed-endpoints:`, and reads a step as harden-runner when its `uses:` holds `step-security/harden-runner@` with its ASCII letters in either case. A step's `uses:`, `egress-policy` and `allowed-endpoints` written as an alias (`uses: *action`) are read as their anchored text. A missed host surfaces as a blocked-egress CI failure and is fixed forward by adding the host to that job's allowlist.
 
 ### Egress allowlist matches tool inventory
 
