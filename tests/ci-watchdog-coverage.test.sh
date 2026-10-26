@@ -15,6 +15,11 @@
 # `types`. Each must exit 1 and name what is wrong, so a check that
 # stopped reading the list could not stay green.
 #
+# The yq expression `workflowCallsNotify` runs, taken from the workflow
+# text, is then run on workflows whose notify step is written with
+# aliases and on their inline twins: each must count the one notify
+# call its inline twin counts.
+#
 # Exits 0 when every scenario behaves, 1 otherwise, and 2 when `yq` is
 # missing.
 
@@ -163,6 +168,63 @@ scenario stale-name "$(mutated_copy stale '.on.workflow_run.workflows += ["no-su
   'FAIL ci-watchdog workflow_run lists no-such-workflow, which no other workflow is named'
 scenario wrong-types "$(mutated_copy types '.on.workflow_run.types = ["requested"]')" 1 \
   'FAIL ci-watchdog workflow_run types are ["requested"], want ["completed"]'
+
+# The notify-call count `workflowCallsNotify` takes from yq, run on a
+# notify step written with aliases and on the same step written inline.
+# The expression is the one quoted argument line in the workflow that
+# selects steps by the notify composite's path; finding none or several
+# means the anchor no longer identifies it.
+notify_expr_lines="$(grep --extended-regexp -- "^[[:space:]]*'\\[\\.jobs\\[\\]\\.steps\\[\\]\\?.*notify-workflow-result.*',\$" \
+  "${LIVE_DIR}/ci-watchdog.yml" || true)"
+notify_expr_count=0
+if [[ -n ${notify_expr_lines} ]]; then
+  notify_expr_count="$(wc --lines <<<"${notify_expr_lines}")"
+fi
+if [[ ${notify_expr_count} -ne 1 ]]; then
+  printf 'FAIL notify-call expression: found %d matching lines in ci-watchdog.yml, want 1\n' "${notify_expr_count}" >&2
+  failures=1
+elif [[ ${notify_expr_lines} == *\\* ]]; then
+  printf 'FAIL notify-call expression holds a backslash, which JavaScript would unescape: %s\n' "${notify_expr_lines}" >&2
+  failures=1
+else
+  notify_expr="${notify_expr_lines#*\'}"
+  notify_expr="${notify_expr%\',}"
+  notify_dir="${TMP_DIR}/notify"
+  mkdir -- "${notify_dir}"
+  notify_job=$'    runs-on: ubuntu-latest\n    steps:\n      - run: echo PAYLOAD_RAN\n'
+  printf 'on: push\njobs:\n  a:\n%s      - uses: ./.github/actions/notify-workflow-result\n' \
+    "${notify_job}" >"${notify_dir}/inline.yml"
+  printf 'on: push\nx-u: &u ./.github/actions/notify-workflow-result\njobs:\n  a:\n%s      - uses: *u\n' \
+    "${notify_job}" >"${notify_dir}/uses-alias.yml"
+  printf 'on: push\njobs:\n  a:\n%s      - uses: rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@0123456789abcdef0123456789abcdef01234567\n' \
+    "${notify_job}" >"${notify_dir}/pinned-inline.yml"
+  printf 'on: push\nx-u: &u rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@0123456789abcdef0123456789abcdef01234567\njobs:\n  a:\n%s      - uses: *u\n' \
+    "${notify_job}" >"${notify_dir}/pinned-alias.yml"
+  printf 'on: push\nx-u: &u ./.github/actions/notify-workflow-result\nx-s: &s {uses: *u}\nx-st: &st [{run: echo PAYLOAD_RAN}, *s]\nx-j: &j {runs-on: ubuntu-latest, steps: *st}\njobs:\n  a: *j\n' \
+    >"${notify_dir}/deep-alias.yml"
+  notify_nest=$'x-d1: &d1 [echo PAYLOAD_RAN]\n'
+  for ((notify_level = 2; notify_level <= 17; notify_level++)); do
+    notify_nest+="x-d${notify_level}: &d${notify_level} [*d$((notify_level - 1))]"$'\n'
+  done
+  printf 'on: push\n%sjobs:\n  a:\n    env:\n      DEEP: *d17\n%s      - uses: ./.github/actions/notify-workflow-result\n' \
+    "${notify_nest}" "${notify_job}" >"${notify_dir}/unread-alias.yml"
+  notify_outs=()
+  for notify_case in inline uses-alias pinned-inline pinned-alias deep-alias unread-alias; do
+    notify_rc=0
+    yq "${notify_expr}" "${notify_dir}/${notify_case}.yml" >"${notify_dir}/${notify_case}.out" 2>&1 || notify_rc=$?
+    printf 'harness-assert-outcome: exit=%d\n' "${notify_rc}" >>"${notify_dir}/${notify_case}.out"
+    notify_outs+=("${notify_dir}/${notify_case}.out")
+    if [[ $(<"${notify_dir}/${notify_case}.out") == $'1\nharness-assert-outcome: exit=0' ]]; then
+      printf 'OK   notify-call count: %s counts one call\n' "${notify_case}"
+    else
+      printf 'FAIL notify-call count: %s printed %q, want 1 and exit 0\n' \
+        "${notify_case}" "$(<"${notify_dir}/${notify_case}.out")" >&2
+      failures=1
+    fi
+  done
+  # Every case is meant to print the same count, so they are one record.
+  harness_assert_record 'notify-call count: aliased and inline notify steps' '' "${notify_outs[@]}"
+fi
 
 harness_assert_verify || failures=1
 
