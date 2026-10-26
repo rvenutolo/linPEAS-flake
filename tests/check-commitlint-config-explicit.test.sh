@@ -267,6 +267,9 @@ expect_configs 'an alias chain under a key the lint does not read is not refused
 expect_configs 'a rule value still holding an alias after resolving is refused' \
   "${BASE_OK}" "extends: [${CONV}]\nx-0: &zero 0\nx-z: &z [*zero]\nx-w: &w [*z]\nx-r: &r {body-max-line-length: *w, footer-max-line-length: [0]}\nrules: *r\n" 2 \
   '%M: rules.body-max-line-length still holds a YAML alias after resolving; cannot read it'
+expect_configs 'a refused rule value is named by the text of its aliased key' \
+  "${BASE_OK}" "extends: [${CONV}]\nx-k: &k footer-max-line-length\nx-0: &zero 0\nx-z: &z [*zero]\nx-w: &w [*z]\nx-r: &r {body-max-line-length: [0], *k : *w}\nrules: *r\n" 2 \
+  '%M: rules.footer-max-line-length still holds a YAML alias after resolving; cannot read it'
 expect_configs 'an extends list still holding an alias after resolving is refused' \
   "x-p: &p ${CONV}\nx-m: &m [*p]\nx-l: &l [*m]\nextends: *l\n" "${MERGE_OK}" 2 \
   '%B: extends still holds a YAML alias after resolving; cannot read it'
