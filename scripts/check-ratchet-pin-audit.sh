@@ -28,8 +28,9 @@
 # merge specification says.
 #
 # A value written as an alias is read as its anchored text, as GitHub
-# Actions reads it; a job's permissions that still hold an alias after
-# sixteen resolving passes are refused with exit 2.
+# Actions reads it; a job's permissions, a first step's `uses:` or the
+# concurrency group that still holds an alias after sixteen resolving
+# passes is refused with exit 2.
 #
 # WORKFLOW_PATH_OVERRIDE points at an alternate workflow file
 # (used by tests/check-ratchet-pin-audit.test.sh fixtures).
@@ -42,12 +43,13 @@
 # a `ratchet --version` string carrying no X.Y.Z. The workflow reads stop
 # the run on the workflow's own content too: a root giving `on`, `jobs`,
 # `permissions` or `concurrency` twice (each key is read as GitHub
-# Actions reads one written as an alias), an `on:` or a job's
-# permissions holding an alias nested too deep to resolve, or a merge key in `on:` that `yq` cannot
-# resolve (see ON_NODE). A file `yq` reads as
-# several YAML documents, or whose root is not a map, is one finding. With no workflow to
-# parse there is no invariant to score, and counting that as a failed
-# invariant would report drift in a file the check never read.
+# Actions reads one written as an alias), an `on:`, a job's permissions,
+# a first step's `uses:` or the concurrency group holding an alias nested
+# too deep to resolve, or a merge key in `on:` that `yq` cannot resolve
+# (see ON_NODE). A file `yq` reads as several YAML documents, or whose
+# root is not a map, is one finding. With no workflow to parse there is
+# no invariant to score, and counting that as a failed invariant would
+# report drift in a file the check never read.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -133,17 +135,21 @@ readonly CONC_NODE="${ROOT_KEY_NODE//@KEY@/concurrency}"
 # A value written as an alias is an alias node at the end of its path,
 # which `//`, `==`, `test` and `to_entries` do not follow, so each value
 # read below is exploded before any of them sees it. An anchor cannot
-# sit on an alias, so one pass resolves a scalar. A job's permissions map
-# can nest an alias inside the text an alias stands for, one level per
-# pass, so it goes through sixteen passes, as ON_NODE resolves `on:`,
-# and one still holding an alias after them is refused by `yq` with an
-# error rather than read.
+# sit on an alias, so one pass resolves a scalar. A value printed in a
+# diagnostic or judged whole (a job's permissions, a first step's
+# `uses:`, the concurrency group) can be a collection nesting an alias
+# inside the text an alias stands for, one level per pass, so it goes
+# through sixteen passes, as ON_NODE resolves `on:`, and one still
+# holding an alias after them is refused by `yq` with an error
+# (UNRESOLVED, the text `@WHAT@` standing for the value's path) rather
+# than read.
 # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
 readonly RESOLVE='(. as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)))'
+readonly UNRESOLVED='with(select([... | select(kind == "alias")] | length > 0); error("@WHAT@ holds an alias nested too deep to resolve"))'
 
 # One job's permissions as sorted `scope:value` pairs, read through
 # RESOLVE. A script reads one job's with `${PERMS_ROWS//@JOB@/<name>}`.
-readonly PERMS_ROWS="${JOBS_NODE}"' | .@JOB@.permissions | '"${RESOLVE}"' | with(select([... | select(kind == "alias")] | length > 0); error("jobs.@JOB@.permissions holds an alias nested too deep to resolve")) | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")'
+readonly PERMS_ROWS="${JOBS_NODE}"' | .@JOB@.permissions | '"${RESOLVE} | ${UNRESOLVED//@WHAT@/jobs.@JOB@.permissions}"' | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")'
 
 failed=0
 fail() {
@@ -204,7 +210,7 @@ done
 
 # 4. harden-runner is the first step of every job.
 for job in check notify; do
-  if ! first="$(read_workflow "${JOBS_NODE} | (.\"${job}\".steps[0].uses | explode(.)) // \"\"" "the first step of job ${job}")"; then
+  if ! first="$(read_workflow "${JOBS_NODE} | (.\"${job}\".steps[0].uses | ${RESOLVE} | ${UNRESOLVED//@WHAT@/jobs.${job}.steps[0].uses}) // \"\"" "the first step of job ${job}")"; then
     exit 2
   fi
 
@@ -244,7 +250,7 @@ if [[ ${disp} != "true" ]]; then
 fi
 
 # 7. concurrency.group is exactly ratchet-pin-audit.
-if ! group="$(read_workflow "${CONC_NODE}"' | (.group | explode(.)) // ""' 'the concurrency group')"; then
+if ! group="$(read_workflow "${CONC_NODE} | (.group | ${RESOLVE} | ${UNRESOLVED//@WHAT@/concurrency.group}) // \"\"" 'the concurrency group')"; then
   exit 2
 fi
 
