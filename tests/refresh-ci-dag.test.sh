@@ -397,6 +397,82 @@ EOF
     cat -- "${key_work}/ml.md" >&2
   fi
 
+  # A needs: value written as an alias renders the diagram the same value
+  # written inline renders, byte for byte: a list alias, a scalar alias
+  # brought in by a merge key, a list nested three aliases deep, and an
+  # alias nest deeper than sixteen sitting where the generator never
+  # reads it. Each run logs only its one line. A needs: nest deeper than
+  # sixteen stops the run (exit 2) naming the key, and the doc is
+  # untouched.
+  local deep_chain='' level
+  deep_chain+=$'x-d1: &d1 [na-a]\n'
+  for ((level = 2; level <= 17; level++)); do
+    deep_chain+="x-d${level}: &d${level} [*d$((level - 1))]"$'\n'
+  done
+  local na_jobs=$'  na-a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n'
+  local na_steps=$'    runs-on: ubuntu-latest\n    steps:\n      - run: "true"\n'
+  printf 'name: ci\non: push\njobs:\n%s  na-b:\n    needs: [na-a]\n%s  na-c:\n    needs: na-a\n%s' \
+    "${na_jobs}" "${na_steps}" "${na_steps}" >"${key_work}/na-inline.yml"
+  printf 'name: ci\non: push\nx-n: &n [na-a]\nx-s: &s na-a\nx-m: &m {needs: *s}\njobs:\n%s  na-b:\n    needs: *n\n%s  na-c:\n    <<: *m\n%s' \
+    "${na_jobs}" "${na_steps}" "${na_steps}" >"${key_work}/na-alias.yml"
+  printf 'name: ci\non: push\n%sjobs:\n%s  na-b:\n    needs: *d3\n%s  na-c:\n    needs: na-a\n%s' \
+    "${deep_chain}" "${na_jobs}" "${na_steps}" "${na_steps}" >"${key_work}/na-deep.yml"
+  printf 'name: ci\non: push\n%sjobs:\n%s  na-b:\n    needs: [na-a]\n    env:\n      DEEP: *d17\n%s  na-c:\n    needs: na-a\n%s' \
+    "${deep_chain}" "${na_jobs}" "${na_steps}" "${na_steps}" >"${key_work}/na-unread.yml"
+  printf 'name: ci\non: push\n%sjobs:\n%s  na-b:\n    needs: *d17\n%s  na-c:\n    needs: na-a\n%s' \
+    "${deep_chain}" "${na_jobs}" "${na_steps}" "${na_steps}" >"${key_work}/na-too-deep.yml"
+  local na_case na_rc
+  for na_case in na-inline na-alias na-deep na-unread na-too-deep; do
+    printf 'na-a: Build + smoke\nna-b: Doc quality\n' >"${key_work}/${na_case}.cats.yml"
+    printf '<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->\n' >"${key_work}/${na_case}.md"
+    na_rc=0
+    CI_WORKFLOW_OVERRIDE="${key_work}/${na_case}.yml" CATEGORIES_FILE_OVERRIDE="${key_work}/${na_case}.cats.yml" \
+      DOC_OVERRIDE="${key_work}/${na_case}.md" \
+      "${SCRIPT}" >"${key_work}/${na_case}.out" 2>"${key_work}/${na_case}.err" || na_rc=$?
+    printf 'harness-assert-outcome: exit=%d\n' "${na_rc}" >"${key_work}/${na_case}.outcome"
+  done
+  if [[ $(<"${key_work}/na-inline.outcome") == 'harness-assert-outcome: exit=0' ]] &&
+    grep --line-regexp --fixed-strings --quiet -- '  na-a --> na-b' "${key_work}/na-inline.md" &&
+    grep --line-regexp --fixed-strings --quiet -- '  na-a --> na-c' "${key_work}/na-inline.md"; then
+    pass 'needs: inline control renders both edges'
+  else
+    fail "needs: inline control: $(<"${key_work}/na-inline.outcome"), want exit 0 and both edges"
+    cat -- "${key_work}/na-inline.err" "${key_work}/na-inline.md" >&2
+  fi
+  harness_assert_record 'needs: inline control' '' \
+    "${key_work}/na-inline.outcome" "${key_work}/na-inline.md" "${key_work}/na-inline.err"
+  local -A na_names=(
+    ["na-alias"]='needs: written as a list alias and a merged scalar alias'
+    ["na-deep"]='needs: nested three aliases deep'
+    ["na-unread"]='an alias nest deeper than sixteen outside needs:'
+  )
+  for na_case in na-alias na-deep na-unread; do
+    harness_assert_record "${na_names[${na_case}]}" '' \
+      "${key_work}/${na_case}.outcome" "${key_work}/${na_case}.md" "${key_work}/${na_case}.err"
+    if [[ $(<"${key_work}/${na_case}.outcome") == 'harness-assert-outcome: exit=0' ]] &&
+      [[ $(<"${key_work}/${na_case}.err") =~ ^\[[^]]*\]\ INFO\ \ refreshed\ ci-dag\ block\ in\ (.*)$ ]] &&
+      [[ ${BASH_REMATCH[1]} == "${key_work}/${na_case}.md" ]] &&
+      cmp --silent -- "${key_work}/${na_case}.md" "${key_work}/na-inline.md"; then
+      pass "${na_names[${na_case}]} renders the inline diagram"
+    else
+      fail "${na_names[${na_case}]}: $(<"${key_work}/${na_case}.outcome"), want exit 0, one log line and the inline diagram"
+      cat -- "${key_work}/${na_case}.err" >&2
+      diff -u -- "${key_work}/na-inline.md" "${key_work}/${na_case}.md" >&2 || true
+    fi
+  done
+  local na_want="${key_work}/na-too-deep.yml: jobs.na-b.needs still holds a YAML alias after resolving; cannot read it"
+  harness_assert_record 'needs: nested deeper than sixteen aliases' "${na_want}" \
+    "${key_work}/na-too-deep.outcome" "${key_work}/na-too-deep.out" "${key_work}/na-too-deep.err"
+  if [[ $(<"${key_work}/na-too-deep.outcome") == 'harness-assert-outcome: exit=2' ]] &&
+    [[ $(<"${key_work}/na-too-deep.err") =~ ^\[[^]]*\]\ ERROR\ (.*)$ ]] &&
+    [[ ${BASH_REMATCH[1]} == "${na_want}" ]] &&
+    [[ $(<"${key_work}/na-too-deep.md") == $'<!-- BEGIN ci-dag -->\n<!-- END ci-dag -->' ]]; then
+    pass 'needs: nested deeper than sixteen aliases exits 2 naming the key'
+  else
+    fail "needs: nested deeper than sixteen aliases: $(<"${key_work}/na-too-deep.outcome"), want exit 2 and '${na_want}'"
+    cat -- "${key_work}/na-too-deep.err" >&2
+  fi
+
   # A failing read of the job keys stops the run (exit 2) with the
   # generator's own message, even when every later read would succeed.
   # The shim fails only the read that prints keys as JSON.
