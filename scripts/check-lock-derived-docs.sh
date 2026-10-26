@@ -303,7 +303,7 @@ readonly ENV_NODE="${ROOT_KEY_NODE//@KEY@/env}"
 function workflow_facts() {
   # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
   yq eval "${YQ_MERGE_SPEC[@]}" "(${ENV_NODE}) as \$env | (${JOBS_NODE}) as \$jobs"' | [
-      ([$jobs | .[]?.steps[]? | (.run // "") | explode(.)] | map(select(test("nix flake update"))) | length > 0),
+      ([$jobs | .[]?.steps[]? | (.run | explode(.)) // ""] | map(select(test("nix flake update"))) | length > 0),
       ((($env.LOCK_DERIVED_GENERATORS | explode(.)) // "") != ""),
       ((($env.COMMITTABLE_PATHS | explode(.)) // "") != ""),
       ((($env.WORKFLOW_DERIVED_GENERATORS | explode(.)) // "") != "")
