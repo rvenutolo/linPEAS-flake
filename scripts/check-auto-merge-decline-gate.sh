@@ -123,7 +123,7 @@ for f in "${selected_files[@]}"; do
   # output cannot round-trip through "$(...)" (bash command substitution
   # strips embedded NUL bytes), hence the temp file.
   runs_file="$(make_temp)"
-  if ! yq eval "${YQ_MERGE_SPEC[@]}" -0 "${JOBS_NODE}"' | .[].steps[] | (.run // "") | explode(.)' "${f}" >"${runs_file}"; then
+  if ! yq eval "${YQ_MERGE_SPEC[@]}" -0 "${JOBS_NODE}"' | .[].steps[] | (.run | explode(.)) // ""' "${f}" >"${runs_file}"; then
     rm --force -- "${runs_file}"
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
@@ -131,10 +131,10 @@ for f in "${selected_files[@]}"; do
   fi
 
   # Each step run: scalar, NUL-delimited so multi-line blocks stay
-  # intact. `// ""` keeps null runs from emitting the literal "null". A
-  # body written as an alias (`run: *body`) is exploded to its anchored
-  # text, which is what the runner executes; read as is it would be the
-  # alias name.
+  # intact. `// ""` after the explode keeps null runs, aliased or not,
+  # from emitting the literal "null". A body written as an alias
+  # (`run: *body`) is exploded to its anchored text, which is what the
+  # runner executes; read as is it would be the alias name.
   while IFS= read -r -d '' block; do
     [[ -n ${block} ]] || continue
     # Only auto-merge run-blocks are in scope.
