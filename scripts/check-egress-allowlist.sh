@@ -16,6 +16,8 @@
 # resulting failure is latent — it surfaces only when the blocked path is
 # finally exercised, which can be months later. A `connection refused` against
 # a healthy public host is harden-runner's block signature, not an outage.
+# A step's `uses:`, `run:` and `with.allowed-endpoints` written as an alias is
+# read as its anchored text.
 #
 # Seven assertions per job:
 #
@@ -372,8 +374,9 @@ readonly HARDEN_RUNNER_RE CHECKOUT_RE FLAKEHUB_CACHE_RE CODEQL_INIT_RE TRIVY_RE 
 # in `jobs:` on each lookup. The
 # `.steps[]` reads after the lookup follow aliases and merge keys inside
 # the job, first mapping winning in a merge list (`YQ_MERGE_SPEC`). A
-# step's run: written as an alias (`run: *body`) is exploded to its
-# anchored text, which is what the runner executes.
+# step's run:, uses: and with.allowed-endpoints written as an alias
+# (`run: *body`, `uses: *action`) are exploded to their anchored text,
+# which is what the runner executes.
 readonly JOB_BY_KEY="${JOBS_NODE}"' | [to_entries[] | select((.key | tostring | @base64) == (strenv(JOB) | @base64))] | reverse | .[0] | .value'
 
 # Resolved against this script's own location rather than the scan root:
@@ -654,8 +657,8 @@ for f in "${selected_files[@]}"; do
     # finds the job through JOB_BY_KEY.
     if ! endpoints="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"'
       | .steps[]
-      | select(.uses // "" | test("'"${HARDEN_RUNNER_RE}"'"))
-      | .with."allowed-endpoints" // ""
+      | select((.uses | explode(.)) // "" | test("'"${HARDEN_RUNNER_RE}"'"))
+      | (.with."allowed-endpoints" | explode(.)) // ""
     ' "${f}" | tr ' ' '\n' | sed '/^$/d')"; then
       printf '%s: cannot read allowed-endpoints for job %q\n' "${f}" "${job}" >&2
       exit 2
@@ -664,7 +667,7 @@ for f in "${selected_files[@]}"; do
     # A job with no harden-runner step has no allowlist to lint.
     [[ -z ${endpoints} ]] && continue
 
-    if ! uses="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .steps[].uses // ""' "${f}")"; then
+    if ! uses="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .steps[] | (.uses | explode(.)) // ""' "${f}")"; then
       printf '%s: cannot read the step uses: list for job %q\n' "${f}" "${job}" >&2
       exit 2
     fi
