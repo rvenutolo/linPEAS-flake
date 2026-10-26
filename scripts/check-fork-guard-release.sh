@@ -54,6 +54,9 @@
 # keys, and any value but a map or null counts as `inherit`. An explicit
 # `secrets:` map is read through the expressions in its values, as above.
 #
+# A permission scope or an `if:` written as a YAML alias is read as its
+# anchored text.
+#
 # Without the guard, a fork that inherits these workflows can fire
 # them under its own GITHUB_TOKEN (or repo-scoped secrets, if any
 # were configured). The repository check pins execution to the
@@ -165,7 +168,7 @@ job_needs_fork_guard() {
   local -r file="$1" job="$2"
   for scope in contents packages id-token attestations actions; do
     local val
-    if ! val="$(read_workflow "${file}" "${JOB_BY_KEY} | .permissions.\"${scope}\" // \"\"" "${job}" "${scope} permission")"; then
+    if ! val="$(read_workflow "${file}" "${JOB_BY_KEY} | (.permissions.\"${scope}\" | explode(.)) // \"\"" "${job}" "${scope} permission")"; then
       exit 2
     fi
     if [[ ${val} == "write" ]]; then
@@ -277,7 +280,7 @@ for f in "${selected_files[@]}"; do
     if ((! env_reads_app_key)) && ! job_needs_fork_guard "${f}" "${job}"; then
       continue
     fi
-    if ! if_clause="$(read_workflow "${f}" "${JOB_BY_KEY}"' | .if // ""' "${job}" 'if:')"; then
+    if ! if_clause="$(read_workflow "${f}" "${JOB_BY_KEY}"' | (.if | explode(.)) // ""' "${job}" 'if:')"; then
       exit 2
     fi
     if [[ ${if_clause} != *"${GUARD_NEEDLE}"* ]]; then

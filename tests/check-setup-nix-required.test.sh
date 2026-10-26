@@ -160,4 +160,28 @@ expect_exact 'a job key written as an alias is named by what it stands for (setu
   'DIR/built.yml: job a: cachix/install-nix-action@v1 installs Nix outside the composite; use ./.github/actions/setup-nix
 check-setup-nix-required: 1 violation(s)'
 
+# A step `uses:` and a `github-token` written as an alias are read as
+# their anchored text, so each verdict matches the inline spelling.
+# shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+readonly TOKEN_STEP_TAIL=', with: {github-token: "${{ secrets.GITHUB_TOKEN }}"}}]}\n'
+readonly MISSING_TOKEN='DIR/built.yml: job a: setup-nix caller missing github-token input
+check-setup-nix-required: 1 violation(s)'
+expect_exact 'an aliased setup-nix uses: without a token is refused (setup-nix required) as aliased-uses' \
+  'x: &u ./.github/actions/setup-nix\njobs:\n  a: {runs-on: x, steps: [{uses: *u}]}\n' 1 "${MISSING_TOKEN}"
+expect_exact 'an inline setup-nix uses: without a token is refused (setup-nix required) as inline-uses' \
+  'jobs:\n  a: {runs-on: x, steps: [{uses: ./.github/actions/setup-nix}]}\n' 1 "${MISSING_TOKEN}"
+expect_exact 'an aliased setup-nix uses: with the token passes (setup-nix required) as aliased-uses' \
+  'x: &u ./.github/actions/setup-nix\njobs:\n  a: {runs-on: x, steps: [{uses: *u'"${TOKEN_STEP_TAIL}" 0 ''
+expect_exact 'an aliased vendor installer uses: is refused (setup-nix required) as aliased-uses' \
+  'x: &u cachix/install-nix-action@v1\njobs:\n  a: {runs-on: x, steps: [{uses: *u}]}\n' 1 \
+  'DIR/built.yml: job a: cachix/install-nix-action@v1 installs Nix outside the composite; use ./.github/actions/setup-nix
+check-setup-nix-required: 1 violation(s)'
+# shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+expect_exact 'an aliased github-token naming the right secret passes (setup-nix required) as aliased-token' \
+  'x: &t "${{ secrets.GITHUB_TOKEN }}"\njobs:\n  a: {runs-on: x, steps: [{uses: ./.github/actions/setup-nix, with: {github-token: *t}}]}\n' 0 ''
+expect_exact 'an aliased github-token naming another value is refused (setup-nix required) as aliased-token' \
+  'x: &t wrong\njobs:\n  a: {runs-on: x, steps: [{uses: ./.github/actions/setup-nix, with: {github-token: *t}}]}\n' 1 \
+  'DIR/built.yml: job a: setup-nix caller has wrong github-token (got wrong, want \$\{\{\ secrets.GITHUB_TOKEN\ \}\})
+check-setup-nix-required: 1 violation(s)'
+
 printf 'all tests passed\n'

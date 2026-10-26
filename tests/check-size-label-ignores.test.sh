@@ -306,6 +306,28 @@ EOF
     >"${work}/long-s.yml"
   expect 'a non-ASCII letter that folds to an ASCII one is no size step' "${DECLARING_SCRIPTS}" "${work}/long-s.yml" 0 ''
 
+  # A step `uses:` and an `IGNORED` list written as an alias are read as
+  # their anchored text, so the size step is found and its list compared
+  # as for the inline spelling.
+  printf 'name: a\non:\n  workflow_dispatch: {}\nx-u: &u pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7\njobs:\n  size:\n    steps:\n      - uses: *u\n        env:\n          IGNORED: "docs/alpha.md\\nCHANGELOG.md"\n' \
+    >"${work}/uses-alias.yml"
+  expect 'an aliased size step uses: is found and its list agrees (size label ignores uses alias)' \
+    "${DECLARING_SCRIPTS}" "${work}/uses-alias.yml" 0 ''
+  printf 'name: a\non:\n  workflow_dispatch: {}\nx-u: &u pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7\njobs:\n  size:\n    steps:\n      - uses: *u\n        env:\n          IGNORED: "docs/alpha.md\\ndocs/uses-alias.md"\n' \
+    >"${work}/uses-alias-undeclared.yml"
+  expect 'an aliased size step uses: has its undeclared entry named (size label ignores uses alias)' \
+    "${DECLARING_SCRIPTS}" "${work}/uses-alias-undeclared.yml" 1 \
+    "${work}/uses-alias-undeclared.yml: IGNORED lists docs/uses-alias.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
+  printf 'name: a\non:\n  workflow_dispatch: {}\nx-i: &i "docs/alpha.md\\nCHANGELOG.md"\njobs:\n  size:\n    steps:\n      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7\n        env:\n          IGNORED: *i\n' \
+    >"${work}/ignored-alias.yml"
+  expect 'an aliased IGNORED list agrees with the declarations (size label ignores IGNORED alias)' \
+    "${DECLARING_SCRIPTS}" "${work}/ignored-alias.yml" 0 ''
+  printf 'name: a\non:\n  workflow_dispatch: {}\nx-i: &i "docs/alpha.md\\ndocs/ignored-alias.md"\njobs:\n  size:\n    steps:\n      - uses: pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff # v0.5.7\n        env:\n          IGNORED: *i\n' \
+    >"${work}/ignored-alias-undeclared.yml"
+  expect 'an aliased IGNORED list has its undeclared entry named (size label ignores IGNORED alias)' \
+    "${DECLARING_SCRIPTS}" "${work}/ignored-alias-undeclared.yml" 1 \
+    "${work}/ignored-alias-undeclared.yml: IGNORED lists docs/ignored-alias.md, which no script declares with @generates and which is not one of this lint's exemptions; every hand edit to it counts as zero toward the PR size label"
+
   # (m) LIVE: the real tree must satisfy the lint.
   expect 'live: real tree agrees' \
     "${REPO_ROOT}/scripts" "${REPO_ROOT}/.github/workflows/labeler.yml" 0 ''

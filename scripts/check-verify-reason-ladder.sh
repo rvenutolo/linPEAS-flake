@@ -66,6 +66,11 @@
 # is read as GitHub Actions reads it, and one given twice, plain and as
 # an alias, is an unparsable workflow.
 #
+# A step, step id, env block, env value or attribution `run:` written as
+# an alias is read as its anchored text, as the runner reads it; a step
+# id or attribution `run:` that still holds an alias after sixteen
+# resolving passes is refused with exit 2.
+#
 # Env overrides (test-only):
 #   VERIFY_WORKFLOW_OVERRIDE  — alternate workflow path
 #   VERIFICATION_DOC_OVERRIDE — alternate verification doc path
@@ -74,7 +79,8 @@
 #   0  all four assertions hold
 #   1  drift detected, including a reason-ladder-exempt marker that
 #      excuses nothing (details printed to stderr)
-#   2  missing yq / missing input file / unparsable workflow
+#   2  missing yq / missing input file / unparsable workflow / a step
+#      id or attribution run: nested in aliases past sixteen passes
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -119,12 +125,26 @@ fi
 }
 
 # --- workflow extraction ---------------------------------------------
+# The runner reads a step, a step id, an env block and an env value
+# written as an alias as its anchored text, so each step is read through
+# its aliases before `has("id")` or `.id` sees it: neither follows an
+# alias or a merge key, so an aliased step would read as one with no id
+# and an aliased attribution id as no attribution step. One `explode`
+# pass resolves one level of an alias chain, and a step id or `run:` that
+# is itself a collection can nest an alias inside the text an alias
+# stands for, so each step goes through sixteen passes, as `ON_NODE` in
+# scripts/check-workflow-on-branches.sh resolves `on:`.
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+readonly RESOLVE='(. as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)))'
+readonly STEPS="${JOBS_NODE} | .verify.steps[] | ${RESOLVE}"
+readonly ATTRIBUTE_STEP="${STEPS} | select(.id == \"${ATTRIBUTE_ID}\")"
+
 # Capture yq's output (and exit status) into a variable rather than
 # feeding a loop from `< <(yq ...)`: a process substitution's exit
 # status is not propagated under `set -Eeuo pipefail`, so an unparsable
 # workflow would yield empty input and every assertion below would pass
 # over nothing.
-if ! step_ids="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | .verify.steps[] | select(has("id")) | .id' "${WORKFLOW}")"; then
+if ! step_ids="$(yq eval "${YQ_MERGE_SPEC[@]}" "${STEPS}"' | select(has("id")) | .id' "${WORKFLOW}")"; then
   printf '%s: could not evaluate workflow with yq (malformed?)\n' "${WORKFLOW}" >&2
   exit 2
 fi
@@ -133,8 +153,27 @@ if [[ -z ${step_ids} ]]; then
   exit 2
 fi
 
+# A step id or attribution `run:` still holding an alias after the
+# sixteen passes has no text to judge, so the run stops on it. An alias
+# left anywhere else in a step is in a value this lint never reads.
+for key in id run; do
+  select_step='select(has("id"))'
+  if [[ ${key} == run ]]; then select_step="select(.id == \"${ATTRIBUTE_ID}\")"; fi
+  if ! residual="$(yq eval "${YQ_MERGE_SPEC[@]}" \
+    "[${STEPS} | ${select_step} | .${key} | ... | select(kind == \"alias\")] | length" \
+    "${WORKFLOW}")"; then
+    printf '%s: could not evaluate workflow with yq (malformed?)\n' "${WORKFLOW}" >&2
+    exit 2
+  fi
+  if [[ ${residual} != 0 ]]; then
+    printf '%s: jobs.verify.steps[].%s still holds a YAML alias after resolving; cannot read it\n' \
+      "${WORKFLOW}" "${key}" >&2
+    exit 2
+  fi
+done
+
 if ! env_rows="$(yq eval "${YQ_MERGE_SPEC[@]}" \
-  "${JOBS_NODE} | .verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .env | to_entries[] | .key + \"\t\" + .value" \
+  "${ATTRIBUTE_STEP} | .env | to_entries[] | .key + \"\t\" + .value" \
   "${WORKFLOW}")"; then
   printf '%s: could not evaluate the attribution step env block with yq\n' "${WORKFLOW}" >&2
   exit 2
@@ -145,10 +184,10 @@ if [[ -z ${env_rows} ]]; then
   exit 2
 fi
 
-# A run: written as an alias (`run: *body`) is exploded to its anchored
+# A run: written as an alias (`run: *body`) is read as its anchored
 # text, which is what the runner executes.
 if ! ladder_body="$(yq eval "${YQ_MERGE_SPEC[@]}" \
-  "${JOBS_NODE} | .verify.steps[] | select(.id == \"${ATTRIBUTE_ID}\") | .run | explode(.)" \
+  "${ATTRIBUTE_STEP} | .run" \
   "${WORKFLOW}")"; then
   printf '%s: could not evaluate the attribution step run body with yq\n' "${WORKFLOW}" >&2
   exit 2

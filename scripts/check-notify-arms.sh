@@ -93,6 +93,10 @@
 # workflow without a notify job, and a marker naming one of its jobs is not
 # judged against jobs that were never read.
 #
+# A notify job, its step list, a step's `uses:`, `if:` and `result:`, the
+# job's `if:` and a scanner job's body are read as their anchored text
+# when written as YAML aliases.
+#
 # Exit codes: 0 every marker matches its job's derived arms and every
 # scanner notify job carries its markers, 1 a marker disagrees with the
 # derived arms, names a job that is not a notify job, is malformed, sits on
@@ -207,18 +211,20 @@ function notify_jobs() {
   yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) // {}"'
     | to_entries | .[] | (.key | explode(.) | tostring) as $job | .value as $j
     | ($j.needs | explode(.) | explode(.) | [.] | flatten) as $n
-    | (($j.if // "") | tostring) as $gate
+    | ($j.if | explode(.)) as $jif
+    | (($jif // "") | tostring) as $gate
     | (if ($n | length) == 1 then $n[0]
         elif ($n | length) > 1 and ($n | all_c(kind == "scalar" and tag == "!!str")) and ($gate | contains("always()"))
         then ([$n[] | . as $x | select($gate | contains("needs." + $x + "."))] | select(length == 1) | .[0])
         else null end) as $w
     | ($j.steps // [])[]
-    | select((.uses // "") | test("notify-workflow-result"))
-    | [(.uses | tostring), $job,
+    | (.uses | explode(.)) as $uses
+    | select(($uses // "") | test("notify-workflow-result"))
+    | [($uses | tostring), $job,
         (($w | select(kind == "scalar" and tag == "!!str")) // "-"),
-        (($j.if // "-") | tostring),
-        ((.with.result // "-") | tostring),
-        ((.if // "-") | tostring)]
+        (($jif // "-") | tostring),
+        (((.with.result | explode(.)) // "-") | tostring),
+        (((.if | explode(.)) // "-") | tostring)]
     | map(sub("[\t\n]"; " "; "g")) | join("\t")
   ' "$1"
 }
@@ -245,7 +251,7 @@ function steps_before_notify() {
   # killed by SIGPIPE, which pipefail turns into a failed read.
   local uses step
   uses="$(JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"'
-    | .steps // [] | .[] | (.uses // "-") | tostring
+    | .steps // [] | .[] | ((.uses | explode(.)) // "-") | tostring
   ' "$1")" || return
   while IFS= read -r step; do
     [[ ${step} == *notify-workflow-result* ]] && break

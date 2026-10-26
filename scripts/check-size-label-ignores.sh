@@ -58,6 +58,9 @@
 # nothing. `LINT_ALLOW_EMPTY_SCAN=1` suppresses that guard for a scan root
 # that deliberately declares nothing.
 #
+# A step `uses:` and an `IGNORED` list written as a YAML alias are read as
+# their anchored text.
+#
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
 # finding that ends the run: the jobs are not read.
 #
@@ -201,7 +204,7 @@ size_steps=0
 ignored_raw=''
 while IFS= read -r job; do
   [[ -n ${job} ]] || continue
-  if ! uses="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .steps[].uses // ""' "${LABELER}")"; then
+  if ! uses="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"' | .steps[] | (.uses | explode(.)) // ""' "${LABELER}")"; then
     printf '%s: could not evaluate job %s in %s with yq\n' "${0##*/}" "${job}" "${LABELER}" >&2
     exit 2
   fi
@@ -209,8 +212,8 @@ while IFS= read -r job; do
   size_steps=$((size_steps + 1))
   if ! step_ignored="$(JOB="${job}" yq eval "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}
     | .steps[]
-    | select(.uses // \"\" | test(\"${SIZE_ACTION_RE}\"))
-    | .env.IGNORED // \"\"
+    | select((.uses | explode(.)) // \"\" | test(\"${SIZE_ACTION_RE}\"))
+    | (.env.IGNORED | explode(.)) // \"\"
   " "${LABELER}")"; then
     printf '%s: could not evaluate the IGNORED list of job %s in %s with yq\n' \
       "${0##*/}" "${job}" "${LABELER}" >&2

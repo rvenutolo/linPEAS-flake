@@ -63,6 +63,10 @@ this repo allowlists. Remove that label from `.github/actionlint.yaml`
 (and the file once it lists none, together with this canary). See
 docs/development/linting.md#runner-label-allowlist.
 
+A label written as an alias is read as its anchored text, as
+actionlint reads it; a label that still holds an alias after sixteen
+resolving passes is refused with exit 2.
+
 Env overrides (test-only):
 
 ```text
@@ -72,9 +76,10 @@ Env overrides (test-only):
 Exits 0 when every allowlisted label is still needed, 1 when the
 canary fires (actionlint accepts an allowlisted label unaided), 2 when
 the canary could not run at all: actionlint or yq is absent from PATH,
-the config is missing, unparsable or lists no label, or actionlint
-itself failed. A canary that never ran says nothing about the
-allowlist, so it must not borrow the failure code.
+the config is missing, unparsable or lists no label, a label still
+holds an alias after resolving, or actionlint itself failed. A canary
+that never ran says nothing about the allowlist, so it must not borrow
+the failure code.
 
 ### scripts/check-actionlint-shellcheck-active.sh
 
@@ -1092,6 +1097,9 @@ within that body. The YAML scan set is `.github/workflows/*.yml` (or
 a `fixtures/` segment. Neither root reaches `tests/fixtures/`, whose
 trees exist to hold violations.
 
+A step list or `run:` body written as an alias (`steps: *st`,
+`run: *body`) is read as its anchored text.
+
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts), WORKFLOWS_DIR_OVERRIDE
 (default: .github/workflows) and ACTIONS_DIR_OVERRIDE (default:
 .github/actions) for fixtures.
@@ -1138,8 +1146,9 @@ long option starting with those letters.
 
 Workflow and composite-action YAML is matched on each step's extracted
 `run:` body, never on raw YAML: every `run: |` key line ends in a pipe,
-so a body opening with a quiet `grep` would read as a hit. A body
-written as an alias (`run: *body`) is read as its anchored text.
+so a body opening with a quiet `grep` would read as a hit. A step list
+or body written as an alias (`steps: *st`, `run: *body`) is read as its
+anchored text.
 
 The scan set is every tracked `*.sh` file, every tracked
 `.github/workflows/*.yml` (or `.yaml`) and every tracked
@@ -1251,6 +1260,10 @@ job is read first mapping wins, as the YAML merge specification says.
 Such a workflow is the one finding: it is not also reported as a scanner
 workflow without a notify job, and a marker naming one of its jobs is not
 judged against jobs that were never read.
+
+A notify job, its step list, a step's `uses:`, `if:` and `result:`, the
+job's `if:` and a scanner job's body are read as their anchored text
+when written as YAML aliases.
 
 Exit codes: 0 every marker matches its job's derived arms and every
 scanner notify job carries its markers, 1 a marker disagrees with the
@@ -2098,7 +2111,7 @@ docs/\_data/ci-check-categories.yml map.
 
 **Options:**
 
-- `--check` — exit 1 if the doc would change; exit 2 if an input file is missing, if ci.yml has needs: references to non-existent jobs, if ci.yml holds a job key the job list cannot carry (see scripts/lib/job-keys.sh), if the category map is neither one map nor empty, or if a tool fails to read them
+- `--check` — exit 1 if the doc would change; exit 2 if an input file is missing, if ci.yml has needs: references to non-existent jobs, if ci.yml holds a job key the job list cannot carry (see scripts/lib/job-keys.sh), if a job's needs: still holds an alias after sixteen resolving passes, if the category map is neither one map nor empty, or if a tool fails to read them
 
 ### scripts/refresh-ci-summary.sh
 

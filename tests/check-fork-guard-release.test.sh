@@ -88,7 +88,7 @@ expect_body count-unread.yml "${WRITE_BARE}" 1 \
   "DIR/count-unread.yml: could not evaluate workflow with yq (malformed?)${ONE_JOB}" 'document_index'
 # A read of one job after the job list has been read stops the run.
 expect_body if-unread.yml "${WRITE_GUARDED}" 2 \
-  'cannot read the if: of job b from DIR/if-unread.yml' '| .if //'
+  'cannot read the if: of job b from DIR/if-unread.yml' '(.if |'
 
 # A job key is data, never expression text. Each key below closes a
 # quoted segment if spliced into a `yq` expression: it would read no
@@ -321,5 +321,22 @@ expect_body inherit-null.yml "${CALL_HEAD}"$'    secrets:\n' 0 ''
 expect_body inherit-guarded.yml "${CALL_HEAD}"$'    if: github.repository == \'rvenutolo/linPEAS-flake\'\n    secrets: inherit\n' 0 ''
 expect_body inherit-unread.yml "${CALL_HEAD}"$'    secrets: inherit\n' 2 \
   'cannot read the secrets: of job a from DIR/inherit-unread.yml' '.secrets'
+
+# A permission scope or an `if:` written as an alias is read as its
+# anchored text, so each verdict matches the inline spelling.
+readonly ALIAS_STEPS=$'    steps:\n      - run: echo PAYLOAD_RAN\n'
+readonly ALIAS_GUARD_TEXT=$'github.repository == \'rvenutolo/linPEAS-flake\''
+expect_body scope-alias-contents-write.yml $'x-w: &w write\njobs:\n  a:\n    permissions:\n      contents: *w\n'"${ALIAS_STEPS}" 1 \
+  "DIR/scope-alias-contents-write.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body scope-inline-contents-write.yml $'jobs:\n  a:\n    permissions:\n      contents: write\n'"${ALIAS_STEPS}" 1 \
+  "DIR/scope-inline-contents-write.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body scope-alias-id-token-write.yml $'x-w: &w write\njobs:\n  a:\n    permissions:\n      id-token: *w\n'"${ALIAS_STEPS}" 1 \
+  "DIR/scope-alias-id-token-write.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body scope-inline-id-token-write.yml $'jobs:\n  a:\n    permissions:\n      id-token: write\n'"${ALIAS_STEPS}" 1 \
+  "DIR/scope-inline-id-token-write.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL}${ONE_JOB}"
+expect_body scope-alias-contents-read.yml $'x-r: &r read\njobs:\n  a:\n    permissions:\n      contents: *r\n'"${ALIAS_STEPS}" 0 ''
+expect_body if-alias-guard.yml $'x-g: &g '"${ALIAS_GUARD_TEXT}"$'\njobs:\n  a:\n    if: *g\n    permissions:\n      contents: write\n'"${ALIAS_STEPS}" 0 ''
+expect_body if-alias-other.yml $'x-g: &g other\njobs:\n  a:\n    if: *g\n    permissions:\n      contents: write\n'"${ALIAS_STEPS}" 1 \
+  "DIR/if-alias-other.yml: job a holds guard-required write scope but is missing fork guard ${UNGUARDED_TAIL%\'\'}other${ONE_JOB}"
 
 printf 'all tests passed\n'

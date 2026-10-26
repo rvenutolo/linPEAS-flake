@@ -281,4 +281,55 @@ if [[ ${alias_comp_exit} != 1 || ${alias_comp_err} != "${alias_comp_want}" ]]; t
 fi
 printf 'OK   run-alias-composite\n'
 
+# A composite action's steps are read as `expect_workflow` reads a
+# workflow's.
+# @arg $1 scenario name  @arg $2 action body  @arg $3 expected exit
+# @arg $4 expected stderr, whole, with @F@ standing for the file
+function expect_action() {
+  local -r name="$1" body="$2" want_exit="$3"
+  local got_exit=0 got_stderr want
+  mkdir -- "${key_dir}/${name}"
+  printf '%s' "${body}" >"${key_dir}/${name}/action.yml"
+  want="${4//@F@/${key_dir}/${name}/action.yml}"
+  got_stderr="$(ACTIONS_DIR_OVERRIDE="${key_dir}/${name}" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${want}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  stderr: %s\n' "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" >&2
+    exit 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+
+# A step list written as an alias (`steps: *st`) is the anchored list, as
+# the runner reads it: each block is judged as in the same list written
+# inline, in a workflow job and in a composite action.
+readonly STEPS_JOB=$'jobs:\n  a:\n    steps: *st\n'
+readonly STEPS_RUNS=$'runs:\n  using: composite\n  steps: *st\n'
+readonly ACTION_WEAK_STEP=$'  steps:\n    - shell: bash\n      run: |\n        set -euo pipefail\n        echo PAYLOAD_RAN\n'
+expect_workflow steps-inline-weak $'jobs:\n  a:\n'"${WEAK_STEP}" 1 "@F@: job a${weak_tail}"
+expect_workflow steps-alias-weak \
+  $'x-steps: &st\n  - run: |\n      set -euo pipefail\n      echo PAYLOAD_RAN\n'"${STEPS_JOB}" 1 "@F@: job a${weak_tail}"
+expect_workflow steps-alias-strict \
+  $'x-steps: &st\n  - run: |\n      set -Eeuo pipefail\n      echo PAYLOAD_RAN\n'"${STEPS_JOB}" 0 ''
+expect_action steps-inline-composite-weak $'runs:\n  using: composite\n'"${ACTION_WEAK_STEP}" 1 "@F@: composite${weak_tail}"
+expect_action steps-alias-composite-weak \
+  $'x-steps: &st\n  - shell: bash\n    run: |\n      set -euo pipefail\n      echo PAYLOAD_RAN\n'"${STEPS_RUNS}" 1 "@F@: composite${weak_tail}"
+# The anchored list holds aliases of its own (a step `- *s`, a body
+# `run: *body`), read through as the runner reads them.
+expect_workflow steps-alias-nested-weak \
+  $'x-step: &s\n  run: |\n    set -euo pipefail\n    echo PAYLOAD_RAN\nx-steps: &st\n  - *s\n'"${STEPS_JOB}" 1 "@F@: job a${weak_tail}"
+expect_action steps-alias-nested-composite-weak \
+  $'x-body: &body |\n  set -euo pipefail\n  echo PAYLOAD_RAN\nx-steps: &st\n  - shell: bash\n    run: *body\n'"${STEPS_RUNS}" 1 "@F@: composite${weak_tail}"
+# A step list aliased to null holds no step, as an absent one does.
+expect_workflow steps-alias-null $'x-none: &none null\njobs:\n  a:\n    steps: *none\n' 0 ''
+# Three levels of aliases (list, step, body) are read through to the
+# body, as the runner reads it.
+readonly DEEP_ANCHORS=$'x-body: &body |\n  set -euo pipefail\n  echo PAYLOAD_RAN\nx-step: &s\n  shell: bash\n  run: *body\nx-steps: &st\n  - *s\n'
+expect_workflow steps-alias-deep-weak "${DEEP_ANCHORS}${STEPS_JOB}" 1 "@F@: job a${weak_tail}"
+expect_action steps-alias-deep-composite-weak "${DEEP_ANCHORS}${STEPS_RUNS}" 1 "@F@: composite${weak_tail}"
+# An alias the lint does not read, an `env:` value inside an aliased
+# step inside an aliased list, leaves the verdict as the same file
+# written inline would.
+expect_workflow steps-alias-env-unread \
+  $'x-value: &v PAYLOAD_RAN\nx-env: &e\n  MARK: *v\nx-step: &s\n  run: |\n    set -Eeuo pipefail\n    echo "${MARK}"\n  env: *e\nx-steps: &st\n  - *s\n'"${STEPS_JOB}" 0 ''
+
 printf 'all tests passed\n'

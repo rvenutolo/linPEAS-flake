@@ -19,7 +19,10 @@ GitHub-owned actions.
 Enforced by `scripts/check-uses-sha-pinned.sh` (member check
 `uses-sha-pinned` of the `lint-workflow-security` CI job; also a
 same-named pre-commit hook). Belt-and-braces backup to the GitHub-side
-`sha_pinning_required` setting.
+`sha_pinning_required` setting. A `uses:` value or key written as an
+alias is read as its anchored text, once, where it is written: a step
+that brings in an anchored step with a merge key adds no second
+reading, and a `uses:` written at the merge site is read as itself.
 
 The trailing `# v<major>.<minor>[.<patch>]` comment beside each SHA is a
 separate rule with a separate enforcer: `scripts/check-patch-tag-pins.sh`,

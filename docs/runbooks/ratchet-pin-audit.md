@@ -185,6 +185,10 @@ grep could not read the workflow set for `uses:` lines.
     the four reason values the notify body documents (`drift-detected`,
     `upstream-api-failure`, `ratchet-tool-failure`, `unknown`), not
     the heuristic strings — so widening it is a single-file change.
+    It reads a value written as an alias (`body: *b`) as its anchored
+    text, as GitHub Actions does; a job's permissions, a first step's
+    `uses:` or the concurrency group that still holds an alias after
+    sixteen resolving passes is refused with exit 2.
 1. If the workflow glob matched zero files, a refactor moved
     workflows out from under `.github/workflows/`. Adjust the glob
     in the `audit pins` step, keeping both `*.yml` and `*.yaml`

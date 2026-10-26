@@ -38,8 +38,9 @@
 #
 # Workflow and composite-action YAML is matched on each step's extracted
 # `run:` body, never on raw YAML: every `run: |` key line ends in a pipe,
-# so a body opening with a quiet `grep` would read as a hit. A body
-# written as an alias (`run: *body`) is read as its anchored text.
+# so a body opening with a quiet `grep` would read as a hit. A step list
+# or body written as an alias (`steps: *st`, `run: *body`) is read as its
+# anchored text.
 #
 # The scan set is every tracked `*.sh` file, every tracked
 # `.github/workflows/*.yml` (or `.yaml`) and every tracked
@@ -127,8 +128,15 @@ readonly HIT_PROGRAM='
 # `runs.steps` (composite action). The job position is empty for a
 # composite. A row holds only numbers and words `yq` prints, never a job
 # key: a key is free text and could hold the `|` separator.
+#
+# A step list written as an alias (`steps: *st`) is read as the anchored
+# list. `to_entries` does not follow an alias, so the list is resolved
+# with one `explode` first; an anchor cannot sit on an alias, so that
+# pass always leaves a list. The aliases inside its copy (a step `- *s`,
+# a body `run: *body`) need no second pass: a path read follows an
+# aliased step, and each body is exploded where it is read.
 # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
-readonly ROWS_QUERY="document_index as \$d | ((((${JOBS_NODE}) // {}) | to_entries | to_entries[] as \$j | (\$j.value.value.steps // []) | to_entries[] | select(.value.run != null) | \"job|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" + (.key | tostring)), ((.runs.steps // []) | to_entries[] | select(.value.run != null) | \"composite|\" + (\$d | tostring) + \"||\" + (.key | tostring)))"
+readonly ROWS_QUERY="document_index as \$d | ((((${JOBS_NODE}) // {}) | to_entries | to_entries[] as \$j | ((\$j.value.value.steps | explode(.)) // []) | to_entries[] | select(.value.run != null) | \"job|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" + (.key | tostring)), (((.runs.steps | explode(.)) // []) | to_entries[] | select(.value.run != null) | \"composite|\" + (\$d | tostring) + \"||\" + (.key | tostring)))"
 
 declare -a candidates=()
 if [[ -n ${SCAN_ROOT_OVERRIDE:-} ]]; then

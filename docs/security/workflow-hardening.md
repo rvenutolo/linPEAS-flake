@@ -33,7 +33,7 @@ Without a concurrency group, cron pile-ups and back-to-back PR pushes can spawn 
 
 `cancel-in-progress` is not required by this lint; the group alone is the load-bearing setting. Pipelines that must run to completion once started (e.g., `release-on-bump.yml`) deliberately set `cancel-in-progress: false` so back-to-back triggers queue instead of cancelling.
 
-The lint reads `concurrency:` and its `group:` by their YAML kind, reads a root key written as an alias of `concurrency` as that key and a file giving it twice, plain and as an alias, as one that does not parse, and reports a file `yq` reads as several YAML documents (GitHub Actions refuses a workflow file holding several) without reading it further. The script header states which shapes are read and which are reported as an unexpected shape.
+The lint reads `concurrency:` and its `group:` as their anchored text when written as an alias (`concurrency: *c`), as it does a `group:` key written as one, so such a file reaches the verdict of the same file written inline, and judges each by its YAML kind. It reads a root key written as an alias of `concurrency` as that key and a file giving it twice, plain and as an alias, as one that does not parse, and reports a file `yq` reads as several YAML documents (GitHub Actions refuses a workflow file holding several) without reading it further. The script header states which shapes are read and which are reported as an unexpected shape.
 
 Enforced by `scripts/check-workflow-concurrency.sh`. Wired as the `lint-workflow-security` CI job (member check `workflow-concurrency`) and as a pre-commit hook.
 
@@ -176,13 +176,13 @@ The ban covers redirections only. `diff <(jq …) <(jq …)` and `diff <(expecte
 
 The lint skips comment lines (lines whose first non-whitespace character is `#`) so a script is free to document the banned idiom by name — e.g. explaining why it uses the capture idiom instead — without tripping the check on its own documentation.
 
-A `run:` body runs under the same `set -Eeuo pipefail` and loses a producer's status the same way, so the rule covers it too. The scan set is every `scripts/**/*.sh`, every `.github/workflows/*.yml` (or `.yaml`) at the top level of that directory, and every `.github/actions/**/action.yml` (or `.yaml`), less any action path with a `fixtures/` segment; none of these roots reaches `tests/fixtures/`, whose trees exist to hold violations. Workflow and composite-action YAML is read through each step's extracted `run:` body, never as raw YAML; a body written as an alias (`run: *body`) is read as its anchored text, which is what the runner executes. A hit names the job (or `composite`), the step index and the line within the body.
+A `run:` body runs under the same `set -Eeuo pipefail` and loses a producer's status the same way, so the rule covers it too. The scan set is every `scripts/**/*.sh`, every `.github/workflows/*.yml` (or `.yaml`) at the top level of that directory, and every `.github/actions/**/action.yml` (or `.yaml`), less any action path with a `fixtures/` segment; none of these roots reaches `tests/fixtures/`, whose trees exist to hold violations. Workflow and composite-action YAML is read through each step's extracted `run:` body, never as raw YAML; a step list or body written as an alias (`steps: *st`, `run: *body`) is read as its anchored text, which is what the runner executes. A hit names the job (or `composite`), the step index and the line within the body.
 
 Enforced by `scripts/check-no-opaque-procsub.sh`. Wired as the `lint-script-hygiene` CI job (member check `no-opaque-procsub`) and as a pre-commit hook.
 
 ## no-pipe-into-grep-quiet
 
-No tracked shell file and no workflow or composite-action `run:` body pipes into a quiet `grep`: `producer | grep -q PAT`, `producer | grep --quiet PAT`, the `--silent` alias, any prefix of either long option GNU grep accepts (`--qui`, `--s`), a bundled flag holding `q` after only letters, including one that runs into an attached option argument (`-qE`, `-Fq`, `-qxF`, `-qm1`, `-qA2`), an `LC_ALL=… grep` prefix, `|&` in place of `|`, and a pipe that ends one line with the quiet `grep` on the next. A body written as an alias (`run: *body`) is read as its anchored text, which is what the runner executes. There is no exemption marker and no allowlist.
+No tracked shell file and no workflow or composite-action `run:` body pipes into a quiet `grep`: `producer | grep -q PAT`, `producer | grep --quiet PAT`, the `--silent` alias, any prefix of either long option GNU grep accepts (`--qui`, `--s`), a bundled flag holding `q` after only letters, including one that runs into an attached option argument (`-qE`, `-Fq`, `-qxF`, `-qm1`, `-qA2`), an `LC_ALL=… grep` prefix, `|&` in place of `|`, and a pipe that ends one line with the quiet `grep` on the next. A step list or body written as an alias (`steps: *st`, `run: *body`) is read as its anchored text, which is what the runner executes. There is no exemption marker and no allowlist.
 
 A quiet `grep` exits at its first match. A producer still writing then takes SIGPIPE, and under `set -o pipefail` the pipeline's status is the producer's 141 — a match read as a miss. Whether the producer is still writing depends on how much it writes and on scheduling, so the same line passes on an idle machine and fails under load, such as in a parallel CI lint group.
 
@@ -647,7 +647,7 @@ Composite actions are covered for the same reason, and the exposure is larger th
 
 Adding the prelude to an existing block is a behavior change, not a formality: a command whose non-zero exit the block ignores today will abort the step under `-e`. Blocks that tolerate failure by design — retry loops, optional probes — must keep the tolerated command in a context that consumes its status (an `if` condition, a `||` fallback) and say so, rather than relying on `-e` being absent.
 
-The rule keys off YAML node style (`|`, `>`, and their chomping/indent variants) as well as newlines in the evaluated value. Newline presence alone under-detects: a folded scalar (`run: >-`) spells a `;`-separated command sequence across several source lines but folds to one newline-free string, so a block that plainly runs several commands would otherwise slip past the requirement. A body written as an alias (`run: *body`) is judged by its anchored text and that text's node style, which is what the runner executes.
+The rule keys off YAML node style (`|`, `>`, and their chomping/indent variants) as well as newlines in the evaluated value. Newline presence alone under-detects: a folded scalar (`run: >-`) spells a `;`-separated command sequence across several source lines but folds to one newline-free string, so a block that plainly runs several commands would otherwise slip past the requirement. A body written as an alias (`run: *body`) is judged by its anchored text and that text's node style, which is what the runner executes. A step list written as an alias (`steps: *st`) is read as its anchored list.
 
 Plain single-line `run:` invocations are exempt — they're already a single shell command whose exit status drives the step directly.
 
@@ -663,7 +663,7 @@ Guard-required write scopes are any of: `contents: write`, `packages: write`, `i
 
 A job that mints a GitHub App installation token (via `actions/create-github-app-token`, or referencing `secrets.BUMP_APP_PRIVATE_KEY` in the dot or the index form `secrets['BUMP_APP_PRIVATE_KEY']`, each matched with its ASCII letters in either case, as GitHub Actions reads a secret's name whatever its case) is likewise privileged despite declaring a read-only `GITHUB_TOKEN`: the App token carries its own write scopes, so the job can commit via the REST contents API, open pull requests, and enable auto-merge — all under the canonical repo's identity. Such a job must carry the same fork guard, otherwise a fork holding the App's private key as a secret could drive those writes against the canonical repo. A job whose expressions use the `secrets` context without a literal name (`toJSON(secrets)`, `secrets[format(...)]`, `secrets[env.NAME]`, `secrets.*`, a double-quoted index, the word `secrets` inside a string literal) or leave an expression unclosed on its line may read that key too, so it needs the guard as well. Every job inherits the workflow-level `env:`, so any of those uses there puts every job in the file under the guard. `env:` is the one workflow-level key GitHub Actions lets read the `secrets` context; `run-name`, `concurrency` and `defaults` cannot. A job calling a reusable workflow with `secrets: inherit` hands it the key with every other secret, though no expression names one, so it needs the guard too; an explicit `secrets:` map is read through the expressions in its values.
 
-GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every guard-required job must carry the guard in its own `if:` expression. Existing `if:` clauses are AND-ed with the repository check.
+GitHub Actions `if:` is job-scoped (no workflow-level syntax), so every guard-required job must carry the guard in its own `if:` expression. Existing `if:` clauses are AND-ed with the repository check. A permission scope or an `if:` written as an alias (`contents: *w`, `if: *guard`) is read as its anchored text.
 
 A file `yq` reads as several YAML documents (GitHub Actions refuses a workflow file holding several) is reported without its jobs being read.
 
@@ -696,7 +696,7 @@ The composite writes the description onto the label when a run opens a new issue
 - **Over the cap.** The labels API rejects a description longer than 100 characters with a 422. The label keeps whichever wording it was created with, each later run that opens an issue re-attempts the write and warns, and the workflow file goes on looking like the source of truth for text that has never reached the label.
 - **Two callers, two descriptions.** A label filed by more than one workflow with different wording is rewritten by whichever of them last opened an issue.
 
-Enforced by `scripts/check-notify-label-descriptions.sh`. Wired as the `lint-workflow-security` CI job (member check `notify-label-descriptions`) and as a pre-commit hook. The scan set is `.github/workflows/*.yml`; a scan that matches workflows but finds no caller of the composite exits 2 rather than reporting a clean tree, because the composite having moved is not the same fact as every description being fine.
+Enforced by `scripts/check-notify-label-descriptions.sh`. Wired as the `lint-workflow-security` CI job (member check `notify-label-descriptions`) and as a pre-commit hook. The scan set is `.github/workflows/*.yml`; a scan that matches workflows but finds no caller of the composite exits 2 rather than reporting a clean tree, because the composite having moved is not the same fact as every description being fine. A job, its step list, a step, and a step's `uses:`, `label:` and `label-description:` written as aliases (`uses: *u`, `label-description: *d`) are read as their anchored text.
 
 ## notify-arms
 
@@ -738,6 +738,8 @@ The gate grammar is what these workflows use: `always()`, `==`, `!=`, `!` (which
 - a job that reaches the composite by any other `uses:` than `./.github/actions/notify-workflow-result`, such as a pinned remote revision the hash does not cover;
 - a workflow whose `on:` gives no event, or that `yq` reads as several YAML documents. How the lint reads `on:` (by kind, through aliases) is stated in the header of `scripts/check-notify-arms.sh`; a value that prints only spaces, tabs and newlines is refused.
 
+A notify job, its step list, a step's `uses:`, `if:` and `result:`, the job's `if:` and a scanner job's body written as aliases (`uses: *u`, `if: *g`) are read as their anchored text.
+
 A `yq` read that fails is not one of these: the lint stops on a line naming what it was reading and the status `yq` exited with, and says nothing about the workflow.
 
 Known limits:
@@ -769,6 +771,8 @@ as GitHub Actions reads a secret's name whatever its case. It is required
 in the dot form: the index form `secrets['GITHUB_TOKEN']` is refused as the
 wrong token, and so is any spelling that reads the `secrets` context
 without that literal name, since the input must equal the one expression.
+A step's `uses:` and its `github-token` written as an alias
+(`uses: *action`) are read as their anchored text.
 {% endraw %}
 
 **Why.** Unauthenticated `api.github.com` tarball fetches are capped

@@ -145,8 +145,8 @@ expect_failed_read bad-empty-group.yml '| .group /' 13 'the concurrency group'
 
 # The map and the group are read by kind: a map carrying a tag of its
 # own is still read, a list carrying a string tag is no string, and the
-# message names the kind and the tag of any other shape. An alias is
-# reported by its kind, unresolved.
+# message names the kind and the tag of any other shape. An aliased map
+# or group is read as the node it stands for.
 readonly ONE=$'\n1 workflow(s) missing or invalid top-level concurrency'
 readonly TOP='top-level concurrency has unexpected shape'
 readonly GROUP='top-level concurrency.group has unexpected shape'
@@ -154,11 +154,44 @@ expect_body mistag.yml $'concurrency: !!map [a]\n' 1 "DIR/mistag.yml: ${TOP} (ki
 expect_body conc-mapint.yml $'concurrency: !!map 5\n' 1 "DIR/conc-mapint.yml: ${TOP} (kind=scalar, tag=!!map); expected map${ONE}"
 expect_body conc-xtag.yml $'concurrency: !x\n  group: g\n' 0 ''
 expect_body conc-strtag.yml $'concurrency: !!str {group: g}\n' 0 ''
-expect_body conc-alias.yml $'x-c: &c\n  group: g\nconcurrency: *c\n' 1 "DIR/conc-alias.yml: ${TOP} (kind=alias, tag=); expected map${ONE}"
+expect_body conc-alias.yml $'x-c: &c\n  group: g\nconcurrency: *c\n' 0 ''
 expect_body group-strseq.yml $'concurrency:\n  group: !!str [a]\n' 1 "DIR/group-strseq.yml: ${GROUP} (kind=seq, tag=!!str); expected string${ONE}"
 expect_body group-mapint.yml $'concurrency:\n  group: !!map 5\n' 1 "DIR/group-mapint.yml: ${GROUP} (kind=scalar, tag=!!map); expected string${ONE}"
 expect_body group-xtag.yml $'concurrency:\n  group: !x g\n' 1 "DIR/group-xtag.yml: ${GROUP} (kind=scalar, tag=!x); expected string${ONE}"
-expect_body group-alias.yml $'x-s: &s g\nconcurrency:\n  group: *s\n' 1 "DIR/group-alias.yml: ${GROUP} (kind=alias, tag=); expected string${ONE}"
+expect_body group-alias.yml $'x-s: &s g\nconcurrency:\n  group: *s\n' 0 ''
+# An aliased map or group reaches the verdict and the message of the
+# same file written inline (the inline twin beside it, or the tracked
+# fixture of the same shape), whether the alias is one level deep, sits
+# inside an aliased map, or comes through a merge key. An alias the lint
+# does not read changes nothing.
+readonly EMPTY="top-level concurrency ${Q}group:${Q} is empty${ONE}"
+expect_body conc-int.yml $'concurrency: 7\n' 1 "DIR/conc-int.yml: ${TOP} (kind=scalar, tag=!!int); expected map${ONE}"
+expect_body conc-alias-int.yml $'x-c: &c 7\nconcurrency: *c\n' 1 "DIR/conc-alias-int.yml: ${TOP} (kind=scalar, tag=!!int); expected map${ONE}"
+expect_body conc-null.yml $'concurrency: null\n' 1 \
+  "DIR/conc-null.yml: missing top-level ${Q}concurrency:${Q} (need ${Q}group:${Q} to bound parallel runs on a ref)${ONE}"
+expect_body conc-alias-null.yml $'x-c: &c null\nconcurrency: *c\n' 1 \
+  "DIR/conc-alias-null.yml: missing top-level ${Q}concurrency:${Q} (need ${Q}group:${Q} to bound parallel runs on a ref)${ONE}"
+expect_body group-alias-empty.yml $'x-s: &s ""\nconcurrency:\n  group: *s\n' 1 "DIR/group-alias-empty.yml: ${EMPTY}"
+expect_body group-alias-seq.yml $'x-s: &s [a]\nconcurrency:\n  group: *s\n' 1 "DIR/group-alias-seq.yml: ${GROUP} (kind=seq, tag=!!seq); expected string${ONE}"
+expect_body group-alias-xtag.yml $'x-s: &s !x g\nconcurrency:\n  group: *s\n' 1 "DIR/group-alias-xtag.yml: ${GROUP} (kind=scalar, tag=!x); expected string${ONE}"
+expect_body conc-alias-group-alias.yml $'x-s: &s g\nx-c: &c\n  group: *s\nconcurrency: *c\n' 0 ''
+expect_body conc-alias-group-alias-empty.yml $'x-s: &s ""\nx-c: &c\n  group: *s\nconcurrency: *c\n' 1 \
+  "DIR/conc-alias-group-alias-empty.yml: ${EMPTY}"
+expect_body conc-merge-group-alias.yml $'x-s: &s g\nx-c: &c\n  group: *s\nconcurrency:\n  <<: *c\n' 0 ''
+expect_body conc-merge-chain-group-alias-empty.yml $'x-s: &s ""\nx-1: &m1 {group: *s}\nx-2: &m2 {<<: *m1}\nconcurrency: *m2\n' 1 \
+  "DIR/conc-merge-chain-group-alias-empty.yml: ${EMPTY}"
+# A group: key written as an alias is the key group:, with or without a
+# value written as an alias, through an aliased or merged map alike.
+expect_body group-inline.yml $'concurrency:\n  group: g1\n' 0 ''
+expect_body group-key-alias.yml $'x: &k group\nconcurrency:\n  *k : g1\n' 0 ''
+expect_body group-inline-empty.yml $'concurrency:\n  group: ""\n' 1 "DIR/group-inline-empty.yml: ${EMPTY}"
+expect_body group-key-alias-empty.yml $'x: &k group\nconcurrency:\n  *k : ""\n' 1 "DIR/group-key-alias-empty.yml: ${EMPTY}"
+expect_body group-key-alias-value-alias-empty.yml $'x: &k group\nx-s: &s ""\nconcurrency:\n  *k : *s\n' 1 \
+  "DIR/group-key-alias-value-alias-empty.yml: ${EMPTY}"
+expect_body conc-alias-group-key-alias.yml $'x: &k group\nx-c: &c {*k : g1}\nconcurrency: *c\n' 0 ''
+expect_body conc-merge-chain-group-key-alias-seq.yml $'x: &k group\nx-s: &s [a]\nx-0: &c0 {*k : *s}\nx-1: &c1 {<<: *c0}\nx-2: &c2 {<<: *c1}\nconcurrency: *c2\n' 1 \
+  "DIR/conc-merge-chain-group-key-alias-seq.yml: ${GROUP} (kind=seq, tag=!!seq); expected string${ONE}"
+expect_body conc-alias-unread.yml $'x-b: &b true\nconcurrency:\n  group: g\n  cancel-in-progress: *b\n' 0 ''
 # GitHub Actions reads a workflow file as one YAML document and refuses
 # one holding several, so such a file is a finding and is read no
 # further.
@@ -166,6 +199,7 @@ expect_body group-alias.yml $'x-s: &s g\nconcurrency:\n  group: *s\n' 1 "DIR/gro
 # GitHub Actions reads it, for the map and the group alike; one given
 # twice, plain and as an alias, fails the read.
 expect_body conc-alias-key.yml $'name: &k concurrency\n*k :\n  group: g\n' 0 ''
+expect_body conc-alias-key-alias-value.yml $'name: &k concurrency\nx-c: &c {group: g}\n*k : *c\n' 0 ''
 expect_body conc-alias-key-empty-group.yml $'name: &k concurrency\n*k :\n  group: ""\n' 1 \
   "DIR/conc-alias-key-empty-group.yml: top-level concurrency ${Q}group:${Q} is empty${ONE}"
 expect_body conc-given-twice.yml $'name: &k concurrency\nconcurrency: {group: g}\n*k :\n  group: h\n' 1 \

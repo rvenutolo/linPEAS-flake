@@ -87,6 +87,8 @@ against the allowlist in both directions and fails on any of:
     grants, or lists a scope under a workflow or job that no longer
     exists. Stale entries
     rot the allowlist into a misleading record of the actual write surface.
+    A job's `permissions:`, a scope name or a scope value written as an
+    alias is read as its anchored text, as the over-grant check reads it.
 - **Unsorted scope list** — a job's scope list departs from sorted
     order. Sorting keeps allowlist diffs minimal and blocks the
     duplicate-prone append-anywhere edit pattern.

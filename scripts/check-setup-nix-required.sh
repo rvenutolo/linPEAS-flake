@@ -28,6 +28,9 @@
 # is read as `yq` decodes it, so a YAML escape in a double-quoted scalar
 # is read as the text GitHub Actions evaluates.
 #
+# A step `uses:` and a `github-token` input written as a YAML alias are
+# read as their anchored text.
+#
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
 # counted finding, and the file's jobs are not read.
 #
@@ -137,7 +140,7 @@ for f in "${selected_files[@]}"; do
   if ! token_rows="$(yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) // {}"' | to_entries[] |
     .key as $job |
     (.value.steps // []) [] |
-    select(.uses == "./.github/actions/setup-nix") |
+    select((.uses | explode(.)) == "./.github/actions/setup-nix") |
     [$job, (.with["github-token"] // "null")] | @tsv
   ' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2

@@ -8,21 +8,27 @@
 # @option --check exit 1 if the doc would change; exit 2 if an input file
 # is missing, if ci.yml has needs: references to non-existent jobs, if
 # ci.yml holds a job key the job list cannot carry (see
-# scripts/lib/job-keys.sh), if the category map is neither one map nor empty, or if a tool fails to
-# read them
+# scripts/lib/job-keys.sh), if a job's needs: still holds an alias after
+# sixteen resolving passes, if the category map is neither one map nor
+# empty, or if a tool fails to read them
 
 # Replace the content between <!-- BEGIN ci-dag --> and <!-- END ci-dag -->
 # in docs/architecture/ci-dag.md with a mermaid `flowchart TD` of the
 # jobs.*.needs relationships in .github/workflows/ci.yml. Nodes are
 # colored by the category map in docs/_data/ci-check-categories.yml;
-# jobs absent from the map render with the `aux` class.
+# jobs absent from the map render with the `aux` class. A `needs:` value
+# written as an alias is read as its anchored text, as GitHub Actions
+# reads it; one that still holds an alias after sixteen resolving passes
+# is refused with exit 2.
 #
 # Usage:
 #   scripts/refresh-ci-dag.sh           # mutate the doc in place
 #   scripts/refresh-ci-dag.sh --check   # exit 1 if doc would change;
 #                                       # exit 2 on a missing input file,
 #                                       # dangling needs:, a job key the
-#                                       # job list cannot carry, a category map
+#                                       # job list cannot carry, a needs:
+#                                       # alias nested too deep to
+#                                       # resolve, a category map
 #                                       # that is neither one map nor
 #                                       # empty, or a tool failure
 #                                       # reading the jobs
@@ -58,6 +64,15 @@ declare -A CAT_TO_CLASS=(
   ["Conventional Commits"]="commits"
 )
 readonly CAT_TO_CLASS
+
+# A `needs:` value written as an alias is an alias node at the end of its
+# path, which `//` and `flatten` do not follow, so it is exploded before
+# either sees it. One `explode` pass resolves one level of an alias
+# chain, and a list can nest an alias inside the text an alias stands
+# for, so the value goes through sixteen passes, as `ON_NODE` in
+# scripts/check-workflow-on-branches.sh resolves `on:`.
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+readonly RESOLVE='(. as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)))'
 
 function main() {
   local check_only='false'
@@ -144,15 +159,28 @@ function main() {
     exit 2
   fi
 
+  # A `needs:` value still holding an alias after RESOLVE has no text to
+  # draw an edge from: `flatten` stops at the alias, so the run stops on
+  # it rather than report its nested list as a dangling job.
+  local unresolved
+  if ! unresolved="$(yq "${YQ_MERGE_SPEC[@]}" "[${JOBS_NODE}"' | to_entries[] | select([.value.needs | '"${RESOLVE}"' | ... | select(kind == "alias")] | length > 0) | .key | explode(.) | tostring] | .[0] // ""' "${workflow}")"; then
+    log_err "could not read the job graph from ${workflow}"
+    exit 2
+  fi
+  if [[ -n ${unresolved} ]]; then
+    log_err "${workflow}: jobs.${unresolved}.needs still holds a YAML alias after resolving; cannot read it"
+    exit 2
+  fi
+
   # Extract {job: [needs...]} as JSON. Normalize `needs:` to a list:
   # GitHub Actions accepts a scalar string or a sequence; wrapping in
-  # an outer array and flattening one level coerces either shape into a
-  # list of strings.
+  # an outer array and flattening coerces either shape into a list of
+  # strings.
   # A workflow that does not parse is an input this generator could not
   # read. Unchecked, yq's own exit 1 becomes the generator's status, and
   # --check mode reads that as a diagram gone stale.
   if ! yq -o=json "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"'
-    | with_entries(.value = ([(.value.needs // [])] | flatten))
+    | with_entries(.value = ([(.value.needs | '"${RESOLVE}"') // []] | flatten))
   ' "${workflow}" >"${jobs_file}"; then
     log_err "could not read the job graph from ${workflow}"
     exit 2

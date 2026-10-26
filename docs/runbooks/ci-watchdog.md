@@ -187,6 +187,9 @@ files this issue only for a workflow that does not call the
 `uses:` of it, neither the local path
 `./.github/actions/notify-workflow-result` nor the pinned self-reference
 `rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@<sha>`.
+A `uses:` written as a YAML alias is read as its anchored text; a root
+`jobs` key written as an alias is not resolved, so its workflow reads as
+calling no notify and the watchdog files.
 A workflow that calls it files its own issue through
 it on the final attempt, and the watchdog only prints a notice, so one
 failure never gets two issues. If the watchdog cannot read the workflow

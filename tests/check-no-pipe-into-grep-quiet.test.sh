@@ -92,6 +92,40 @@ expect workflow-alias-run-body "${FIXTURES}/alias-workflow" 1 \
 expect composite-alias-run-body "${FIXTURES}/alias-action" 1 \
   '.github/actions/a/action.yml: composite step[0] run: line 4: '"${HIT_DIAG}"
 
+# A step list written as an alias (`steps: *st`) is the anchored list, as
+# the runner reads it: its run: bodies are scanned exactly as the same
+# list written inline, in a workflow job and in a composite action.
+expect steps-inline-workflow "${FIXTURES}/steps-inline-workflow" 1 \
+  '.github/workflows/steps-inline-workflow.yml: job a step[0] run: line 2: '"${HIT_DIAG}"
+expect steps-alias-workflow "${FIXTURES}/steps-alias-workflow" 1 \
+  '.github/workflows/steps-alias-workflow.yml: job a step[0] run: line 2: '"${HIT_DIAG}"
+expect steps-inline-composite "${FIXTURES}/steps-inline-composite" 1 \
+  '.github/actions/steps-inline-composite/action.yml: composite step[0] run: line 2: '"${HIT_DIAG}"
+expect steps-alias-composite "${FIXTURES}/steps-alias-composite" 1 \
+  '.github/actions/steps-alias-composite/action.yml: composite step[0] run: line 2: '"${HIT_DIAG}"
+# The anchored list holds aliases of its own (a step `- *s`, a body
+# `run: *body`), read through as the runner reads them.
+expect steps-alias-nested-workflow "${FIXTURES}/steps-alias-nested-workflow" 1 \
+  '.github/workflows/steps-alias-nested-workflow.yml: job a step[0] run: line 2: '"${HIT_DIAG}"
+expect steps-alias-nested-composite "${FIXTURES}/steps-alias-nested-composite" 1 \
+  '.github/actions/steps-alias-nested-composite/action.yml: composite step[0] run: line 2: '"${HIT_DIAG}"
+expect steps-alias-clean "${FIXTURES}/steps-alias-clean" 0 \
+  'no-pipe-into-grep-quiet: ok — scanned 0 shell file(s) and 2 run: block(s)'
+# A step list aliased to null holds no step, as an absent one does.
+expect steps-alias-null "${FIXTURES}/steps-alias-null" 0 \
+  'no-pipe-into-grep-quiet: ok — scanned 0 shell file(s) and 0 run: block(s)'
+# Three levels of aliases (list, step, body) are read through to the
+# body, as the runner reads it.
+expect steps-alias-deep-workflow "${FIXTURES}/steps-alias-deep-workflow" 1 \
+  '.github/workflows/steps-alias-deep-workflow.yml: job a step[0] run: line 2: '"${HIT_DIAG}"
+expect steps-alias-deep-composite "${FIXTURES}/steps-alias-deep-composite" 1 \
+  '.github/actions/steps-alias-deep-composite/action.yml: composite step[0] run: line 2: '"${HIT_DIAG}"
+# An alias the lint does not read, an `env:` value inside an aliased
+# step inside an aliased list, leaves the scan as the same file written
+# inline would.
+expect steps-alias-env-unread "${FIXTURES}/steps-alias-env-unread" 0 \
+  'no-pipe-into-grep-quiet: ok — scanned 0 shell file(s) and 3 run: block(s)'
+
 # The tracked tree itself: every shell file and run: body this lint
 # guards is clean. The file counts drift with the tree, so only the exit
 # code is asserted.

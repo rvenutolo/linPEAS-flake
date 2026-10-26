@@ -475,7 +475,10 @@ jobs:
             // Such a workflow files its own issue on the final attempt, and a second
             // filer would mean two issues for one failure. A file that cannot be
             // read counts as calling no notify, so the watchdog files: a broken
-            // check must never leave an exhausted run with no issue at all.
+            // check must never leave an exhausted run with no issue at all. A step's
+            // `uses:` written as a YAML alias is read as its anchored text.
+            // Limit: a root `jobs` key written as an alias is not resolved, so
+            // it reads as no notify call and the watchdog files (fails safe).
             function workflowCallsNotify(path) {
               if (!notifyCallers.has(path)) {
                 let calls = false;
@@ -483,7 +486,7 @@ jobs:
                   const count = execFileSync(
                     'yq',
                     [
-                      '[.jobs[].steps[]? | select((.uses // "") | test("^([.]/|rvenutolo/linPEAS-flake/)[.]github/actions/notify-workflow-result(@|$)"))] | length',
+                      '[.jobs[].steps[]? | select(((.uses | explode(.)) // "") | test("^([.]/|rvenutolo/linPEAS-flake/)[.]github/actions/notify-workflow-result(@|$)"))] | length',
                       `${process.env.GITHUB_WORKSPACE}/${path}`,
                     ],
                     execOpts,

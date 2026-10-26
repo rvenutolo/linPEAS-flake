@@ -80,7 +80,10 @@ input defaults to a file this repo does not have, and the action then falls back
 to a bundled `@commitlint/config-conventional`, so an unset `configFile` makes
 the repo's own config a no-op with no visible symptom.
 `scripts/check-commitlint-config-explicit.sh` pins that shut, along with the
-two configs' agreement on the base preset they extend.
+two configs' agreement on the base preset they extend. It reads an aliased value
+in either config as its anchored text, as commitlint does, and refuses with exit
+2 a rule value or `extends:` list that still holds an alias after sixteen
+resolving passes.
 
 A PR body may contain fenced lines of any length. Prose in a PR body needs no
 manual wrapping — GitHub wraps it.

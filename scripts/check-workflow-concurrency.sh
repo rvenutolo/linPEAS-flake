@@ -16,15 +16,18 @@
 #
 # Each shape is read by its kind, with the tag beside it: a map carrying
 # a tag of its own is still a map, a list or a map is no string whatever
-# tag it carries, and a scalar is a string only with the string tag. An
-# alias is reported by its kind, unresolved. The key itself is read the
-# way GitHub Actions reads it, so one written as an alias of
-# `concurrency` is that key, and one given twice, plain and as an alias,
-# is a workflow that does not parse. Every read passes YQ_MERGE_SPEC, so
-# a root merge list is read first mapping wins, as the YAML merge
-# specification says. GitHub Actions reads a
-# workflow file as one YAML document and refuses one holding several, so
-# a file that `yq` reads as several is a finding and is read no further.
+# tag it carries, and a scalar is a string only with the string tag.
+# The key itself is read the way GitHub Actions reads it, so one written
+# as an alias of `concurrency` is that key, and one given twice, plain
+# and as an alias, is a workflow that does not parse. Every read passes
+# YQ_MERGE_SPEC, so a root merge list is read first mapping wins, as the
+# YAML merge specification says. GitHub Actions reads a workflow file as
+# one YAML document and refuses one holding several, so a file that `yq`
+# reads as several is a finding and is read no further.
+#
+# A `concurrency:` or `group:` value, or a `group:` key, written as a
+# YAML alias is read as its anchored text, so it reaches the verdict of
+# the same file written inline.
 #
 # `cancel-in-progress` is not required by this lint; the group alone
 # is the load-bearing setting. Some pipelines (release-on-bump) keep
@@ -56,11 +59,17 @@ readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
 
 # The top-level `concurrency:` node: the one root key that is
 # `concurrency` or an alias of it, as GitHub Actions reads a root key
-# written as an alias. Its value is left as written, so a value written
-# as an alias is reported by its kind. A root holding the key more than
-# once makes `yq` fail, which the first read reports as a workflow that
-# does not parse.
-readonly CONC_NODE="${ROOT_KEY_RAW_NODE//@KEY@/concurrency}"
+# written as an alias, with a value written as an alias read as what it
+# stands for. A root holding the key more than once makes `yq` fail,
+# which the first read reports as a workflow that does not parse.
+readonly CONC_NODE="${ROOT_KEY_NODE//@KEY@/concurrency}"
+
+# The `group:` of that node, read through an alias. Resolving the node
+# leaves the aliases inside it, so a `group:` key or value written as an
+# alias is still one. `explode` handed the map, which is no alias, then
+# resolves each key and value it holds, merge keys included; a value
+# stands for a node that is no alias, since an anchor cannot sit on one.
+readonly GROUP_NODE="${CONC_NODE} | explode(.) | .group"
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -117,8 +126,7 @@ for f in "${selected_files[@]}"; do
   # beside it to tell an absent or null value from any other scalar. A
   # map carrying a tag of its own is still read. `yq` prints one line per
   # document, and GitHub Actions refuses a file holding several, so such a
-  # file is a finding and is read no further. An alias is reported by its
-  # kind, unresolved.
+  # file is a finding and is read no further.
   if ! conc_shape="$(read_workflow "${f}" "${CONC_NODE}"' | kind + " " + tag')"; then
     failed=$((failed + 1))
     continue
@@ -146,7 +154,7 @@ for f in "${selected_files[@]}"; do
 
   # The group is a string: a scalar carrying the string tag. A list or a
   # map is no string whatever tag it carries.
-  group_shape="$(yq eval "${YQ_MERGE_SPEC[@]}" "${CONC_NODE}"' | .group | kind + " " + tag' "${f}")" ||
+  group_shape="$(yq eval "${YQ_MERGE_SPEC[@]}" "${GROUP_NODE}"' | kind + " " + tag' "${f}")" ||
     die_unread 'the concurrency group shape' "${f}" "$?"
   case "${group_shape}" in
   'scalar !!null')
@@ -155,7 +163,7 @@ for f in "${selected_files[@]}"; do
     failed=$((failed + 1))
     ;;
   'scalar !!str')
-    group_val="$(yq eval "${YQ_MERGE_SPEC[@]}" "${CONC_NODE} | .group" "${f}")" ||
+    group_val="$(yq eval "${YQ_MERGE_SPEC[@]}" "${GROUP_NODE}" "${f}")" ||
       die_unread 'the concurrency group' "${f}" "$?"
     if [[ -z ${group_val} ]]; then
       # shellcheck disable=SC2016 # literal backticks in human-readable prose

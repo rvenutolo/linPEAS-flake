@@ -55,6 +55,12 @@ expect bad-scorecard-missing-osv.yml 1 "api.osv.dev"
 expect bad-scorecard-missing-deps-dev.yml 1 "api.deps.dev"
 expect bad-attestation-verify-missing-tuf.yml 1 "tuf-repo.github.com"
 
+# A `uses:` or an `allowed-endpoints:` written as an alias is read as its
+# anchored text, so each lints the way its inline twin above does.
+expect bad-aliased-uses-denylisted-host.yml 1 "cafe.github.com"
+expect bad-aliased-endpoints-denylisted-host.yml 1 "cafe.github.com"
+expect bad-aliased-trivy-missing-get-trivy.yml 1 "uses trivy-action but does not allowlist get.trivy.dev"
+
 # Respelling an action in another case must not take a job out of a
 # rule's reach, so each rule keyed on a remote action reads it whatever
 # the case of the ASCII letters in its owner and repository. Each fixture

@@ -159,10 +159,12 @@ and each list has a check that fails once it stops:
 
 - `scripts/check-actionlint-runner-labels-needed.sh` lints a one-job
     workflow per allowlisted label with an empty config, so the allowlist
-    is out of play. It runs as the `actionlint-runner-labels-needed`
-    pre-commit hook and through its harness in the CI `harness-group` job,
-    so an actionlint bump in `flake.lock` that learns a label fails the
-    bump's own PR.
+    is out of play. A label written as an alias is probed as its anchored
+    text, as actionlint reads it, and a label that still holds an alias
+    after sixteen resolving passes stops the check with exit 2. It runs as
+    the `actionlint-runner-labels-needed` pre-commit hook and through its
+    harness in the CI `harness-group` job, so an actionlint bump in
+    `flake.lock` that learns a label fails the bump's own PR.
 - `scripts/octoscan-scan.sh` probes each suppressed label alone after
     the scan, with only `runner-label` enabled and no `--ignore`. A label
     octoscan no longer flags fails the run with
@@ -638,18 +640,78 @@ classified and exemptions applied.
 
 ## YAML aliases in workflow reads
 
-A script that reads a workflow node through an alias resolves it with
-`yq`'s `explode`, which replaces each alias with a copy of what it
-stands for. A read of one node hands `explode` only that node, so
-aliases elsewhere in the file cost nothing. The name lookups described
-under "Text from files in yq expressions" that use `explode` are the
-exception: each hands it the whole map it searches, which is the
-workflow's `jobs:` for the stale-entry read of
-`check-permission-scopes.sh` and the job lookups of
-`check-notify-arms.sh`, and the whole file for the allowlist reads of
+GitHub Actions, commitlint and actionlint read a value written as an
+alias as the text its anchor holds, so the lints read it the same way
+and a file written with aliases reaches the verdict of the same file
+written inline. `yq` does not follow an alias at the end of a path:
+`//`, `==`, `test`, `to_entries`, `keys`, `flatten` and `has` see an
+alias node, not its text. A script resolves one with `yq`'s `explode`,
+which replaces each alias with a copy of what it stands for. Handed the
+document root, `explode` resolves every alias in one pass. Handed a
+node below the root, it resolves one level: the copies still hold the
+aliases written inside the anchored text. An anchor cannot sit on an
+alias, so that first pass always leaves a scalar, a list or a map. The
+reads take one of four shapes:
+
+- **Leaf read.** The selected value is exploded once, before `//` or a
+    comparison sees it (`(.uses | explode(.)) // ""`), so a value
+    aliased to null or to an empty string reaches the same default as
+    the inline value. One pass resolves a scalar. The workflow lints
+    `check-egress-allowlist.sh`, `check-harden-runner-block.sh`,
+    `check-harden-runner-first.sh`, `check-fork-guard-release.sh`,
+    `check-setup-nix-required.sh`, `check-size-label-ignores.sh`,
+    `check-uses-sha-pinned.sh`, `check-notify-arms.sh` and
+    `check-notify-label-descriptions.sh` read their values this way, as
+    do the scalar reads of `check-ratchet-pin-audit.sh`, the emptiness
+    tests of `check-lock-derived-docs.sh`, a rule's key in
+    `check-commitlint-config-explicit.sh`, and the notify-caller count
+    in the `ci-watchdog` workflow.
+- **Container read.** A node that a container operator is applied to
+    is exploded first. One pass suffices where the reads after it
+    follow aliases by path and explode each leaf where they read it:
+    the step lists of `check-no-opaque-procsub.sh`,
+    `check-no-pipe-into-grep-quiet.sh` and `check-run-block-strict.sh`,
+    the `rules:` map of `check-commitlint-config-explicit.sh`, and the
+    `concurrency:` map of `check-workflow-concurrency.sh`, whose single
+    pass resolves a `group:` key or value written as an alias. Two
+    passes resolve a map or list whose entries are compared after the
+    copy: a job's `permissions:` map in the stale-entry pass of
+    `check-permission-scopes.sh` and a job's `needs:` list in
+    `check-notify-arms.sh`.
+- **Bounded resolve.** A judged list or map value can nest an alias
+    inside the text an alias stands for, one level per pass, so it goes
+    through sixteen passes, the loop `ON_NODE` uses for `on:` (see
+    `scripts/check-workflow-on-branches.sh`). A value that still holds
+    an alias after all sixteen has no text to judge, and the lint stops
+    with exit 2 rather than read the alias marker:
+    `check-commitlint-config-explicit.sh` (a rule's value and
+    `extends:`), `check-lock-derived-docs.sh` (a workflow-level env
+    list), `check-actionlint-runner-labels-needed.sh` (a runner label),
+    `check-verify-reason-ladder.sh` (each `verify` step, refusing a step
+    id or attribution `run:`), `check-ratchet-pin-audit.sh` (a job's
+    permissions, a first step's `uses:` and the concurrency group) and
+    `refresh-ci-dag.sh` (a job's `needs:`). Only the value the lint
+    judges is checked for a surviving alias; an alias elsewhere in the
+    file is never read and never refused.
+- **Root explode.** `refresh-ci-summary.sh` explodes its category map
+    at the document root, which resolves every alias in it, however
+    deep, in one pass.
+
+The `ci-watchdog` workflow reads `.jobs` by path, so a root `jobs` key
+written as an alias reads there as no notify call and the watchdog
+files the issue itself.
+
+A read of one node hands `explode` only that node, so aliases elsewhere
+in the file cost nothing. The name lookups described under "Text from
+files in yq expressions" that use `explode` are the exception: each
+hands it the whole map it searches, which is the workflow's `jobs:` for
+the stale-entry read of `check-permission-scopes.sh` and the job lookups
+of `check-notify-arms.sh`, and the whole file for the allowlist reads of
 `check-permission-scopes.sh`, the category map of `refresh-ci-dag.sh`
-and the manifest of `run-lint-group.sh`. An alias nest anywhere in such a
-map is expanded on every lookup.
+and the manifest of `run-lint-group.sh`. An alias nest anywhere in such
+a map is expanded on every lookup. The root explode of
+`refresh-ci-summary.sh` likewise expands the whole category map, once
+per read.
 
 The copies are not capped. Aliases that each repeat another alias
 several times multiply at every level: a 408-byte workflow whose `on:`
@@ -678,10 +740,7 @@ then `*k :`) as the key it stands for. Every read of a root `jobs:`,
 theirs from the `ON_NODE` constant each such script defines: the node is the value of the one root key that is
 the name or an alias of it, and a root holding two, one plain and one an
 alias, makes `yq` fail ("jobs: is given more than once"), which each
-script handles as a read that failed. `check-workflow-concurrency.sh`,
-which reports a value written as an alias by its kind, takes its node
-from `ROOT_KEY_RAW_NODE`, which finds the key the same way and leaves its
-value as written.
+script handles as a read that failed.
 
 A lint that reads only the `jobs:` node hands `explode` that node alone
 (`JOBS_NODE` in `scripts/lib/job-keys.sh`): a `jobs:` written as an alias

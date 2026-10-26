@@ -36,7 +36,8 @@
 # style, which survives folding, catches it.
 #
 # A body written as an alias (`run: *body`) is judged by its anchored
-# text and that text's node style.
+# text and that text's node style. A step list written as an alias
+# (`steps: *st`) is read as its anchored list.
 #
 # Plain single-line `run:` invocations stay exempt — they are
 # already a single shell command whose exit status drives the step
@@ -102,8 +103,15 @@ readonly MULTILINE_SELECT='select(.value.run != null and (.value.run | explode(.
 # only words and numbers `yq` prints, never a job key: a key is free
 # text, and one holding the `|` separator would move its own text into
 # the index. The reads below find the job by its document and position.
+#
+# A step list written as an alias (`steps: *st`) is read as the anchored
+# list. `to_entries` does not follow an alias, so the list is resolved
+# with one `explode` first; an anchor cannot sit on an alias, so that
+# pass always leaves a list. The aliases inside its copy (a step `- *s`,
+# a body `run: *body`) need no second pass: a path read follows an
+# aliased step, and each body is exploded where it is read.
 # shellcheck disable=SC2016 # yq expression: literal $ refs, not shell expansion
-readonly ROWS_QUERY="document_index as \$d | ((((${JOBS_NODE}) // {}) | to_entries | to_entries[] as \$j | (\$j.value.value.steps // []) | to_entries[] | ${MULTILINE_SELECT} | \"job|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" + (.key | tostring)), ((.runs.steps // []) | to_entries[] | ${MULTILINE_SELECT} | \"composite|\" + (\$d | tostring) + \"||\" + (.key | tostring)))"
+readonly ROWS_QUERY="document_index as \$d | ((((${JOBS_NODE}) // {}) | to_entries | to_entries[] as \$j | ((\$j.value.value.steps | explode(.)) // []) | to_entries[] | ${MULTILINE_SELECT} | \"job|\" + (\$d | tostring) + \"|\" + (\$j.key | tostring) + \"|\" + (.key | tostring)), (((.runs.steps | explode(.)) // []) | to_entries[] | ${MULTILINE_SELECT} | \"composite|\" + (\$d | tostring) + \"||\" + (.key | tostring)))"
 
 # Return first non-blank, non-comment line of a run: block.
 # Args: run-body-on-stdin

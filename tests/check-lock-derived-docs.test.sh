@@ -881,6 +881,60 @@ EOF
     "${work}/alias-run-writer" 1 \
     'aliased-run.yml writes flake.lock but declares no LOCK_DERIVED_GENERATORS'
 
+  # (y1n) GOOD: a run: written as an alias of null is the empty run: an
+  # inline `run: null` is, so the workflow is read, not refused as
+  # unparsable. Inline twins, `run: null`, a bare `run:` and `run: ""`, sit in the
+  # same tree.
+  write_tree "${work}/alias-run-null" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}"
+  cat >"${work}/alias-run-null/.github/workflows/aliased-null-run.yml" <<'EOF'
+name: aliased-null-run
+on:
+  workflow_dispatch:
+permissions: {}
+x-none: &none null
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: *none
+EOF
+  cat >"${work}/alias-run-null/.github/workflows/inline-null-run.yml" <<'EOF'
+name: inline-null-run
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: null
+EOF
+  cat >"${work}/alias-run-null/.github/workflows/inline-empty-run.yml" <<'EOF'
+name: inline-empty-run
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ""
+EOF
+  cat >"${work}/alias-run-null/.github/workflows/inline-bare-run.yml" <<'EOF'
+name: inline-bare-run
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run:
+EOF
+  expect 'agree: a run: aliased to null reads as an empty run: like an inline one' \
+    "${work}/alias-run-null" 0 ''
+
   # (y2) BAD: the aliased writer's job is the upload candidate, and it
   # uploads less than it may commit.
   write_tree "${work}/alias-run-upload" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
@@ -912,6 +966,207 @@ EOF
   expect 'bad: an aliased writer job uploading less than it commits fails' \
     "${work}/alias-run-upload" 1 \
     'docs/reference/alpha.md is in COMMITTABLE_PATHS in .github/workflows/aliased-bump.yml but missing from its upload-artifact path list'
+
+  # (z) An env list written as an alias is the anchored text GitHub
+  # Actions hands the steps, so it is read as that text.
+  # (z1) GOOD: the three lists, each an alias, agree as the inline lists
+  # of (w1) do. An env value holding aliases the lint never reads changes
+  # nothing. A sibling workflow keeps the breadth line apart from (w1).
+  write_tree "${work}/alias-lists-agree" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${lock_and_delta}"
+  write_workflow "${work}/alias-lists-agree" 'idle-sibling.yml' 'false' 'omit' 'omit'
+  cat >"${work}/alias-lists-agree/.github/workflows/update-flake-lock.yml" <<'EOF'
+name: update-flake-lock
+on:
+  workflow_dispatch:
+permissions: {}
+x-generators: &generators |
+  scripts/refresh-alpha.sh
+x-workflow-generators: &workflow_generators |
+  scripts/refresh-delta.sh
+x-committable: &committable |
+  flake.lock
+  docs/reference/alpha.md
+  docs/reference/delta.md
+  docs/reference/epsilon.md
+x-word: &word unread
+x-words: &words [*word]
+env:
+  LOCK_DERIVED_GENERATORS: *generators
+  WORKFLOW_DERIVED_GENERATORS: *workflow_generators
+  COMMITTABLE_PATHS: *committable
+  UNREAD: *words
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          nix flake update
+      - uses: actions/upload-artifact@v7
+        with:
+          name: result
+          path: |
+            flake.lock
+            docs/reference/alpha.md
+            docs/reference/delta.md
+            docs/reference/epsilon.md
+EOF
+  expect 'agree: env lists written as aliases are read as their text' \
+    "${work}/alias-lists-agree" 0 ''
+
+  # (z2) BAD: an aliased committable list carrying a path nothing
+  # declares names that path, as the inline list of (t) does.
+  write_generators "${work}/alias-committable-extra"
+  write_hooks "${work}/alias-committable-extra" "${LOCK_ALPHA}" "${NOLOCK_BETA}"
+  mkdir --parents -- "${work}/alias-committable-extra/.github/workflows"
+  cat >"${work}/alias-committable-extra/.github/workflows/aliased-committable.yml" <<'EOF'
+name: aliased-committable
+on:
+  workflow_dispatch:
+permissions: {}
+x-committable: &committable |
+  flake.lock
+  docs/reference/alpha.md
+  docs/reference/orphan.md
+env:
+  LOCK_DERIVED_GENERATORS: |
+    scripts/refresh-alpha.sh
+  COMMITTABLE_PATHS: *committable
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          nix flake update
+      - uses: actions/upload-artifact@v7
+        with:
+          name: result
+          path: |
+            flake.lock
+            docs/reference/alpha.md
+            docs/reference/orphan.md
+EOF
+  expect 'bad: an aliased committable path no listed generator declares fails' \
+    "${work}/alias-committable-extra" 1 \
+    'docs/reference/orphan.md is in COMMITTABLE_PATHS in .github/workflows/aliased-committable.yml, but no listed generator declares it'
+
+  # (z3) GOOD: a workflow writing no lock whose lists are empty, written
+  # inline or as aliases of an empty string and of null, declares no list.
+  # Siblings give each tree a count of workflows no other scenario scans,
+  # so their breadth lines differ from every other passing run.
+  local empty_case sibling
+  for empty_case in inline alias; do
+    write_tree "${work}/empty-lists-${empty_case}" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+      '    scripts/refresh-alpha.sh' "${alpha_committable}"
+    for sibling in one two three four; do
+      write_workflow "${work}/empty-lists-${empty_case}" "idle-${sibling}.yml" 'false' 'omit' 'omit'
+    done
+  done
+  write_workflow "${work}/empty-lists-alias" 'idle-five.yml' 'false' 'omit' 'omit'
+  cat >"${work}/empty-lists-inline/.github/workflows/idle-lists.yml" <<'EOF'
+name: idle-lists
+on:
+  workflow_dispatch:
+permissions: {}
+env:
+  LOCK_DERIVED_GENERATORS: ""
+  WORKFLOW_DERIVED_GENERATORS: ""
+  COMMITTABLE_PATHS:
+jobs:
+  idle:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+EOF
+  cat >"${work}/empty-lists-alias/.github/workflows/idle-lists.yml" <<'EOF'
+name: idle-lists
+on:
+  workflow_dispatch:
+permissions: {}
+x-empty: &empty ""
+x-none: &none
+env:
+  LOCK_DERIVED_GENERATORS: *empty
+  WORKFLOW_DERIVED_GENERATORS: *empty
+  COMMITTABLE_PATHS: *none
+jobs:
+  idle:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo PAYLOAD_RAN
+EOF
+  expect 'agree: empty inline lists on a workflow writing no lock declare nothing' \
+    "${work}/empty-lists-inline" 0 ''
+  expect 'agree: lists aliased to empty on a workflow writing no lock declare nothing' \
+    "${work}/empty-lists-alias" 0 ''
+
+  # (z4) BAD: a list value nested three aliases deep is judged as the
+  # same nest written inline is: a committable list that is a list of a
+  # list names no flake.lock. Each tree names its own workflow.
+  local nest_case nest_value
+  for nest_case in inline alias; do
+    write_generators "${work}/nested-list-${nest_case}"
+    write_hooks "${work}/nested-list-${nest_case}" "${LOCK_ALPHA}" "${NOLOCK_BETA}"
+    mkdir --parents -- "${work}/nested-list-${nest_case}/.github/workflows"
+    nest_value='[[flake.lock]]'
+    if [[ ${nest_case} == alias ]]; then nest_value='*committable'; fi
+    cat >"${work}/nested-list-${nest_case}/.github/workflows/nested-${nest_case}.yml" <<EOF
+name: nested-${nest_case}
+on:
+  workflow_dispatch:
+permissions: {}
+x-lock: &lock flake.lock
+x-inner: &inner [*lock]
+x-committable: &committable [*inner]
+env:
+  LOCK_DERIVED_GENERATORS: |
+    scripts/refresh-alpha.sh
+  COMMITTABLE_PATHS: ${nest_value}
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          nix flake update
+EOF
+  done
+  expect 'bad: an inline committable list nested in a list omits flake.lock' \
+    "${work}/nested-list-inline" 1 \
+    'COMMITTABLE_PATHS in .github/workflows/nested-inline.yml omits flake.lock'
+  expect 'bad: a committable list three aliases deep is judged as its text' \
+    "${work}/nested-list-alias" 1 \
+    'COMMITTABLE_PATHS in .github/workflows/nested-alias.yml omits flake.lock'
+
+  # (z5) TOOLING: a list nested seventeen aliases deep outlasts the
+  # sixteen resolving passes, so an alias is left in a value the lint
+  # judges, and the run stops rather than score the alias marker as a path.
+  write_generators "${work}/alias-list-residual"
+  write_hooks "${work}/alias-list-residual" "${LOCK_ALPHA}" "${NOLOCK_BETA}"
+  mkdir --parents -- "${work}/alias-list-residual/.github/workflows"
+  local nest_anchors='x-n0: &n0 flake.lock' level
+  for ((level = 1; level <= 17; level++)); do
+    nest_anchors+=$'\n'"x-n${level}: &n${level} [*n$((level - 1))]"
+  done
+  cat >"${work}/alias-list-residual/.github/workflows/update-flake-lock.yml" <<EOF
+name: update-flake-lock
+on:
+  workflow_dispatch:
+permissions: {}
+${nest_anchors}
+env:
+  LOCK_DERIVED_GENERATORS: |
+    scripts/refresh-alpha.sh
+  COMMITTABLE_PATHS: *n17
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          nix flake update
+EOF
+  expect 'tooling: a committable list nested past the resolving passes is a could-not-run' \
+    "${work}/alias-list-residual" 2 \
+    'lock-derived-docs: .github/workflows/update-flake-lock.yml: env.COMMITTABLE_PATHS still holds a YAML alias after resolving; cannot read it'
 
   # (ac) BAD: beta-fresh's trigger uses negative lookaheads, the shape
   # pre-commit evaluates with Python `re`. Under that engine it matches

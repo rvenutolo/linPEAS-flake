@@ -12,6 +12,9 @@
 # with their ASCII letters in either case; the ref is forty lower-case
 # hex digits.
 #
+# A first-step `uses:` written as a YAML alias is read as its anchored
+# text.
+#
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
 # counted finding, and the file's jobs are not read.
 #
@@ -82,7 +85,7 @@ for f in "${selected_files[@]}"; do
   # status is not propagated under set -Eeuo pipefail, so a yq failure
   # (unparsable workflow, or a query that errors on a valid-but-odd
   # shape) would yield empty input and the check would pass silently.
-  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) + "\t" + (.value.steps[0].uses // "null")' "${f}")"; then
+  if ! rows="$(yq eval "${YQ_MERGE_SPEC[@]}" "${JOBS_NODE}"' | to_entries[] | (.key | explode(.) | tostring) + "\t" + ((.value.steps[0].uses | explode(.)) // "null")' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue

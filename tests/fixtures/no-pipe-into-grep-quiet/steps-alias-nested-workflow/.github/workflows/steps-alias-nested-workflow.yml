@@ -1,0 +1,12 @@
+name: w
+on: push
+x-step: &s
+  run: |
+    set -Eeuo pipefail
+    echo PAYLOAD_RAN | grep --quiet PAYLOAD
+x-steps: &st
+  - *s
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: *st

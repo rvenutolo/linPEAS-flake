@@ -301,6 +301,419 @@ EOF
   rm --recursive --force -- "${dir}" "${stderr_file}" "${stdout_file}" "${outcome_file}"
 }
 
+# @description Run the script on a workflow written with YAML aliases and,
+# when one is given, on its twin written inline, and compare each run's
+# exit code, stdout and the whole of stderr: an aliased value is read as
+# its anchored text, so both reach one verdict and one diagnostic, the file
+# path aside. Both runs are recorded as one scenario, as a twin that
+# passes prints the same summary line.
+# @arg $1 scenario name  @arg $2 expected exit  @arg $3 the whole expected
+# stdout  @arg $4 the whole expected stderr, with FILE for the workflow path
+# @arg $5 the aliased workflow  @arg $6 the inline twin ('' for none)
+function expect_twin() {
+  local -r name="$1" want_exit="$2" want_out="$3" want_err="$4"
+  local dir variant got_exit captures=()
+  dir="$(mktemp --directory)"
+  printf '%s\n' "$5" >"${dir}/aliased.yml"
+  local variants=(aliased)
+  if [[ -n $6 ]]; then
+    printf '%s\n' "$6" >"${dir}/inline.yml"
+    variants+=(inline)
+  fi
+  for variant in "${variants[@]}"; do
+    got_exit=0
+    VERIFY_WORKFLOW_OVERRIDE="${dir}/${variant}.yml" \
+      VERIFICATION_DOC_OVERRIDE="${FIXTURES}/good/verification.md" \
+      "${SCRIPT}" >"${dir}/${variant}.out" 2>"${dir}/${variant}.err" || got_exit=$?
+    printf 'harness-assert-outcome: exit=%d\n' "${got_exit}" >"${dir}/${variant}.exit"
+    local want="${want_err//FILE/${dir}/${variant}.yml}"
+    if [[ ${got_exit} -ne ${want_exit} ||
+      "$(cat -- "${dir}/${variant}.out")" != "${want_out}" ||
+      "$(cat -- "${dir}/${variant}.err")" != "${want}" ]]; then
+      printf 'FAIL: %s (%s) — expected exit %d, stdout %q and stderr %q; got exit %d, stdout %q and stderr %q\n' \
+        "${name}" "${variant}" "${want_exit}" "${want_out}" "${want}" "${got_exit}" \
+        "$(cat -- "${dir}/${variant}.out")" "$(cat -- "${dir}/${variant}.err")" >&2
+      failures=$((failures + 1))
+    else
+      printf 'PASS: %s (%s, exit %d)\n' "${name}" "${variant}" "${got_exit}"
+    fi
+    captures+=("${dir}/${variant}.exit" "${dir}/${variant}.out" "${dir}/${variant}.err")
+  done
+
+  # The recorded substring is the first line of whichever stream carries
+  # the verdict, without the path, as one may not hold a line break.
+  local record="${want_err%%$'\n'*}"
+  record="${record#FILE: }"
+  harness_assert_record "${name}" "${record:-${want_out}}" "${captures[@]}"
+  rm --recursive --force -- "${dir}"
+}
+
+# @description Print a YAML mapping entry anchoring a list nested
+# through aliases, each level an alias of the one below; `*<prefix><n-1>`
+# names its outermost level, and resolving it takes one `explode` pass a
+# level.
+# @arg $1 anchor prefix  @arg $2 number of levels
+function alias_nest() {
+  local -r prefix="$1" depth="$2"
+  local level
+  printf 'x-%s:\n  l0: &%s0 [x]\n' "${prefix}" "${prefix}"
+  for ((level = 1; level < depth; level++)); do
+    printf '  l%d: &%s%d [*%s%d]\n' "${level}" "${prefix}" "${level}" "${prefix}" "$((level - 1))"
+  done
+}
+
+# @description Print the list `alias_nest` anchors, written inline.
+# @arg $1 number of levels
+function inline_nest() {
+  local level
+  for ((level = 0; level < $1; level++)); do printf '['; done
+  printf 'x'
+  for ((level = 0; level < $1; level++)); do printf ']'; done
+}
+
+# @description The scenarios whose workflow reads a YAML alias where the
+# verify job, a step, a step id, the attribution env or its values sit.
+# Each passing twin prints its own counts, so no two passing scenarios
+# share a summary line.
+function alias_scenarios() {
+  local -r head='name: fixture-verify
+on:
+  workflow_dispatch:
+permissions: {}'
+  # shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+  local -r alpha_env='STEP_ALPHA: ${{ steps.step-alpha.outcome }}'
+  # shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+  local -r bravo_env='STEP_BRAVO: ${{ steps.step-bravo.outcome }}'
+  # shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+  local -r alpha_ladder='if [[ ${STEP_ALPHA} == '"'failure'"' ]]; then reason='"'alpha-failed'"'; fi'
+  local -r extra_msg='FILE: step id extra-step has no steps.<id>.outcome entry in the attribution env'
+  local -r extra_inline="${head}
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: extra-step
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}"
+
+  expect_twin 'a step written as an alias is read as its anchored step' 1 '' \
+    "${extra_msg}" "${head}
+x-anchors:
+  extra: &extra
+    id: extra-step
+    run: echo PAYLOAD_RAN
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - *extra
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}" "${extra_inline}"
+
+  expect_twin 'a step written as a merge key is read as its merged step' 1 '' \
+    "${extra_msg}" "${head}
+x-anchors:
+  extra: &extra
+    id: extra-step
+    run: echo PAYLOAD_RAN
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - <<: *extra
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}" "${extra_inline}"
+
+  expect_twin 'a step id written as an alias is read as its anchored id' 0 \
+    'check-verify-reason-ladder: ok (2 id-carrying steps, 1 env entries, 2 reason tokens)' '' \
+    "${head}
+x-anchors:
+  vpid: &vpid step-alpha
+jobs:
+  verify:
+    steps:
+      - id: *vpid
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}
+          reason='unknown'" "${head}
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}
+          reason='unknown'"
+
+  # shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+  expect_twin 'an attribution env value written as an alias is read as its anchored text' 0 \
+    'check-verify-reason-ladder: ok (2 id-carrying steps, 1 env entries, 3 reason tokens)' '' \
+    "${head}
+x-anchors:
+  vp: &vp \${{ steps.step-alpha.outcome }}
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          STEP_ALPHA: *vp
+        run: |
+          ${alpha_ladder}
+          reason='bravo-failed'
+          reason='unknown'" "${head}
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}
+          reason='bravo-failed'
+          reason='unknown'"
+
+  # shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+  local -r both_ladder='if [[ ${STEP_ALPHA} == x || ${STEP_BRAVO} == x ]]; then reason='"'alpha-failed'"'; fi'
+  expect_twin 'an attribution env written as a merge key is read as its merged entries' 0 \
+    'check-verify-reason-ladder: ok (3 id-carrying steps, 2 env entries, 1 reason tokens)' '' \
+    "${head}
+x-anchors:
+  envbase: &envbase
+    ${alpha_env}
+    ${bravo_env}
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: step-bravo
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          <<: *envbase
+        run: |
+          ${both_ladder}" "${head}
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: step-bravo
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          ${alpha_env}
+          ${bravo_env}
+        run: |
+          ${both_ladder}"
+
+  # shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+  local -r all_ladder='if [[ ${STEP_ALPHA} == x || ${STEP_BRAVO} == x || ${STEP_CHARLIE} == x ]]; then reason='"'unknown'"'; fi'
+  # shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+  local -r charlie_env='STEP_CHARLIE: ${{ steps.step-charlie.outcome }}'
+  expect_twin 'the attribution step id written as an alias is read as its anchored id' 0 \
+    'check-verify-reason-ladder: ok (4 id-carrying steps, 3 env entries, 1 reason tokens)' '' \
+    "${head}
+x-anchors:
+  attrid: &attrid attribute
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: step-bravo
+        run: echo PAYLOAD_RAN
+      - id: step-charlie
+        run: echo PAYLOAD_RAN
+      - id: *attrid
+        env:
+          ${alpha_env}
+          ${bravo_env}
+          ${charlie_env}
+        run: |
+          ${all_ladder}" "${head}
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: step-bravo
+        run: echo PAYLOAD_RAN
+      - id: step-charlie
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          ${alpha_env}
+          ${bravo_env}
+          ${charlie_env}
+        run: |
+          ${all_ladder}"
+
+  # The attribution step, its env and an env value are each an alias, so
+  # the value sits three aliases deep.
+  expect_twin 'an attribution env value three aliases deep is read as its anchored text' 1 '' \
+    'FILE: step id step-bravo has no steps.<id>.outcome entry in the attribution env' \
+    "${head}
+x-anchors:
+  vp: &vp \${{ steps.step-alpha.outcome }}
+  envmap: &envmap
+    STEP_ALPHA: *vp
+  attrstep: &attrstep
+    id: attribute
+    env: *envmap
+    run: |
+      ${alpha_ladder}
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: step-bravo
+        run: echo PAYLOAD_RAN
+      - *attrstep" "${head}
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: step-bravo
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}"
+
+  # A step id holding a list is no id GitHub Actions accepts, but it is
+  # the one judged value that can nest an alias at any depth: an aliased
+  # step whose id is a list nested five aliases deep reads as its inline
+  # twin.
+  local -r nested_id_inline="${head}
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: $(inline_nest 5)
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}"
+  expect_twin 'a step id nested five aliases deep is read as its anchored text' 1 '' \
+    'FILE: step id \[\[\[\[\[x\]\]\]\]\] has no steps.<id>.outcome entry in the attribution env' \
+    "${head}
+$(alias_nest nest 5)
+  st: &st
+    id: *nest4
+    run: echo PAYLOAD_RAN
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - *st
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}" "${nested_id_inline}"
+
+  # Past sixteen levels an alias survives every resolving pass, and the
+  # lint has no text to judge for that value.
+  expect_twin 'a step id nested deeper than sixteen aliases is refused' 2 '' \
+    'FILE: jobs.verify.steps[].id still holds a YAML alias after resolving; cannot read it' \
+    "${head}
+$(alias_nest nest 20)
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: *nest19
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}" ''
+  expect_twin 'an attribution run: nested deeper than sixteen aliases is refused' 2 '' \
+    'FILE: jobs.verify.steps[].run still holds a YAML alias after resolving; cannot read it' \
+    "${head}
+$(alias_nest nest 20)
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        run: echo PAYLOAD_RAN
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: *nest19" ''
+
+  # The lint reads no step's with:, so an alias nested there past every
+  # resolving pass leaves the verdict to the values it does read.
+  expect_twin 'an alias nested deeper than sixteen where the lint reads nothing is not refused' 0 \
+    'check-verify-reason-ladder: ok (2 id-carrying steps, 1 env entries, 4 reason tokens)' '' \
+    "${head}
+$(alias_nest nest 20)
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        uses: ./fixture-action
+        with:
+          nested: *nest19
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}
+          reason='bravo-failed'
+          reason='charlie-failed'
+          reason='unknown'" "${head}
+jobs:
+  verify:
+    steps:
+      - id: step-alpha
+        uses: ./fixture-action
+        with:
+          nested: $(inline_nest 20)
+      - id: attribute
+        env:
+          ${alpha_env}
+        run: |
+          ${alpha_ladder}
+          reason='bravo-failed'
+          reason='charlie-failed'
+          reason='unknown'"
+}
+
 function main() {
   expect 'good' 'workflow.yml' 0 ''
 
@@ -375,6 +788,7 @@ function main() {
   expect_step_merge 'a merge list in the attribution step reads its run body first mapping wins: the four-token body first reads as four tokens' \
     run '[*run-four, *run-three]' 0 \
     '2 env entries, 4 reason tokens)'
+  alias_scenarios
   harness_assert_verify || failures=$((failures + 1))
 
   if ((failures > 0)); then

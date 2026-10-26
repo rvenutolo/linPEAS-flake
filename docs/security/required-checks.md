@@ -3,7 +3,8 @@
 In-tree restatement of the required-context set from the `protect-main`
 branch ruleset (`gh api repos/rvenutolo/linPEAS-flake/rules/branches/main`).
 `docs/_data/ci-check-categories.yml` restates the same set, parity-gated by
-`scripts/refresh-ci-summary.sh`. Update this file in the same change as any
+`scripts/refresh-ci-summary.sh`, which reads a key or category written as a
+YAML alias as its anchored text. Update this file in the same change as any
 modification to the ruleset.
 
 ## Required contexts
