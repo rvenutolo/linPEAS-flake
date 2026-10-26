@@ -180,6 +180,17 @@ expect_body conc-alias-group-alias-empty.yml $'x-s: &s ""\nx-c: &c\n  group: *s\
 expect_body conc-merge-group-alias.yml $'x-s: &s g\nx-c: &c\n  group: *s\nconcurrency:\n  <<: *c\n' 0 ''
 expect_body conc-merge-chain-group-alias-empty.yml $'x-s: &s ""\nx-1: &m1 {group: *s}\nx-2: &m2 {<<: *m1}\nconcurrency: *m2\n' 1 \
   "DIR/conc-merge-chain-group-alias-empty.yml: ${EMPTY}"
+# A group: key written as an alias is the key group:, with or without a
+# value written as an alias, through an aliased or merged map alike.
+expect_body group-inline.yml $'concurrency:\n  group: g1\n' 0 ''
+expect_body group-key-alias.yml $'x: &k group\nconcurrency:\n  *k : g1\n' 0 ''
+expect_body group-inline-empty.yml $'concurrency:\n  group: ""\n' 1 "DIR/group-inline-empty.yml: ${EMPTY}"
+expect_body group-key-alias-empty.yml $'x: &k group\nconcurrency:\n  *k : ""\n' 1 "DIR/group-key-alias-empty.yml: ${EMPTY}"
+expect_body group-key-alias-value-alias-empty.yml $'x: &k group\nx-s: &s ""\nconcurrency:\n  *k : *s\n' 1 \
+  "DIR/group-key-alias-value-alias-empty.yml: ${EMPTY}"
+expect_body conc-alias-group-key-alias.yml $'x: &k group\nx-c: &c {*k : g1}\nconcurrency: *c\n' 0 ''
+expect_body conc-merge-chain-group-key-alias-seq.yml $'x: &k group\nx-s: &s [a]\nx-0: &c0 {*k : *s}\nx-1: &c1 {<<: *c0}\nx-2: &c2 {<<: *c1}\nconcurrency: *c2\n' 1 \
+  "DIR/conc-merge-chain-group-key-alias-seq.yml: ${GROUP} (kind=seq, tag=!!seq); expected string${ONE}"
 expect_body conc-alias-unread.yml $'x-b: &b true\nconcurrency:\n  group: g\n  cancel-in-progress: *b\n' 0 ''
 # GitHub Actions reads a workflow file as one YAML document and refuses
 # one holding several, so such a file is a finding and is read no
