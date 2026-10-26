@@ -1252,6 +1252,10 @@ non-scalar one, or a merge key) is a finding and its jobs are not read: the key 
 other names or as none, hiding a notify job. Every `yq` read of a
 workflow passes YQ_MERGE_SPEC, so a merge list (`<<: [*a, *b]`) inside a
 job is read first mapping wins, as the YAML merge specification says.
+
+A notify job, its step list, a step's `uses:`, `if:` and `result:`, the
+job's `if:` and a scanner job's body are read as their anchored text
+when written as YAML aliases.
 Such a workflow is the one finding: it is not also reported as a scanner
 workflow without a notify job, and a marker naming one of its jobs is not
 judged against jobs that were never read.

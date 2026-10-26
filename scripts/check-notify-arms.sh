@@ -89,6 +89,10 @@
 # other names or as none, hiding a notify job. Every `yq` read of a
 # workflow passes YQ_MERGE_SPEC, so a merge list (`<<: [*a, *b]`) inside a
 # job is read first mapping wins, as the YAML merge specification says.
+#
+# A notify job, its step list, a step's `uses:`, `if:` and `result:`, the
+# job's `if:` and a scanner job's body are read as their anchored text
+# when written as YAML aliases.
 # Such a workflow is the one finding: it is not also reported as a scanner
 # workflow without a notify job, and a marker naming one of its jobs is not
 # judged against jobs that were never read.
@@ -207,18 +211,20 @@ function notify_jobs() {
   yq -r "${YQ_MERGE_SPEC[@]}" "(${JOBS_NODE}) // {}"'
     | to_entries | .[] | (.key | explode(.) | tostring) as $job | .value as $j
     | ($j.needs | explode(.) | explode(.) | [.] | flatten) as $n
-    | (($j.if // "") | tostring) as $gate
+    | ($j.if | explode(.)) as $jif
+    | (($jif // "") | tostring) as $gate
     | (if ($n | length) == 1 then $n[0]
         elif ($n | length) > 1 and ($n | all_c(kind == "scalar" and tag == "!!str")) and ($gate | contains("always()"))
         then ([$n[] | . as $x | select($gate | contains("needs." + $x + "."))] | select(length == 1) | .[0])
         else null end) as $w
     | ($j.steps // [])[]
-    | select((.uses // "") | test("notify-workflow-result"))
-    | [(.uses | tostring), $job,
+    | (.uses | explode(.)) as $uses
+    | select(($uses // "") | test("notify-workflow-result"))
+    | [($uses | tostring), $job,
         (($w | select(kind == "scalar" and tag == "!!str")) // "-"),
-        (($j.if // "-") | tostring),
-        ((.with.result // "-") | tostring),
-        ((.if // "-") | tostring)]
+        (($jif // "-") | tostring),
+        (((.with.result | explode(.)) // "-") | tostring),
+        (((.if | explode(.)) // "-") | tostring)]
     | map(sub("[\t\n]"; " "; "g")) | join("\t")
   ' "$1"
 }
@@ -245,7 +251,7 @@ function steps_before_notify() {
   # killed by SIGPIPE, which pipefail turns into a failed read.
   local uses step
   uses="$(JOB="$2" yq -r "${YQ_MERGE_SPEC[@]}" "${JOB_BY_KEY}"'
-    | .steps // [] | .[] | (.uses // "-") | tostring
+    | .steps // [] | .[] | ((.uses | explode(.)) // "-") | tostring
   ' "$1")" || return
   while IFS= read -r step; do
     [[ ${step} == *notify-workflow-result* ]] && break

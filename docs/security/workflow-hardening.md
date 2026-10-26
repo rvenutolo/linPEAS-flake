@@ -738,6 +738,8 @@ The gate grammar is what these workflows use: `always()`, `==`, `!=`, `!` (which
 - a job that reaches the composite by any other `uses:` than `./.github/actions/notify-workflow-result`, such as a pinned remote revision the hash does not cover;
 - a workflow whose `on:` gives no event, or that `yq` reads as several YAML documents. How the lint reads `on:` (by kind, through aliases) is stated in the header of `scripts/check-notify-arms.sh`; a value that prints only spaces, tabs and newlines is refused.
 
+A notify job, its step list, a step's `uses:`, `if:` and `result:`, the job's `if:` and a scanner job's body written as aliases (`uses: *u`, `if: *g`) are read as their anchored text.
+
 A `yq` read that fails is not one of these: the lint stops on a line naming what it was reading and the status `yq` exited with, and says nothing about the workflow.
 
 Known limits:
