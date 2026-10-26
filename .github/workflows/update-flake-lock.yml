@@ -405,14 +405,20 @@ jobs:
             if [[ "${path}" == 'flake.lock' ]]; then
               msg='chore: update flake.lock'
             fi
-            content_b64="$(base64 --wrap=0 -- "${artifact}/${path}")"
-            tip_sha="$(gh api --method PUT "repos/${REPO}/contents/${path}" \
-              --field message="${msg}" \
-              --field content="${content_b64}" \
-              --field sha="${to_sha[i]}" \
-              --field branch="${work_branch}" \
-              --jq .commit.sha \
-              --header "${api_header}")"
+            # The body reaches gh on stdin, not as a --field argument: Linux caps
+            # one argument at 128 KiB, and a base64 file body outgrows it.
+            content_b64="$(mktemp)"
+            base64 --wrap=0 -- "${artifact}/${path}" >"${content_b64}"
+            tip_sha="$(jq --null-input \
+              --arg message "${msg}" \
+              --rawfile content "${content_b64}" \
+              --arg sha "${to_sha[i]}" \
+              --arg branch "${work_branch}" \
+              '{message: $message, content: $content, sha: $sha, branch: $branch}' |
+              gh api --method PUT "repos/${REPO}/contents/${path}" \
+                --input - \
+                --jq .commit.sha \
+                --header "${api_header}")"
             printf 'committed %s\n' "${path}"
           done
 
