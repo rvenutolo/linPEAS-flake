@@ -109,6 +109,38 @@ expect_body step-xtag.yml $'on: push\njobs:\n  a:\n    steps:\n      - !x {uses:
 expect_body step-strtag.yml $'on: push\njobs:\n  a:\n    steps:\n      - !!str {uses: actions/setup-node@v4}\n' 1 \
   $'DIR/step-strtag.yml: actions/setup-node@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
 
+# A `uses:` value written as an alias is read as its anchored text, so it
+# reaches the verdict and the diagnostic of the same reference written
+# inline: a pinned one passes, an unpinned one is named by its text.
+expect_body uses-inline-pinned.yml $'on: push\nenv:\n  X: &u actions/checkout@0123456789abcdef0123456789abcdef01234567\njobs:\n  a:\n    steps:\n      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\n' 0 ''
+expect_body uses-alias-pinned.yml $'on: push\nenv:\n  X: &u actions/checkout@0123456789abcdef0123456789abcdef01234567\njobs:\n  a:\n    steps:\n      - uses: *u\n' 0 ''
+expect_body uses-inline-unpinned.yml $'on: push\nenv:\n  X: &u actions/checkout@0123456789abcdef0123456789abcdef01234567\njobs:\n  a:\n    steps:\n      - uses: actions/checkout@v4\n' 1 \
+  $'DIR/uses-inline-unpinned.yml: actions/checkout@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
+expect_body uses-alias-unpinned.yml $'on: push\nenv:\n  X: &u actions/checkout@v4\njobs:\n  a:\n    steps:\n      - uses: *u\n' 1 \
+  $'DIR/uses-alias-unpinned.yml: actions/checkout@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
+# A composite action's steps are read the same way.
+expect_body action.yml $'name: a\nruns:\n  using: composite\n  steps:\n    - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\n      env:\n        X: &u actions/setup-node@v4\n    - uses: *u\n' 1 \
+  $'DIR/action.yml: actions/setup-node@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
+
+# The `uses` key itself written as an alias is still the step's `uses:`.
+expect_body uses-key-inline.yml $'on: push\nenv:\n  X: &k uses\njobs:\n  a:\n    steps:\n      - uses : actions/checkout@v4\n' 1 \
+  $'DIR/uses-key-inline.yml: actions/checkout@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
+expect_body uses-key-alias.yml $'on: push\nenv:\n  X: &k uses\njobs:\n  a:\n    steps:\n      - *k : actions/checkout@v4\n' 1 \
+  $'DIR/uses-key-alias.yml: actions/checkout@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
+
+# A reference is read once, where it is written: a step that brings in an
+# anchored step with a merge key adds no second finding for the anchor's
+# `uses:`, and yq prints no merge-key warning.
+expect_body uses-merge-step.yml $'on: push\nx-step: &s\n  uses: actions/checkout@v4\njobs:\n  a:\n    steps:\n      - <<: *s\n        name: merged\n' 1 \
+  $'DIR/uses-merge-step.yml: actions/checkout@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
+
+# A `uses:` written at the merge site overrides the merged one, whichever
+# key comes first, so an unpinned override of a pinned anchor is a finding.
+expect_body uses-merge-override-inline.yml $'on: push\nx-step: &s\n  uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\njobs:\n  a:\n    steps:\n      - uses: actions/checkout@v4\n' 1 \
+  $'DIR/uses-merge-override-inline.yml: actions/checkout@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
+expect_body uses-merge-override.yml $'on: push\nx-step: &s\n  uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\njobs:\n  a:\n    steps:\n      - uses: actions/checkout@v4\n        <<: *s\n' 1 \
+  $'DIR/uses-merge-override.yml: actions/checkout@v4 not SHA-pinned (need owner/repo@<40-hex>)\n1 unpinned uses: reference(s) found'
+
 # Under en_US.UTF-8 a bash `[0-9a-f]` range also matches non-ASCII
 # characters, so a ref of 39 hex digits and one such character would read
 # as a SHA. GitHub resolves it as a tag or branch name, which can move.
