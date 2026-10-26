@@ -881,6 +881,60 @@ EOF
     "${work}/alias-run-writer" 1 \
     'aliased-run.yml writes flake.lock but declares no LOCK_DERIVED_GENERATORS'
 
+  # (y1n) GOOD: a run: written as an alias of null is the empty run: an
+  # inline `run: null` is, so the workflow is read, not refused as
+  # unparsable. Inline twins, `run: null`, a bare `run:` and `run: ""`, sit in the
+  # same tree.
+  write_tree "${work}/alias-run-null" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${alpha_committable}"
+  cat >"${work}/alias-run-null/.github/workflows/aliased-null-run.yml" <<'EOF'
+name: aliased-null-run
+on:
+  workflow_dispatch:
+permissions: {}
+x-none: &none null
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: *none
+EOF
+  cat >"${work}/alias-run-null/.github/workflows/inline-null-run.yml" <<'EOF'
+name: inline-null-run
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: null
+EOF
+  cat >"${work}/alias-run-null/.github/workflows/inline-empty-run.yml" <<'EOF'
+name: inline-empty-run
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ""
+EOF
+  cat >"${work}/alias-run-null/.github/workflows/inline-bare-run.yml" <<'EOF'
+name: inline-bare-run
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run:
+EOF
+  expect 'agree: a run: aliased to null reads as an empty run: like an inline one' \
+    "${work}/alias-run-null" 0 ''
+
   # (y2) BAD: the aliased writer's job is the upload candidate, and it
   # uploads less than it may commit.
   write_tree "${work}/alias-run-upload" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
