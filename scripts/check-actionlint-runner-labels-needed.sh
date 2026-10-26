@@ -13,15 +13,20 @@
 # (and the file once it lists none, together with this canary). See
 # docs/development/linting.md#runner-label-allowlist.
 #
+# A label written as an alias is read as its anchored text, as
+# actionlint reads it; a label that still holds an alias after resolving
+# is refused with exit 2.
+#
 # Env overrides (test-only):
 #   ACTIONLINT_CONFIG_OVERRIDE — alternate config path
 #
 # Exits 0 when every allowlisted label is still needed, 1 when the
 # canary fires (actionlint accepts an allowlisted label unaided), 2 when
 # the canary could not run at all: actionlint or yq is absent from PATH,
-# the config is missing, unparsable or lists no label, or actionlint
-# itself failed. A canary that never ran says nothing about the
-# allowlist, so it must not borrow the failure code.
+# the config is missing, unparsable or lists no label, a label still
+# holds an alias after resolving, or actionlint itself failed. A canary
+# that never ran says nothing about the allowlist, so it must not borrow
+# the failure code.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -49,8 +54,23 @@ if [[ ! -f ${CONFIG} ]]; then
   exit 2
 fi
 
+# actionlint reads a label written as an alias as its anchored text, so
+# each label is read through its alias; `.[]` already follows a list
+# written as one. One `explode` pass resolves one level of an alias
+# chain, and an anchor cannot sit on an alias, so a scalar label always
+# resolves. A label that is itself a collection holding an alias does
+# not, and the canary has no text to probe for it.
+label_aliases=""
+if ! label_aliases="$(yq '[.self-hosted-runner.labels // [] | .[] | explode(.) | .. | select(kind == "alias")] | length' "${CONFIG}")"; then
+  printf 'ERROR: cannot read self-hosted-runner.labels from %s\n' "${CONFIG}" >&2
+  exit 2
+fi
+if [[ ${label_aliases} != 0 ]]; then
+  printf 'ERROR: %s: self-hosted-runner.labels still holds a YAML alias after resolving; cannot read it\n' "${CONFIG}" >&2
+  exit 2
+fi
 labels_raw=""
-if ! labels_raw="$(yq '.self-hosted-runner.labels // [] | .[]' "${CONFIG}")"; then
+if ! labels_raw="$(yq '.self-hosted-runner.labels // [] | .[] | explode(.)' "${CONFIG}")"; then
   printf 'ERROR: cannot read self-hosted-runner.labels from %s\n' "${CONFIG}" >&2
   exit 2
 fi

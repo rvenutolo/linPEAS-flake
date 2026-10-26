@@ -63,6 +63,10 @@ this repo allowlists. Remove that label from `.github/actionlint.yaml`
 (and the file once it lists none, together with this canary). See
 docs/development/linting.md#runner-label-allowlist.
 
+A label written as an alias is read as its anchored text, as
+actionlint reads it; a label that still holds an alias after resolving
+is refused with exit 2.
+
 Env overrides (test-only):
 
 ```text
@@ -72,9 +76,10 @@ Env overrides (test-only):
 Exits 0 when every allowlisted label is still needed, 1 when the
 canary fires (actionlint accepts an allowlisted label unaided), 2 when
 the canary could not run at all: actionlint or yq is absent from PATH,
-the config is missing, unparsable or lists no label, or actionlint
-itself failed. A canary that never ran says nothing about the
-allowlist, so it must not borrow the failure code.
+the config is missing, unparsable or lists no label, a label still
+holds an alias after resolving, or actionlint itself failed. A canary
+that never ran says nothing about the allowlist, so it must not borrow
+the failure code.
 
 ### scripts/check-actionlint-shellcheck-active.sh
 

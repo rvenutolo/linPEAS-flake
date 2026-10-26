@@ -159,10 +159,12 @@ and each list has a check that fails once it stops:
 
 - `scripts/check-actionlint-runner-labels-needed.sh` lints a one-job
     workflow per allowlisted label with an empty config, so the allowlist
-    is out of play. It runs as the `actionlint-runner-labels-needed`
-    pre-commit hook and through its harness in the CI `harness-group` job,
-    so an actionlint bump in `flake.lock` that learns a label fails the
-    bump's own PR.
+    is out of play. A label written as an alias is probed as its anchored
+    text, as actionlint reads it, and a label that still holds an alias
+    after resolving stops the check with exit 2. It runs as the
+    `actionlint-runner-labels-needed` pre-commit hook and through its
+    harness in the CI `harness-group` job, so an actionlint bump in
+    `flake.lock` that learns a label fails the bump's own PR.
 - `scripts/octoscan-scan.sh` probes each suppressed label alone after
     the scan, with only `runner-label` enabled and no `--ignore`. A label
     octoscan no longer flags fails the run with
