@@ -1,0 +1,11 @@
+name: a
+description: a
+x-body: &body |
+  set -Eeuo pipefail
+  echo PAYLOAD_RAN | grep --quiet PAYLOAD
+x-steps: &st
+  - shell: bash
+    run: *body
+runs:
+  using: composite
+  steps: *st

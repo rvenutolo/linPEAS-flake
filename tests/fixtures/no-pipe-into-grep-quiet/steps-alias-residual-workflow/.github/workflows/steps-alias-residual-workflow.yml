@@ -1,0 +1,13 @@
+name: w
+on: push
+x-body: &body |
+  set -Eeuo pipefail
+  echo PAYLOAD_RAN
+x-step: &s
+  run: *body
+x-steps: &st
+  - *s
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: *st

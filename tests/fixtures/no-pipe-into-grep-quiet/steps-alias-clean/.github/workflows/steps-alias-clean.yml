@@ -1,0 +1,14 @@
+name: w
+on: push
+x-steps: &st
+  - run: |
+      set -Eeuo pipefail
+      echo PAYLOAD_RAN
+  - run: |
+      set -Eeuo pipefail
+      out="$(echo PAYLOAD_RAN)"
+      grep --quiet PAYLOAD <<<"${out}"
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: *st

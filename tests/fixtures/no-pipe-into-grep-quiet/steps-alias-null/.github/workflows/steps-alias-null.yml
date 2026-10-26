@@ -1,0 +1,7 @@
+name: w
+on: push
+x-none: &none null
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: *none

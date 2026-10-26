@@ -1,0 +1,9 @@
+name: a
+description: a
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -Eeuo pipefail
+        echo PAYLOAD_RAN | grep --quiet PAYLOAD
