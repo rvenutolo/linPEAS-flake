@@ -27,6 +27,10 @@
 # (`<<: [*a, *b]`) inside a job is read first mapping wins, as the YAML
 # merge specification says.
 #
+# A value written as an alias is read as its anchored text, as GitHub
+# Actions reads it; a job's permissions that still hold an alias after
+# sixteen resolving passes are refused with exit 2.
+#
 # WORKFLOW_PATH_OVERRIDE points at an alternate workflow file
 # (used by tests/check-ratchet-pin-audit.test.sh fixtures).
 # RATCHET_DOC_OVERRIDE and RATCHET_VERSION_OVERRIDE are the fixture hooks
@@ -38,8 +42,8 @@
 # a `ratchet --version` string carrying no X.Y.Z. The workflow reads stop
 # the run on the workflow's own content too: a root giving `on`, `jobs`,
 # `permissions` or `concurrency` twice (each key is read as GitHub
-# Actions reads one written as an alias), an `on:` holding an alias
-# nested too deep to resolve, or a merge key in `on:` that `yq` cannot
+# Actions reads one written as an alias), an `on:` or a job's
+# permissions holding an alias nested too deep to resolve, or a merge key in `on:` that `yq` cannot
 # resolve (see ON_NODE). A file `yq` reads as
 # several YAML documents, or whose root is not a map, is one finding. With no workflow to
 # parse there is no invariant to score, and counting that as a failed
@@ -126,6 +130,21 @@ readonly PERMS_NODE="${ROOT_KEY_NODE//@KEY@/permissions}"
 # The `concurrency:` node, read the same way. `jobs:` is `JOBS_NODE`.
 readonly CONC_NODE="${ROOT_KEY_NODE//@KEY@/concurrency}"
 
+# A value written as an alias is an alias node at the end of its path,
+# which `//`, `==`, `test` and `to_entries` do not follow, so each value
+# read below is exploded before any of them sees it. An anchor cannot
+# sit on an alias, so one pass resolves a scalar. A job's permissions map
+# can nest an alias inside the text an alias stands for, one level per
+# pass, so it goes through sixteen passes, as ON_NODE resolves `on:`,
+# and one still holding an alias after them is refused by `yq` with an
+# error rather than read.
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+readonly RESOLVE='(. as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)))'
+
+# One job's permissions as sorted `scope:value` pairs, read through
+# RESOLVE. A script reads one job's with `${PERMS_ROWS//@JOB@/<name>}`.
+readonly PERMS_ROWS="${JOBS_NODE}"' | .@JOB@.permissions | '"${RESOLVE}"' | with(select([... | select(kind == "alias")] | length > 0); error("jobs.@JOB@.permissions holds an alias nested too deep to resolve")) | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")'
+
 failed=0
 fail() {
   printf '%s\n' "$*" >&2
@@ -174,7 +193,7 @@ fi
 
 # 3. Both jobs declare timeout-minutes.
 for job in check notify; do
-  if ! t="$(read_workflow "${JOBS_NODE} | .\"${job}\".\"timeout-minutes\" // \"\"" "the timeout-minutes of job ${job}")"; then
+  if ! t="$(read_workflow "${JOBS_NODE} | (.\"${job}\".\"timeout-minutes\" | explode(.)) // \"\"" "the timeout-minutes of job ${job}")"; then
     exit 2
   fi
 
@@ -185,7 +204,7 @@ done
 
 # 4. harden-runner is the first step of every job.
 for job in check notify; do
-  if ! first="$(read_workflow "${JOBS_NODE} | .\"${job}\".steps[0].uses // \"\"" "the first step of job ${job}")"; then
+  if ! first="$(read_workflow "${JOBS_NODE} | (.\"${job}\".steps[0].uses | explode(.)) // \"\"" "the first step of job ${job}")"; then
     exit 2
   fi
 
@@ -195,10 +214,10 @@ for job in check notify; do
 done
 
 # 5. Every actions/checkout step sets persist-credentials: false.
-if ! checkout_count="$(read_workflow "[${JOBS_NODE}"' | .[].steps[] | select(.uses // "" | test("'"${CHECKOUT_RE}"'"))] | length' 'the checkout steps')"; then
+if ! checkout_count="$(read_workflow "[${JOBS_NODE}"' | .[].steps[] | select((.uses | explode(.)) // "" | test("'"${CHECKOUT_RE}"'"))] | length' 'the checkout steps')"; then
   exit 2
 fi
-if ! safe_count="$(read_workflow "[${JOBS_NODE}"' | .[].steps[] | select(.uses // "" | test("'"${CHECKOUT_RE}"'")) | select(.with."persist-credentials" == false)] | length' 'the checkout steps')"; then
+if ! safe_count="$(read_workflow "[${JOBS_NODE}"' | .[].steps[] | select((.uses | explode(.)) // "" | test("'"${CHECKOUT_RE}"'")) | select((.with."persist-credentials" | explode(.)) == false)] | length' 'the checkout steps')"; then
   exit 2
 fi
 
@@ -225,7 +244,7 @@ if [[ ${disp} != "true" ]]; then
 fi
 
 # 7. concurrency.group is exactly ratchet-pin-audit.
-if ! group="$(read_workflow "${CONC_NODE}"' | .group // ""' 'the concurrency group')"; then
+if ! group="$(read_workflow "${CONC_NODE}"' | (.group | explode(.)) // ""' 'the concurrency group')"; then
   exit 2
 fi
 
@@ -234,7 +253,7 @@ if [[ ${group} != "ratchet-pin-audit" ]]; then
 fi
 
 # 8. Notify body contains all four reason tokens.
-if ! body="$(read_workflow "${JOBS_NODE}"' | .notify.steps[] | select(.uses == "./.github/actions/notify-workflow-result") | .with.body // ""' 'the notify body')"; then
+if ! body="$(read_workflow "${JOBS_NODE}"' | .notify.steps[] | select((.uses | explode(.)) == "./.github/actions/notify-workflow-result") | (.with.body | explode(.)) // ""' 'the notify body')"; then
   exit 2
 fi
 
@@ -255,14 +274,14 @@ if [[ -z ${WORKFLOW_PATH_OVERRIDE:-} ]]; then
 fi
 
 # 10. Per-job permissions are exactly what's expected.
-if ! check_perms="$(read_workflow "${JOBS_NODE}"' | .check.permissions | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")' 'the permissions of job check')"; then
+if ! check_perms="$(read_workflow "${PERMS_ROWS//@JOB@/check}" 'the permissions of job check')"; then
   exit 2
 fi
 
 if [[ ${check_perms} != "contents:read" ]]; then
   fail "job check: permissions must be exactly { contents: read } (got: ${check_perms})"
 fi
-if ! notify_perms="$(read_workflow "${JOBS_NODE}"' | .notify.permissions | to_entries | map(.key + ":" + (.value | tostring)) | sort | join(",")' 'the permissions of job notify')"; then
+if ! notify_perms="$(read_workflow "${PERMS_ROWS//@JOB@/notify}" 'the permissions of job notify')"; then
   exit 2
 fi
 
