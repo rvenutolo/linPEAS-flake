@@ -1092,12 +1092,17 @@ within that body. The YAML scan set is `.github/workflows/*.yml` (or
 a `fixtures/` segment. Neither root reaches `tests/fixtures/`, whose
 trees exist to hold violations.
 
+A step list or `run:` body written as an alias (`steps: *st`,
+`run: *body`) is read as its anchored text; a step list that still
+holds an alias after resolving is refused with exit 2.
+
 Honors SCRIPTS_DIR_OVERRIDE (default: scripts), WORKFLOWS_DIR_OVERRIDE
 (default: .github/workflows) and ACTIONS_DIR_OVERRIDE (default:
 .github/actions) for fixtures.
 Exit 0 clean, 1 on any hit, 2 on operational error: `yq` is missing, a
-scan set is empty, `grep` cannot read a shell script, or `yq` cannot
-read a workflow or action file or one of its steps.
+scan set is empty, `grep` cannot read a shell script, `yq` cannot read
+a workflow or action file or one of its steps, or a step list still
+holds an alias after resolving.
 
 ### scripts/check-no-pipe-into-grep-quiet.sh
 
