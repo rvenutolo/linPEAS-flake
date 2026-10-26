@@ -768,7 +768,9 @@ with the ASCII letters of `secrets` and of `GITHUB_TOKEN` in either case,
 as GitHub Actions reads a secret's name whatever its case. It is required
 in the dot form: the index form `secrets['GITHUB_TOKEN']` is refused as the
 wrong token, and so is any spelling that reads the `secrets` context
-without that literal name, since the input must equal the one expression.
+without that literal name, since the input must equal the one expression. A step's `uses:` and its
+`github-token` written as an alias (`uses: *action`) are read as their
+anchored text.
 {% endraw %}
 
 **Why.** Unauthenticated `api.github.com` tarball fetches are capped
