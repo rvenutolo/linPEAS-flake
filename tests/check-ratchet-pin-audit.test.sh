@@ -544,6 +544,9 @@ expect_shape 'a checkout step that keeps credentials is counted' \
 expect_shape 'a checkout step written as an alias that keeps credentials is counted' \
   "${CHECK_STEPS}" "${CHECK_HR}      - uses: *u\\n        with:\\n          persist-credentials: true\\n${CHECK_NIX}" '' 1 \
   "${CREDENTIALS_KEPT}" "x-u: &u ${CHECKOUT_PIN}\\n"
+expect_shape 'a checkout step written as an alias that drops credentials is safe' \
+  "${CHECK_STEPS}" "${CHECK_HR}      - uses: *u\\n        with:\\n          persist-credentials: false\\n${CHECK_NIX}" '' 0 '' \
+  "x-u: &u ${CHECKOUT_PIN}\\n"
 expect_shape 'a persist-credentials written as an alias of false is false' \
   "${CHECK_STEPS}" "${CHECK_HR}      - uses: ${CHECKOUT_PIN}\\n        with:\\n          persist-credentials: *f\\n${CHECK_NIX}" '' 0 '' \
   'x-f: &f false\n'
