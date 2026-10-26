@@ -38,6 +38,10 @@
 # (exit 1) before its rows are split, since it could forge a row for
 # another entry.
 #
+# The stale-entry pass reads a job's `permissions:`, a scope name and a
+# scope value written as a YAML alias as their anchored text, as the
+# forward pass does.
+#
 # Read and `none` scope values are ignored — least-privilege concern is
 # write over-grant. See docs/security/min-permissions.md.
 #
@@ -246,8 +250,15 @@ if [[ -z ${FILE_FILTER} ]]; then
       # evaluate as a finding against that file and moves on, so this
       # pass says the same thing rather than inventing a second verdict
       # for the same file.
+      #
+      # `permissions:` is read through an alias in two `explode` passes:
+      # the first turns a `permissions:` written as an alias into a copy
+      # of its map, which still holds the aliases written inside it, and
+      # the second resolves a scope name or value written as an alias in
+      # that map, merge keys included. The scope value is compared with
+      # `write` and nothing inside it is read, so no deeper level matters.
       if ! granted="$(JOB="${job}" SCOPE="${scope}" yq eval "${YQ_MERGE_SPEC[@]}" \
-        "[${JOBS_NODE} | explode(.) | [to_entries[] | $(eq JOB)] | reverse | .[0] | .value | .permissions | select(kind == \"map\") | [to_entries[] | $(eq SCOPE)] | reverse | .[0] | .value] | .[0] // \"\"" \
+        "[${JOBS_NODE} | explode(.) | [to_entries[] | $(eq JOB)] | reverse | .[0] | .value | .permissions | explode(.) | explode(.) | select(kind == \"map\") | [to_entries[] | $(eq SCOPE)] | reverse | .[0] | .value] | .[0] // \"\"" \
         "${wf_path}")"; then
         printf '%s: could not evaluate workflow with yq (malformed?)\n' "${wf_path}" >&2
         failed=$((failed + 1))
