@@ -338,6 +338,33 @@ expect_names allowlist-read-all w.yml \
 expect_names allowlist-permissions-alias w.yml \
   $'permissions: {}\nx-perms: &p\n  packages: write\njobs:\n  writer:\n    permissions: *p\n    steps:\n      - run: echo PAYLOAD_RAN\n' \
   $'w.yml:\n  writer: [packages]\n' 0 ''
+# The stale-entry read reaches the verdict the same workflow written
+# inline does (allowlist-permissions-alias and the inline twins below),
+# however the aliases nest: a permissions: alias holding an aliased
+# value or scope name, a job alias holding a permissions: alias, jobs:
+# itself an alias, or a merge chain. An alias the lint does not read
+# changes nothing, and an aliased scope value other than write is stale.
+readonly STEPS=$'    steps:\n      - run: echo PAYLOAD_RAN\n'
+readonly AL_PKG=$'w.yml:\n  writer: [packages]\n'
+readonly STALE_PKG='@AL@: stale entry w.yml/writer/packages (job does not grant that write scope)'$'\n1 permission-scope violation(s) found'
+expect_names stale-read-inline-twin w.yml \
+  $'permissions: {}\njobs:\n  writer:\n    permissions:\n      packages: write\n'"${STEPS}" "${AL_PKG}" 0 ''
+expect_names stale-read-permissions-alias-value-alias w.yml \
+  $'permissions: {}\nx-w: &w write\nx-p: &p\n  packages: *w\njobs:\n  writer:\n    permissions: *p\n'"${STEPS}" "${AL_PKG}" 0 ''
+expect_names stale-read-permissions-alias-scope-alias w.yml \
+  $'permissions: {}\nx-k: &k packages\nx-p: &p\n  *k : write\njobs:\n  writer:\n    permissions: *p\n'"${STEPS}" "${AL_PKG}" 0 ''
+expect_names stale-read-job-alias-permissions-alias w.yml \
+  $'permissions: {}\nx-w: &w write\nx-p: &p\n  packages: *w\nx-j: &j\n  permissions: *p\n'"${STEPS//    /  }"$'jobs:\n  writer: *j\n' "${AL_PKG}" 0 ''
+expect_names stale-read-jobs-alias-job-alias w.yml \
+  $'permissions: {}\nx-w: &w write\nx-p: &p\n  packages: *w\nx-j: &j\n  permissions: *p\n'"${STEPS//    /  }"$'x-js: &js\n  writer: *j\njobs: *js\n' "${AL_PKG}" 0 ''
+expect_names stale-read-permissions-merge-chain w.yml \
+  $'permissions: {}\nx-w: &w write\nx-k: &k packages\nx-0: &p0 {*k : *w}\nx-1: &p1 {<<: *p0}\nx-2: &p2 {<<: *p1}\njobs:\n  writer:\n    permissions: *p2\n'"${STEPS}" "${AL_PKG}" 0 ''
+expect_names stale-read-unread-alias w.yml \
+  $'permissions: {}\nx-st: &st\n  - run: echo PAYLOAD_RAN\njobs:\n  writer:\n    permissions:\n      packages: write\n    steps: *st\n' "${AL_PKG}" 0 ''
+expect_names stale-read-inline-read w.yml \
+  $'permissions: {}\njobs:\n  writer:\n    permissions:\n      packages: read\n'"${STEPS}" "${AL_PKG}" 1 "${STALE_PKG}"
+expect_names stale-read-permissions-alias-value-alias-read w.yml \
+  $'permissions: {}\nx-r: &r read\nx-p: &p\n  packages: *r\njobs:\n  writer:\n    permissions: *p\n'"${STEPS}" "${AL_PKG}" 1 "${STALE_PKG}"
 # A name written twice is read as `yq`'s own lookup reads it, the last
 # one; and every listed allowlist row is still checked.
 expect_names job-key-twice w.yml \
