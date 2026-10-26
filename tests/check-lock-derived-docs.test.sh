@@ -1046,23 +1046,28 @@ EOF
   expect 'agree: lists aliased to empty on a workflow writing no lock declare nothing' \
     "${work}/empty-lists-alias" 0 ''
 
-  # (z4) TOOLING: each resolving pass reads one level of an alias chain,
-  # so a list value holding an alias of its own is text the lint cannot
-  # read, and the run stops rather than score the alias marker as a path.
-  write_generators "${work}/alias-list-residual"
-  write_hooks "${work}/alias-list-residual" "${LOCK_ALPHA}" "${NOLOCK_BETA}"
-  mkdir --parents -- "${work}/alias-list-residual/.github/workflows"
-  cat >"${work}/alias-list-residual/.github/workflows/update-flake-lock.yml" <<'EOF'
-name: update-flake-lock
+  # (z4) BAD: a list value nested three aliases deep is judged as the
+  # same nest written inline is: a committable list that is a list of a
+  # list names no flake.lock. Each tree names its own workflow.
+  local nest_case nest_value
+  for nest_case in inline alias; do
+    write_generators "${work}/nested-list-${nest_case}"
+    write_hooks "${work}/nested-list-${nest_case}" "${LOCK_ALPHA}" "${NOLOCK_BETA}"
+    mkdir --parents -- "${work}/nested-list-${nest_case}/.github/workflows"
+    nest_value='[[flake.lock]]'
+    if [[ ${nest_case} == alias ]]; then nest_value='*committable'; fi
+    cat >"${work}/nested-list-${nest_case}/.github/workflows/nested-${nest_case}.yml" <<EOF
+name: nested-${nest_case}
 on:
   workflow_dispatch:
 permissions: {}
 x-lock: &lock flake.lock
-x-committable: &committable [*lock]
+x-inner: &inner [*lock]
+x-committable: &committable [*inner]
 env:
   LOCK_DERIVED_GENERATORS: |
     scripts/refresh-alpha.sh
-  COMMITTABLE_PATHS: *committable
+  COMMITTABLE_PATHS: ${nest_value}
 jobs:
   compute:
     runs-on: ubuntu-latest
@@ -1070,7 +1075,42 @@ jobs:
       - run: |
           nix flake update
 EOF
-  expect 'tooling: a committable list still holding an alias after resolving is a could-not-run' \
+  done
+  expect 'bad: an inline committable list nested in a list omits flake.lock' \
+    "${work}/nested-list-inline" 1 \
+    'COMMITTABLE_PATHS in .github/workflows/nested-inline.yml omits flake.lock'
+  expect 'bad: a committable list three aliases deep is judged as its text' \
+    "${work}/nested-list-alias" 1 \
+    'COMMITTABLE_PATHS in .github/workflows/nested-alias.yml omits flake.lock'
+
+  # (z5) TOOLING: a list nested seventeen aliases deep outlasts the
+  # sixteen resolving passes, so an alias is left in a value the lint
+  # judges, and the run stops rather than score the alias marker as a path.
+  write_generators "${work}/alias-list-residual"
+  write_hooks "${work}/alias-list-residual" "${LOCK_ALPHA}" "${NOLOCK_BETA}"
+  mkdir --parents -- "${work}/alias-list-residual/.github/workflows"
+  local nest_anchors='x-n0: &n0 flake.lock' level
+  for ((level = 1; level <= 17; level++)); do
+    nest_anchors+=$'\n'"x-n${level}: &n${level} [*n$((level - 1))]"
+  done
+  cat >"${work}/alias-list-residual/.github/workflows/update-flake-lock.yml" <<EOF
+name: update-flake-lock
+on:
+  workflow_dispatch:
+permissions: {}
+${nest_anchors}
+env:
+  LOCK_DERIVED_GENERATORS: |
+    scripts/refresh-alpha.sh
+  COMMITTABLE_PATHS: *n17
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          nix flake update
+EOF
+  expect 'tooling: a committable list nested past the resolving passes is a could-not-run' \
     "${work}/alias-list-residual" 2 \
     'lock-derived-docs: .github/workflows/update-flake-lock.yml: env.COMMITTABLE_PATHS still holds a YAML alias after resolving; cannot read it'
 
