@@ -43,6 +43,19 @@ jobs:
 EOF
 }
 
+# @description Write a workflow that files one label through the notify
+# composite with each piece given as raw YAML, so a piece can be an alias.
+# @arg $1 destination path  @arg $2 anchor lines before `jobs:` (may be empty)
+# @arg $3 the step's `uses:`  @arg $4 `label:` value  @arg $5 `label-description:` value
+function write_anchored_caller() {
+  {
+    printf 'name: caller\non: push\n'
+    [[ -z $2 ]] || printf '%s\n' "$2"
+    printf 'jobs:\n  notify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: %s\n        with:\n          label: %s\n          label-description: %s\n' \
+      "$3" "$4" "$5"
+  } >"$1"
+}
+
 # @description Write a workflow whose job `a` merges two steps' jobs.
 # The over-cap step is P and the in-cap step is Q.
 # @arg $1 destination path  @arg $2 merge list, e.g. "*P, *Q"
@@ -184,6 +197,65 @@ EOF
     "${root}/key-read-fails/a.yml could not be parsed"
   rm --force -- "${stub_dir}/yq"
   rmdir -- "${stub_dir}"
+
+  # A value written as a YAML alias is read as its anchored text, so the
+  # cap and the agreement rule hold for it as they do inline.
+  local -r composite='./.github/actions/notify-workflow-result'
+  mkdir -p "${root}/uses-alias-over" "${root}/uses-alias-over-sole"
+  write_anchored_caller "${root}/uses-alias-over/a.yml" "x-u: &u ${composite}" '*u' 'eta-drift' "\"${OVER_CAP}\""
+  write_caller "${root}/uses-alias-over/b.yml" 'theta-drift' 'theta'
+  run_scenario 'an over-cap description under an aliased uses fails' "${root}/uses-alias-over" 1 \
+    'label eta-drift description is 101 characters, over the 100-character cap'
+  write_anchored_caller "${root}/uses-alias-over-sole/a.yml" "x-u: &u ${composite}" '*u' 'iota-drift' "\"${OVER_CAP}\""
+  run_scenario 'an aliased uses is the only notify caller' "${root}/uses-alias-over-sole" 1 \
+    'label iota-drift description is 101 characters, over the 100-character cap'
+
+  mkdir -p "${root}/label-alias-conflict"
+  write_anchored_caller "${root}/label-alias-conflict/a.yml" 'x-l: &l kappa-drift' "${composite}" '*l' 'one'
+  write_anchored_caller "${root}/label-alias-conflict/b.yml" '' "${composite}" 'kappa-drift' 'two'
+  run_scenario 'an aliased label with two descriptions fails' "${root}/label-alias-conflict" 1 \
+    'label kappa-drift is filed with more than one description'
+
+  mkdir -p "${root}/desc-alias-over" "${root}/desc-alias-agree"
+  write_anchored_caller "${root}/desc-alias-over/a.yml" "x-d: &d \"${OVER_CAP}\"" "${composite}" 'lambda-drift' '*d'
+  run_scenario 'an aliased over-cap description fails' "${root}/desc-alias-over" 1 \
+    'label lambda-drift description is 101 characters, over the 100-character cap'
+  write_anchored_caller "${root}/desc-alias-agree/a.yml" 'x-d: &d same' "${composite}" 'mu-drift' '*d'
+  write_anchored_caller "${root}/desc-alias-agree/b.yml" '' "${composite}" 'mu-drift' 'same'
+  write_caller "${root}/desc-alias-agree/c.yml" 'nu-drift' 'nu'
+  write_caller "${root}/desc-alias-agree/d.yml" 'xi-drift' 'xi'
+  run_scenario 'an aliased description that agrees passes' "${root}/desc-alias-agree" 0 \
+    '3 label description(s) across 4 caller workflow(s)'
+
+  # A description anchored on null is no description, as written inline.
+  mkdir -p "${root}/desc-alias-null"
+  write_anchored_caller "${root}/desc-alias-null/a.yml" 'x-n: &n null' "${composite}" 'omicron-drift' '*n'
+  write_caller "${root}/desc-alias-null/b.yml" 'pi-drift' 'pi'
+  write_caller "${root}/desc-alias-null/c.yml" 'rho-drift' 'rho'
+  write_caller "${root}/desc-alias-null/d.yml" 'sigma-drift' 'sigma'
+  run_scenario 'a description aliased to null is no description' "${root}/desc-alias-null" 0 \
+    '3 label description(s) across 3 caller workflow(s)'
+
+  # Every piece several aliases deep: the job, its step list, the step, its
+  # inputs, the composite and the description.
+  mkdir -p "${root}/deep-alias"
+  {
+    printf 'name: caller\non: push\n'
+    printf 'x-u: &u %s\nx-d: &d "%s"\nx-l: &l tau-drift\n' "${composite}" "${OVER_CAP}"
+    printf 'x-with: &with\n  label: *l\n  label-description: *d\n'
+    printf 'x-step: &step\n  uses: *u\n  with: *with\nx-steps: &steps\n  - *step\n'
+    printf 'x-job: &job\n  runs-on: ubuntu-latest\n  steps: *steps\njobs:\n  notify: *job\n'
+  } >"${root}/deep-alias/a.yml"
+  run_scenario 'a job, steps, step and inputs aliased deep are read' "${root}/deep-alias" 1 \
+    'label tau-drift description is 101 characters, over the 100-character cap'
+
+  # An aliased value in a position the lint never reads changes nothing.
+  mkdir -p "${root}/unread-alias"
+  write_anchored_caller "${root}/unread-alias/a.yml" "x-e: &e unread" "${composite}
+        name: *e
+        env: {UNREAD: *e}" 'upsilon-drift' "\"${OVER_CAP}\""
+  run_scenario 'an aliased value the lint never reads is ignored' "${root}/unread-alias" 1 \
+    'label upsilon-drift description is 101 characters, over the 100-character cap'
 
   # A scan set holding workflows but no notify caller means the composite
   # moved or was renamed. Scored clean, that is a lint reporting on a
