@@ -136,12 +136,12 @@ expect_unparsable 'concurrency: [\n' 'bad-unparsable.yml: could not evaluate'
 
 # Every read after a workflow's first is held to the run-stopping line,
 # on a workflow that holds the fault the read is for and on one that
-# does not. The group read ends `explode(.)` followed by the fixture's
+# does not. The group read ends `| .group` followed by the fixture's
 # absolute path, which the shape read does not hold.
-expect_failed_read good.yml '.group | explode(.) | kind' 7 'the concurrency group shape'
-expect_failed_read bad-seq-group.yml '.group | explode(.) | kind' 9 'the concurrency group shape'
-expect_failed_read good.yml '.group | explode(.) /' 11 'the concurrency group'
-expect_failed_read bad-empty-group.yml '.group | explode(.) /' 13 'the concurrency group'
+expect_failed_read good.yml '.group | kind' 7 'the concurrency group shape'
+expect_failed_read bad-seq-group.yml '.group | kind' 9 'the concurrency group shape'
+expect_failed_read good.yml '| .group /' 11 'the concurrency group'
+expect_failed_read bad-empty-group.yml '| .group /' 13 'the concurrency group'
 
 # The map and the group are read by kind: a map carrying a tag of its
 # own is still read, a list carrying a string tag is no string, and the

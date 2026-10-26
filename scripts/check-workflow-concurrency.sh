@@ -25,9 +25,9 @@
 # one YAML document and refuses one holding several, so a file that `yq`
 # reads as several is a finding and is read no further.
 #
-# A `concurrency:` or `group:` value written as a YAML alias is read as
-# its anchored value, so it reaches the verdict of the same file written
-# inline.
+# A `concurrency:` or `group:` value, or a `group:` key, written as a
+# YAML alias is read as its anchored text, so it reaches the verdict of
+# the same file written inline.
 #
 # `cancel-in-progress` is not required by this lint; the group alone
 # is the load-bearing setting. Some pipelines (release-on-bump) keep
@@ -65,10 +65,11 @@ readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
 readonly CONC_NODE="${ROOT_KEY_NODE//@KEY@/concurrency}"
 
 # The `group:` of that node, read through an alias. Resolving the node
-# leaves the aliases inside it, so a `group:` written as an alias is
-# still one; `explode` handed only the group resolves it in one pass,
-# since an anchor cannot sit on an alias.
-readonly GROUP_NODE="${CONC_NODE} | .group | explode(.)"
+# leaves the aliases inside it, so a `group:` key or value written as an
+# alias is still one. `explode` handed the map, which is no alias, then
+# resolves each key and value it holds, merge keys included; a value
+# stands for a node that is no alias, since an anchor cannot sit on one.
+readonly GROUP_NODE="${CONC_NODE} | explode(.) | .group"
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2

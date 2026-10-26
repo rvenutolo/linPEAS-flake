@@ -33,7 +33,7 @@ Without a concurrency group, cron pile-ups and back-to-back PR pushes can spawn 
 
 `cancel-in-progress` is not required by this lint; the group alone is the load-bearing setting. Pipelines that must run to completion once started (e.g., `release-on-bump.yml`) deliberately set `cancel-in-progress: false` so back-to-back triggers queue instead of cancelling.
 
-The lint reads `concurrency:` and its `group:` by their YAML kind, reads a root key written as an alias of `concurrency` as that key and a file giving it twice, plain and as an alias, as one that does not parse, and reports a file `yq` reads as several YAML documents (GitHub Actions refuses a workflow file holding several) without reading it further. A `concurrency:` or `group:` value written as an alias (`concurrency: *c`) is read as its anchored value, so it reaches the verdict of the same file written inline. The script header states which shapes are read and which are reported as an unexpected shape.
+The lint reads `concurrency:` and its `group:` by their YAML kind, reads a root key written as an alias of `concurrency` as that key and a file giving it twice, plain and as an alias, as one that does not parse, and reports a file `yq` reads as several YAML documents (GitHub Actions refuses a workflow file holding several) without reading it further. A `concurrency:` or `group:` value, or a `group:` key, written as an alias (`concurrency: *c`) is read as its anchored text, so it reaches the verdict of the same file written inline. The script header states which shapes are read and which are reported as an unexpected shape.
 
 Enforced by `scripts/check-workflow-concurrency.sh`. Wired as the `lint-workflow-security` CI job (member check `workflow-concurrency`) and as a pre-commit hook.
 
