@@ -28,6 +28,9 @@
 # one given twice is a workflow `yq` cannot parse. A merge list inside a
 # job is read first mapping wins, as the YAML merge specification says
 # (`YQ_MERGE_SPEC`).
+# A job, its step list, a step, and a step's `uses:`, `label:` and
+# `label-description:` written as YAML aliases are read as their anchored
+# text.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE (default: .github/workflows) and
 # LINT_ALLOW_EMPTY_SCAN=1 for fixtures.
@@ -90,9 +93,10 @@ function main() {
     fi
     if ! out="$(yq eval "${YQ_MERGE_SPEC[@]}" "
       [ ${JOBS_NODE} | .[].steps[]
-        | select(.uses // \"\" | test(\"${COMPOSITE_SUFFIX}(@|\$)\"))
-        | select(.with.\"label-description\" != null)
-        | (.with.label // \"-\") + \"\t\" + .with.\"label-description\" ]
+        | select(((.uses | explode(.)) // \"\") | test(\"${COMPOSITE_SUFFIX}(@|\$)\"))
+        | (.with.\"label-description\" | explode(.)) as \$d
+        | select(\$d != null)
+        | ((.with.label | explode(.)) // \"-\") + \"\t\" + \$d ]
       | .[]
     " "${wf}" 2>/dev/null)"; then
       printf 'notify-label-descriptions lint: %s could not be parsed\n' "${wf}" >&2
