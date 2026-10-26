@@ -1143,8 +1143,7 @@ Workflow and composite-action YAML is matched on each step's extracted
 `run:` body, never on raw YAML: every `run: |` key line ends in a pipe,
 so a body opening with a quiet `grep` would read as a hit. A step list
 or body written as an alias (`steps: *st`, `run: *body`) is read as its
-anchored text; a step list that still holds an alias after resolving
-is refused with exit 2.
+anchored text.
 
 The scan set is every tracked `*.sh` file, every tracked
 `.github/workflows/*.yml` (or `.yaml`) and every tracked
@@ -1156,9 +1155,8 @@ under that directory instead of listed by `git ls-files`, and paths are
 reported relative to it.
 
 Exits 0 when clean, 1 on any hit, 2 on operational error: a required
-tool is missing, the scan set is empty, a file cannot be read, `yq`
-cannot read a workflow or one of its steps, or a step list still holds
-an alias after resolving.
+tool is missing, the scan set is empty, a file cannot be read, or `yq`
+cannot read a workflow or one of its steps.
 
 ### scripts/check-notify-arms.sh
 
