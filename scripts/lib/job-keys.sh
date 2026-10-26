@@ -29,14 +29,11 @@ readonly YQ_MERGE_SPEC=(--yaml-fix-merge-anchor-to-spec)
 # it is `.<name>`, which is how a key a root merge key brings in is read,
 # since the merged keys are not the root's own; a root that is no map
 # holds none. An absent key reads as null rather than as nothing at all.
-# `ROOT_KEY_RAW_NODE` is the key's value as written, an alias left
-# unresolved, for a script that reports such a value by its kind.
-# `ROOT_KEY_NODE` reads the value through an alias: `explode` handed only
-# that node resolves it in one pass, since an anchor cannot sit on an
-# alias. A script reads one key with `${ROOT_KEY_NODE//@KEY@/<name>}`.
+# The value is read through an alias: `explode` handed only that node
+# resolves it in one pass, since an anchor cannot sit on an alias. A
+# script reads one key with `${ROOT_KEY_NODE//@KEY@/<name>}`.
 # shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
-readonly ROOT_KEY_RAW_NODE='.@KEY@ as $plain | [select(kind == "map") | to_entries[] | select((.key | explode(.)) == "@KEY@") | .value] as $all | with(select($all | length > 1); error("@KEY@: is given more than once")) | ($all + [$plain] | .[0])'
-readonly ROOT_KEY_NODE="${ROOT_KEY_RAW_NODE}"' | [(select(kind == "alias") | explode(.)), select(kind != "alias")] | .[0]'
+readonly ROOT_KEY_NODE='.@KEY@ as $plain | [select(kind == "map") | to_entries[] | select((.key | explode(.)) == "@KEY@") | .value] as $all | with(select($all | length > 1); error("@KEY@: is given more than once")) | ($all + [$plain] | .[0]) | [(select(kind == "alias") | explode(.)), select(kind != "alias")] | .[0]'
 
 # The `jobs:` node.
 readonly JOBS_NODE="${ROOT_KEY_NODE//@KEY@/jobs}"

@@ -680,10 +680,7 @@ then `*k :`) as the key it stands for. Every read of a root `jobs:`,
 theirs from the `ON_NODE` constant each such script defines: the node is the value of the one root key that is
 the name or an alias of it, and a root holding two, one plain and one an
 alias, makes `yq` fail ("jobs: is given more than once"), which each
-script handles as a read that failed. `check-workflow-concurrency.sh`,
-which reports a value written as an alias by its kind, takes its node
-from `ROOT_KEY_RAW_NODE`, which finds the key the same way and leaves its
-value as written.
+script handles as a read that failed.
 
 A lint that reads only the `jobs:` node hands `explode` that node alone
 (`JOBS_NODE` in `scripts/lib/job-keys.sh`): a `jobs:` written as an alias
