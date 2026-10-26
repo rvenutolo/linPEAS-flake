@@ -17,6 +17,12 @@
 # surrounding quotes are stripped before the SHA test. A yq parse failure
 # fails closed — the file's references cannot be verified.
 #
+# A `uses:` value or key written as a YAML alias is read as its anchored
+# text. Each reference is read once, where it is written: a step that
+# brings in an anchored step with a merge key (`<<: *step`) adds no
+# second reading of the anchor's `uses:`, and a `uses:` written at the
+# merge site is read as itself.
+#
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
 # Exits 0 on full coverage, 1 on any drift, 2 when the lint could not run
 # because yq is absent from PATH. Nothing was scanned in that case, so it
@@ -34,6 +40,8 @@ _lib_dir="${BASH_SOURCE[0]%/*}"
 if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 # shellcheck source=scripts/lib/enumerate.sh
 source "${_lib_dir}/lib/enumerate.sh"
+# shellcheck source=scripts/lib/job-keys.sh
+source "${_lib_dir}/lib/job-keys.sh"
 
 readonly DEFAULT_DIRS=(.github/workflows .github/actions)
 readonly OVERRIDE="${WORKFLOWS_DIR_OVERRIDE:-}"
@@ -48,7 +56,10 @@ fi
 # Extract every `uses:` value anywhere in the document, regardless of
 # block/flow style, with surrounding quotes stripped by yq. A map is
 # selected by its kind, so one carrying a tag of its own is still read.
-readonly USES_QUERY='.. | select(kind == "map" and has("uses")) | .uses'
+# Only a map's own entries are read: `..` does not walk into an alias, so
+# a merged-in or aliased step is read once, at its anchor, and a merge
+# site's own `uses:` is read whichever key comes first.
+readonly USES_QUERY='.. | select(kind == "map") | to_entries[] | select((.key | explode(.)) == "uses") | .value | explode(.)'
 
 failed=0
 shopt -s nullglob globstar
@@ -76,7 +87,7 @@ for f in "${selected_files[@]}"; do
   [[ -f ${f} ]] || continue
   uses_output=''
   yq_rc=0
-  uses_output="$(yq "${USES_QUERY}" "${f}" 2>/dev/null)" || yq_rc=$?
+  uses_output="$(yq "${YQ_MERGE_SPEC[@]}" "${USES_QUERY}" "${f}" 2>/dev/null)" || yq_rc=$?
   if ((yq_rc != 0)); then
     printf '%s: yq parse failed; uses: references cannot be verified\n' "${f}" >&2
     failed=$((failed + 1))
