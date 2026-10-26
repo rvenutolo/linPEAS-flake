@@ -853,7 +853,7 @@ without teaching every lock-writing workflow to run it fails the lint
 rather than surfacing later as a PR that cannot merge. A list written as
 an alias is read as its anchored text, so one aliased to an empty string
 or to null declares nothing; a list that still holds an alias after
-resolving is refused with exit 2.
+sixteen resolving passes is refused with exit 2.
 
 A hook's trigger is decided the way pre-commit decides it: a path
 triggers the hook when the hook's `files` pattern matches it and its

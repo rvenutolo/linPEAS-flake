@@ -51,7 +51,8 @@
 # not be read.
 #
 # An env list written as an alias is read as its anchored text; a list
-# that still holds an alias after resolving is refused with exit 2.
+# that still holds an alias after sixteen resolving passes is refused
+# with exit 2.
 #
 # Honors ROOT_OVERRIDE for fixtures (default: the repo root), and
 # LOCK_TRIGGER_EXEMPT_OVERRIDE, a space-separated list of hook names that
@@ -309,17 +310,22 @@ function workflow_facts() {
     ] | map(tostring) | join(",")' -- "$1"
 }
 
+# A workflow-level env list written as an alias is read as its anchored
+# text. One `explode` pass resolves one level of an alias chain; a scalar
+# list always resolves in one, since an anchor cannot sit on an alias,
+# but a value that is itself a collection can nest an alias inside the
+# text an alias stands for. So the value goes through sixteen passes, as
+# `ON_NODE` in scripts/check-workflow-on-branches.sh resolves `on:`.
+# shellcheck disable=SC2016 # yq program literal; its $ names are yq variables
+readonly RESOLVE='(. as $n | [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][] as $i ireduce ($n; explode(.)))'
+
 # Stops the run on a workflow-level env list that still holds an alias
-# after resolving. A list written as an alias is read as its anchored
-# text, in one `explode` pass, which resolves one level of an alias
-# chain. An anchor cannot sit on an alias, so a scalar list always
-# resolves; a value that is itself a collection holding an alias does
-# not, and the run stops on it rather than score the alias marker as a
-# path. Runs in the caller's shell, so its exit ends the run.
+# after the sixteen passes, rather than score the alias marker as a path.
+# Runs in the caller's shell, so its exit ends the run.
 # Args: workflow file, env key, workflow path as reported
 function refuse_unresolved_list() {
   local aliases
-  if ! aliases="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${ENV_NODE} | .${2} | explode(.) | .. | select(kind == \"alias\")] | length" -- "$1")"; then
+  if ! aliases="$(yq eval "${YQ_MERGE_SPEC[@]}" "[${ENV_NODE} | .${2} | ${RESOLVE} | ... | select(kind == \"alias\")] | length" -- "$1")"; then
     printf 'lock-derived-docs: could not parse %s\n' "$3" >&2
     exit 2
   fi
@@ -335,7 +341,7 @@ function refuse_unresolved_list() {
 # `refuse_unresolved_list` passed it, so an empty result here is a parse
 # fault rather than an absent key.
 function workflow_list() {
-  yq eval "${YQ_MERGE_SPEC[@]}" --exit-status "${ENV_NODE} | (.${2} | explode(.)) // \"\"" -- "$1"
+  yq eval "${YQ_MERGE_SPEC[@]}" --exit-status "${ENV_NODE} | (.${2} | ${RESOLVE}) // \"\"" -- "$1"
 }
 
 # The `actions/upload-artifact` steps of the jobs that run the lock
