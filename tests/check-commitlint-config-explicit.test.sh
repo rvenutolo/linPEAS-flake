@@ -189,6 +189,87 @@ expect_built 'a step spelled in mixed case is a commitlint step' \
 ${ONE}"
 expect_built 'a step spelled in upper case with a configFile passes' \
   "${HEAD}"'  upperok:\n    steps:\n      - uses: WAGOID/COMMITLINT-GITHUB-ACTION@x\n        with: {configFile: .commitlintrc.yml}\n' 0 ''
+
+# --- aliases in the two configs, built at run time --------------------
+# commitlint reads an aliased value as its anchored text, so each config
+# below reaches the verdict of the same config written inline. The good
+# fixture's workflow is copied beside a numbered pair of configs, and the
+# whole of stderr is asserted: a merge key must not add a yq warning.
+
+# @description Run the script on the good workflow beside two built
+# configs and compare the exit code and the whole of stderr; `%B` stands
+# for the base config's path and `%M` for the merge config's.
+# @arg $1 scenario name
+# @arg $2 base config text (printf format, no arguments)
+# @arg $3 merge config text (printf format, no arguments)
+# @arg $4 expected exit code
+# @arg $5 expected stderr
+function expect_configs() {
+  local -r name="$1" base_text="$2" merge_text="$3" want_exit="$4" want="$5"
+  local dir got_exit=0 got_stderr expected
+  SCENARIO_N=$((SCENARIO_N + 1))
+  dir="$(mktemp --directory)/cfg-${SCENARIO_N}"
+  mkdir -- "${dir}"
+  cp -- "${FIXTURES}/good/ci.yml" "${dir}/ci.yml"
+  # shellcheck disable=SC2059 # the config text is the format
+  printf "${base_text}" >"${dir}/.commitlintrc.yml"
+  # shellcheck disable=SC2059 # the config text is the format
+  printf "${merge_text}" >"${dir}/.commitlintrc.merge.yml"
+  got_stderr="$(PATHS_OVERRIDE="${dir}/ci.yml" "${SCRIPT}" 2>&1 >/dev/null)" || got_exit=$?
+  expected="${want//%B/${dir}/.commitlintrc.yml}"
+  expected="${expected//%M/${dir}/.commitlintrc.merge.yml}"
+  rm --recursive --force -- "${dir%/*}"
+  if [[ ${got_exit} != "${want_exit}" || ${got_stderr} != "${expected}" ]]; then
+    printf 'FAIL %s: exit %s, want %s\n  got:  %q\n  want: %q\n' \
+      "${name}" "${got_exit}" "${want_exit}" "${got_stderr}" "${expected}" >&2
+    return 1
+  fi
+  printf 'OK   %s\n' "${name}"
+}
+readonly CONV='"@commitlint/config-conventional"'
+readonly ANGULAR='"@commitlint/config-angular"'
+readonly BASE_OK="extends: [${CONV}]\n"
+readonly ZEROED='{body-max-line-length: [0], footer-max-line-length: [0]}'
+readonly MERGE_OK="extends: [${CONV}]\nrules: ${ZEROED}\n"
+readonly EXTENDS_DIFFER="%B and %M declare different ${BT}extends:${BT} lists (@commitlint/config-conventional vs @commitlint/config-angular); the merge config duplicates the base preset list and must track it
+${ONE}"
+readonly EXTRA_RULE='%M: rules must be exactly body-max-line-length=\[0\]\,footer-max-line-length=\[0\]; got body-max-line-length=\[0\]\,footer-max-line-length=\[0\]\,subject-case=\[0\]. The merge ruleset relaxes only the two GitHub-composed line-length rules
+'"${ONE}"
+
+expect_configs 'inline extends lists naming different presets differ' \
+  "${BASE_OK}" "extends: [${ANGULAR}]\nrules: ${ZEROED}\n" 1 "${EXTENDS_DIFFER}"
+expect_configs 'aliased extends lists naming different presets differ' \
+  "x-e: &e [${CONV}]\nextends: *e\n" "x-e: &e [${ANGULAR}]\nextends: *e\nrules: ${ZEROED}\n" 1 "${EXTENDS_DIFFER}"
+expect_configs 'an extends item written as an alias is read as its text' \
+  "x-p: &p ${CONV}\nextends: [*p]\n" "${MERGE_OK}" 0 ''
+expect_configs 'an extends list two aliases deep is read as its text' \
+  "x-p: &p ${CONV}\nx-l: &l [*p]\nextends: *l\n" "${MERGE_OK}" 0 ''
+expect_configs 'an aliased rule value is read as its text' \
+  "${BASE_OK}" "extends: [${CONV}]\nx-z: &z [0]\nrules:\n  body-max-line-length: *z\n  footer-max-line-length: [0]\n" 0 ''
+expect_configs 'rules: written as an alias is read as its map' \
+  "${BASE_OK}" "extends: [${CONV}]\nx-r: &r ${ZEROED}\nrules: *r\n" 0 ''
+expect_configs 'an aliased rules map holding aliased values is read through both' \
+  "${BASE_OK}" "extends: [${CONV}]\nx-z: &z [0]\nx-r: &r {body-max-line-length: *z, footer-max-line-length: *z}\nrules: *r\n" 0 ''
+expect_configs 'an aliased rule value two aliases deep is read as its text' \
+  "${BASE_OK}" "extends: [${CONV}]\nx-0: &zero 0\nx-z: &z [*zero]\nx-r: &r {body-max-line-length: *z, footer-max-line-length: [0]}\nrules: *r\n" 0 ''
+expect_configs 'an aliased rule key is read as its text' \
+  "${BASE_OK}" "extends: [${CONV}]\nx-k: &k body-max-line-length\nx-r: &r {*k : [0], footer-max-line-length: [0]}\nrules: *r\n" 0 ''
+expect_configs 'rules merged in from an alias are read as the merged map' \
+  "${BASE_OK}" "extends: [${CONV}]\nx-r: &r ${ZEROED}\nrules: {<<: *r}\n" 0 ''
+expect_configs 'an inline extra rule is named' \
+  "${BASE_OK}" "extends: [${CONV}]\nrules: {body-max-line-length: [0], footer-max-line-length: [0], subject-case: [0]}\n" 1 "${EXTRA_RULE}"
+expect_configs 'an extra rule merged in from an alias is named' \
+  "${BASE_OK}" "extends: [${CONV}]\nx-r: &r {body-max-line-length: [0], footer-max-line-length: [0], subject-case: [0]}\nrules: {<<: *r}\n" 1 "${EXTRA_RULE}"
+expect_configs 'an alias chain under a key the lint does not read is not refused' \
+  "${BASE_OK}x-0: &zero 0\nx-a: &a [*zero]\nx-b: &b [*a]\nx-c: &c [*b]\nprompt: *c\n" "${MERGE_OK}" 0 ''
+# Each `explode` pass resolves one level of a chain, so a chain deeper
+# than the passes leaves an alias in a value the lint judges.
+expect_configs 'a rule value still holding an alias after resolving is refused' \
+  "${BASE_OK}" "extends: [${CONV}]\nx-0: &zero 0\nx-z: &z [*zero]\nx-w: &w [*z]\nx-r: &r {body-max-line-length: *w, footer-max-line-length: [0]}\nrules: *r\n" 2 \
+  '%M: rules.body-max-line-length still holds a YAML alias after resolving; cannot read it'
+expect_configs 'an extends list still holding an alias after resolving is refused' \
+  "x-p: &p ${CONV}\nx-m: &m [*p]\nx-l: &l [*m]\nextends: *l\n" "${MERGE_OK}" 2 \
+  '%B: extends still holds a YAML alias after resolving; cannot read it'
 # A commitlint config that does not parse is a file this lint could not
 # read: yq exits 1 on it, and reporting that as the rule-set drift
 # verdict would name rules nothing was ever read. The config is written
