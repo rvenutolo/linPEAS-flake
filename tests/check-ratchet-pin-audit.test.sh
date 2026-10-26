@@ -618,16 +618,44 @@ expect_shape 'a check permission nested five aliases deep is named by its text' 
 # text to judge, so the run stops on it; the same nest anywhere the lint
 # never reads leaves the verdict alone. Each anchor holds a list holding
 # an alias of the one before.
-perm_deep='x-a0: &a0 [read]\n'
+list_deep='x-a0: &a0 [read]\n'
 for i in $(seq 1 17); do
-  perm_deep+="x-a${i}: &a${i} [*a$((i - 1))]\\n"
+  list_deep+="x-a${i}: &a${i} [*a$((i - 1))]\\n"
 done
-readonly perm_deep
+readonly list_deep
 expect_shape 'a check permission nested deeper than sixteen aliases stops the run' \
   "${CHECK_PERMS}" '    permissions:\n      contents: *a17\n' '' 2 \
   "Error: jobs.check.permissions holds an alias nested too deep to resolve
-cannot read the permissions of job check from %W" "${perm_deep}"
+cannot read the permissions of job check from %W" "${list_deep}"
 expect_shape 'an alias nested deeper than sixteen in a value the lint never reads is not read' \
-  $'          label: ratchet-drift\n' '          label: *a17\n' '' 0 '' "${perm_deep}"
+  $'          label: ratchet-drift\n' '          label: *a17\n' '' 0 '' "${list_deep}"
+
+# A first step's uses: and a concurrency group that are lists holding
+# aliases are named by their text, as the same nest written inline is,
+# and one still holding an alias after sixteen passes stops the run. A
+# uses: that is a list then stops the checkout read, inline or aliased.
+readonly LIST_NEST='x-a0: &a0 [p]\nx-a1: &a1 [*a0]\nx-a2: &a2 [*a1]\nx-a3: &a3 [*a2]\n'
+readonly NESTED_FIRST="job check: first step must be step-security/harden-runner (got: [[[[p]]]])
+Error: cannot match with !!seq, can only match strings. Hint: Most often you'll want to use '|=' over '=' for this operation
+cannot read the checkout steps from %W"
+readonly NESTED_GROUP="concurrency.group must be \"ratchet-pin-audit\" (got: \"[[[[p]]]]\")
+${ONE_FAILED}"
+expect_shape 'a first step nested four lists deep is named and stops the checkout read' \
+  "${CHECK_STEPS}" "      - uses: [[[[p]]]]\\n${CHECK_CHECKOUT}${CHECK_NIX}" '' 2 "${NESTED_FIRST}"
+expect_shape 'a first step nested four aliases deep is named by its text and stops the checkout read' \
+  "${CHECK_STEPS}" "      - uses: *a3\\n${CHECK_CHECKOUT}${CHECK_NIX}" '' 2 "${NESTED_FIRST}" \
+  "${LIST_NEST}"
+expect_shape 'a first step nested deeper than sixteen aliases stops the run' \
+  "${CHECK_STEPS}" "      - uses: *a17\\n${CHECK_CHECKOUT}${CHECK_NIX}" '' 2 \
+  "Error: jobs.check.steps[0].uses holds an alias nested too deep to resolve
+cannot read the first step of job check from %W" "${list_deep}"
+expect_shape 'a concurrency group nested four lists deep is named' \
+  "${CONC_GROUP}" '  group: [[[[p]]]]\n' '' 1 "${NESTED_GROUP}"
+expect_shape 'a concurrency group nested four aliases deep is named by its text' \
+  "${CONC_GROUP}" '  group: *a3\n' '' 1 "${NESTED_GROUP}" "${LIST_NEST}"
+expect_shape 'a concurrency group nested deeper than sixteen aliases stops the run' \
+  "${CONC_GROUP}" '  group: *a17\n' '' 2 \
+  "Error: concurrency.group holds an alias nested too deep to resolve
+cannot read the concurrency group from %W" "${list_deep}"
 
 printf 'all tests passed\n'
