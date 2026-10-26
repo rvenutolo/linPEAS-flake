@@ -60,7 +60,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -314,7 +316,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           # Anonymous registry reads only: no cosign (no sigstore
           # hosts), no Nix, no docker login. buildx imagetools inspect
           # reads a public manifest via the registry + its CDN/auth.
@@ -448,7 +452,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -780,7 +786,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -1064,7 +1072,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -1246,7 +1256,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -1564,7 +1576,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           # No timestamp.sigstore.dev: this job only verifies (cosign
           # verify / verify-blob), and the TSA is signing-only.
           allowed-endpoints: >
@@ -1788,7 +1802,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >
             api.github.com:443
             github.com:443

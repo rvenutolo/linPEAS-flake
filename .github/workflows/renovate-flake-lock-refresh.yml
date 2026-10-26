@@ -141,7 +141,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >
             api.github.com:443
             github.com:443
@@ -315,7 +317,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -338,9 +342,10 @@ jobs:
       # parses it. What a modified composite can reach here is bounded: the job
       # holds `permissions: contents: read` and passes only that GITHUB_TOKEN,
       # carries no App key, checks out with `persist-credentials: false`, and
-      # runs under a harden-runner `egress-policy: block` allowlist. A
-      # SHA-pinned self-reference, as pages.yml uses for its notify step,
-      # closes the gap without waiting on actionlint.
+      # runs under a harden-runner egress allowlist, which bounds egress while
+      # the step is in block mode but only records it while the temporary
+      # audit mode is in force. A SHA-pinned self-reference, as pages.yml uses
+      # for its notify step, closes the gap without waiting on actionlint.
       - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -466,7 +471,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -844,7 +851,9 @@ jobs:
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
-          egress-policy: block
+          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
+          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
+          egress-policy: audit
           allowed-endpoints: >
             api.github.com:443
             github.com:443

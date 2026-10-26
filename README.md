@@ -247,9 +247,12 @@ required check; alphabetical):
     advisory only; prevention path is `update-flake-lock`).
 - `release-tag-protection` ruleset blocks delete / non-FF / update on
     release tags.
-- `step-security/harden-runner` runs as the first step in every job
-    in `egress-policy: block` mode, each with a per-job
-    `allowed-endpoints:` allowlist.
+- `step-security/harden-runner` runs as the first step in every job,
+    each with a per-job `allowed-endpoints:` allowlist. Block mode is the
+    policy; every step runs in audit mode for now, because block mode
+    drops allowed hosts on `westus2` runners
+    (upstream harden-runner bug: [step-security/harden-runner#708](https://github.com/step-security/harden-runner/issues/708)).
+    See [`SECURITY.md`](SECURITY.md#runner-egress-control-harden-runner-block-mode).
 
 ### Release attestation verification
 

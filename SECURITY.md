@@ -254,7 +254,7 @@ provenance only.
 ## Runner egress control (harden-runner, block mode)
 
 `step-security/harden-runner` runs as the first step of every job in
-every workflow, with `egress-policy: block`. Each job declares an
+every workflow, with `egress-policy: block` as the policy. Each job declares an
 `allowed-endpoints:` allowlist scoped to the minimum outbound hosts it
 needs: a two-host floor (`api.github.com`, `github.com`),
 `objects.githubusercontent.com` on all but a couple of jobs whose
@@ -284,6 +284,26 @@ When a job legitimately needs a new endpoint, add it to that job's
 `scripts/check-harden-runner-block.sh` (pre-commit and the
 `lint-workflow-security` CI job) fails any harden-runner step that is
 not `egress-policy: block` with a non-empty allowlist.
+
+### Temporary audit mode
+
+Every harden-runner step currently runs `egress-policy: audit`, because
+block mode drops connections to allowed hosts on GitHub-hosted runners
+in the `westus2` region and hangs the job (upstream harden-runner bug:
+[step-security/harden-runner#708](https://github.com/step-security/harden-runner/issues/708)). Audit mode records every outbound connection but enforces
+nothing: while it is in force, a compromised step can reach any host,
+including to exfiltrate a credential. `disable-sudo` and the file
+tampering monitor still apply.
+
+Each audit step carries a `# TODO: restore egress-policy block` comment
+directly above its `egress-policy` key that links the upstream issue,
+and keeps its `allowed-endpoints:` list so restoring block is a one-word
+change. `scripts/check-harden-runner-block.sh` accepts audit only under
+that comment and still requires a non-empty allowlist, so an unmarked
+audit step or an emptied allowlist fails as before. The change carries a
+[security-review entry](CONTRIBUTING.md#security-review-entries).
+Restoring block means switching every marked step back, deleting the
+comments, and removing the audit exception from the script.
 
 ## Settings posture
 
