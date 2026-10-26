@@ -1,0 +1,15 @@
+name: bad-aliased-uses-denylisted-host
+on:
+  workflow_dispatch: {}
+x-harden-runner: &harden-runner step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: *harden-runner
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            cafe.github.com:443
+            github.com:443
