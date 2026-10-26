@@ -182,4 +182,17 @@ expect_exact 'a non-ASCII letter that folds to an ASCII one is no harden-runner 
   "DIR/built.yml: job a first step is $(printf '%q' $'\xc5\xbf'"tep-security/harden-runner@${HR_SHA40}"), want step-security/harden-runner@<sha>
 1 job(s) missing harden-runner as first step"
 
+# A first step `uses:` written as an alias is read as its anchored text,
+# so each verdict matches the inline spelling.
+expect_exact 'an aliased pinned harden-runner first step passes (harden-runner first) as aliased-uses' \
+  "x: &u ${HR_PINNED}\njobs:\n  a:\n    steps:\n      - uses: *u\n" 0 ''
+expect_exact 'an aliased non-harden-runner first step is named by its text (harden-runner first) as aliased-uses' \
+  "x: &u actions/checkout@${HR_SHA40}\njobs:\n  a:\n    steps:\n      - uses: *u\n" 1 \
+  "DIR/built.yml: job a first step is actions/checkout@${HR_SHA40}, want step-security/harden-runner@<sha>
+1 job(s) missing harden-runner as first step"
+expect_exact 'an inline non-harden-runner first step is named by its text (harden-runner first) as inline-uses' \
+  "jobs:\n  a:\n    steps:\n      - uses: actions/checkout@${HR_SHA40}\n" 1 \
+  "DIR/built.yml: job a first step is actions/checkout@${HR_SHA40}, want step-security/harden-runner@<sha>
+1 job(s) missing harden-runner as first step"
+
 printf 'all tests passed\n'
