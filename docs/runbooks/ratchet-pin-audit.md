@@ -212,9 +212,9 @@ a `[!WARNING]` banner at the top of the issue body when the cancelled
 run is the one that opened the issue, and in its comment when it
 re-commented an already-open one. Look for that flag first: a
 cancelled run says nothing about pin drift, so re-run it. A scheduled
-run cancelled by its timeout files only once the CI watchdog's re-runs
-of it are spent, so find out why it keeps timing out before re-running
-it again. For a failed
+run cancelled by its timeout is held off for the CI watchdog's re-runs
+first, so by the time it files those re-runs may be spent: find out why
+it keeps timing out before re-running it again. For a failed
 earlier step, read its log and re-run once it is fixed; it says nothing
 about pin drift either. For an unhandled error, inspect the run log
 directly, add classification for the new failure mode, and update both

@@ -732,7 +732,7 @@ moment it goes red, and the PR it was meant to repair sits with a
 failing `flake-check` instead. A combination the job graph cannot
 produce classifies as `failure` too: an issue naming a drifted workflow
 beats the silence. `tests/classify-refresh-notify-result.test.sh` holds
-the matrix: a failed `identify` reports, a `ci` completion that is not a
+the matrix, including these cases: a failed `identify` reports, a `ci` completion that is not a
 Renovate PR needing a refresh stays silent, and a runner-label refresh
 that finds no diff closes rather than files.
 

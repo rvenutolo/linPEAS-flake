@@ -27,7 +27,8 @@ flowchart TD
 
 A failure anywhere in that chain files a deduped issue labelled
 `update-linpeas-failure`, titled `update-linpeas: cron failed`, through
-the `notify-workflow-result` composite. A no-op day — upstream tag equal
+the `notify-workflow-result` composite, after its transient hold-off
+(see [Cancelled-job attribution](ci.md#cancelled-job-attribution)). A no-op day — upstream tag equal
 to the current pin — collapses to success and files nothing, because
 `push-and-merge` skipping is not a failure.
 

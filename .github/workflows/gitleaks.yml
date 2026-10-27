@@ -78,8 +78,9 @@ jobs:
           body: |
             The `gitleaks` workflow did not pass on a
             `${{ github.event_name }}` run: gitleaks reported a secret in
-            the repository history, or a step (the scan itself included)
-            failed or was cancelled. The job log says which.
+            the repository history, a step (the scan itself included)
+            failed, or the job was cancelled. The run page and job log say
+            which.
 
             Run:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

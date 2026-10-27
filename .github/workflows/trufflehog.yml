@@ -79,9 +79,9 @@ jobs:
             The `trufflehog` workflow did not pass on a
             `${{ github.event_name }}` run: trufflehog reported a verified
             secret (one it confirmed live against its provider) in the
-            repository history, or a step (the trufflehog image pull and
-            the scan itself included) failed or was cancelled. The job log
-            says which.
+            repository history, a step (the trufflehog image pull and the
+            scan itself included) failed, or the job was cancelled. The run
+            page and job log say which.
 
             Run:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

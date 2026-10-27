@@ -258,8 +258,12 @@ the `attribute failure reason` step. Reasons:
     token to watch for after adding a verification step without wiring
     its `id:` into the ladder.
 - `cancelled` — the `verify` job was cancelled after it started and no
-    step had failed: the attribution step runs under `always()` and reads
-    the job's `cancelled` status. Not a verification result; re-run.
+    step the ladder checks had failed: the attribution step runs under
+    `always()` and reads the job's `cancelled` status. Cancelling the
+    whole run cancels the `notify` job too, so this token reaches an issue
+    only through a cancel of the job alone, such as its `timeout-minutes`,
+    and only if GitHub runs `always()` steps after that cancel, which this
+    repo has not yet observed. Not a verification result; re-run.
 - `unknown` — the `verify` job produced no `reason` output at all: it
     never got a runner, or the runner was lost. Not a verification
     result; re-run.

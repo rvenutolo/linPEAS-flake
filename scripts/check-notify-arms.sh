@@ -164,7 +164,7 @@ readonly -a SCANNER_WORKFLOWS=(
 # opens its success branch: the input wiring and every line that decides
 # whether a result files, closes or does nothing. Update it only after
 # checking that the arm model below still describes the composite.
-readonly COMPOSITE_SHA256='8b745b7fb37fd912f7819c1cdb30896ca09723c5b09b164f0284937e82d1dd4f'
+readonly COMPOSITE_SHA256='760327a5a850e0d321d792b1d7fef62429e87bb65a18b1a40aae923152bb88b5'
 
 function die2() {
   printf 'notify-arms: %s\n' "$1" >&2

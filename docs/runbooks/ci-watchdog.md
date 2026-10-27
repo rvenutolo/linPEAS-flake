@@ -41,9 +41,8 @@ A `skipped` run never replaces anything: `renovate-flake-lock-refresh`, for
 one, concludes `skipped` on nearly every `ci` completion, and counting that
 as a newer run would hide the failure before it. A candidate that concluded
 `failure`, `cancelled` or `timed_out` is classified with
-`--policy automated`, which retries only when the classifier calls every
-counted job transient (the header of `scripts/classify-ci-run.sh` says
-which failures those are), so a real regression is reported on its first
+`--policy automated`, which retries only when `scripts/classify-ci-run.sh`
+classifies every counted job transient, so a real regression is reported on its first
 attempt instead of being retried. The verdicts are `retry`, `exhausted`,
 `report` (a real failure, or a run the policy does not retry: nothing to
 do here, the workflow's own notify job files it) and `ignore`.
@@ -54,7 +53,7 @@ sweep is skipped, so one sweep never acts on a run twice.
 The `notify-workflow-result` composite holds an issue off on exactly the
 `--policy automated` verdict `retry`, so a failure it holds off on is one
 this loop re-runs, unless a newer `push` or `schedule` run of the same
-workflow replaces it or its latest attempt finished outside the 24-hour
+workflow and event replaces it or its latest attempt finished outside the 24-hour
 lookback (see the hold-off paragraphs under
 [Cancelled-job attribution](../architecture/ci.md#cancelled-job-attribution)).
 

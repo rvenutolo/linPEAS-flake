@@ -130,7 +130,7 @@ Every job's first step is `step-security/harden-runner` with a per-job `allowed-
 
 ## Pages workflow
 
-The Pages workflow (`pages.yml`) is **not** in the required set. Its `build` job runs on every PR for visibility; on non-PR events a `build` or `deploy` failure auto-files a deduped issue tagged `pages-build-failure`. The `notify` job is skipped on `pull_request`, so a failure on a contributor branch files nothing. Coupling the Pages build to merge-gating would invert the priority — the supply-chain pipeline is higher priority than the documentation site.
+The Pages workflow (`pages.yml`) is **not** in the required set. Its `build` job runs on every PR for visibility; on non-PR events a `build` or `deploy` failure auto-files a deduped issue tagged `pages-build-failure`, after the transient hold-off described under [Cancelled-job attribution](#cancelled-job-attribution). The `notify` job is skipped on `pull_request`, so a failure on a contributor branch files nothing. Coupling the Pages build to merge-gating would invert the priority — the supply-chain pipeline is higher priority than the documentation site.
 
 ```mermaid
 flowchart TD
@@ -256,7 +256,7 @@ rather than reading one job's absence from it as expiry.
 
 The composite holds off on a transient cancel or failure, which the CI
 watchdog re-runs unless a newer `push` or `schedule` run of the same
-workflow replaces it or its latest attempt finished outside the
+workflow and event replaces it or its latest attempt finished outside the
 watchdog's 24-hour lookback. When its `result` is `failure` or
 `cancelled`, it fetches its own run with `scripts/fetch-ci-run.sh` and
 classifies it with `scripts/classify-ci-run.sh --policy automated`, the
@@ -271,8 +271,7 @@ attempt cap is not spent, so the composite prints a notice naming the
 attempt and the classified jobs and files nothing; the re-run reaches the
 composite again and files if it fails again. Any other verdict files as
 before, so a run that exhausts its attempts, or that has a failed step of
-its own work, still gets its issue, and a cancelled run is filed later
-rather than never. A fetch or classifier error also files, with a
+its own work, still gets its issue. A fetch or classifier error also files, with a
 workflow warning: a broken classifier must never silence an issue. The
 fetch needs `actions: read` and `checks: read` on every job that calls the
 composite, by its local path or its pinned self-reference

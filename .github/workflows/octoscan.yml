@@ -153,7 +153,8 @@ jobs:
             the `octoscan` tool group and apply the suggested fix to
             the offending workflow file. If the finding is a known
             false positive, add a targeted pattern to `IGNORE_PATTERN`
-            (or the rule to `DISABLE_RULES`) in scripts/octoscan-scan.sh
+            (the rule to `DISABLE_RULES`, or a runner label to
+            `RUNNER_LABEL_SUPPRESSIONS`) in scripts/octoscan-scan.sh
             and document it in that script's Suppressions header.
           github-token: ${{ secrets.GITHUB_TOKEN }}
 

@@ -2317,8 +2317,8 @@ is not `BEHIND` (auto-merge never updates the branch, so the PR waits
 forever) or `DIRTY` (a conflict); and at least one check run on the
 head concluded `FAILURE`, `CANCELLED` or `TIMED_OUT`. The watchdog
 re-runs failures and timeout cancels, not a superseded or manual
-cancel, and a check run carries no annotation to tell those cancels
-apart, so every `CANCELLED` counts here: a PR whose only red check is a
+cancel, and the `statusCheckRollup` this script reads carries no
+annotation to tell those cancels apart, so every `CANCELLED` counts here: a PR whose only red check is a
 superseded or manual cancel is handed off and gets no watchdog action.
 A PR whose checks are all still pending or green past
 the deadline has nothing for the watchdog to re-run, and a required

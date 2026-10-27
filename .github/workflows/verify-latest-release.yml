@@ -630,8 +630,8 @@ jobs:
               the second case is a bug to file against this workflow's
               `attribute failure reason` step.
             - `cancelled` — the `verify` job was cancelled after it
-              started and no step had failed. Not a verification
-              result; re-run.
+              started, such as by its timeout, and no step the ladder
+              checks had failed. Not a verification result; re-run.
             - `unknown` — the `verify` job emitted no reason at all: it
               never got a runner, or the runner was lost. Re-run.
 

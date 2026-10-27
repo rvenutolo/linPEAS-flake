@@ -85,10 +85,11 @@ jobs:
           title: "links: broken Markdown link(s), or the link check could not run"
           label-description: weekly lychee link check found broken links, or the check could not run
           body: |
-            The weekly `links` workflow failed: either `lychee` found one
-            or more broken links in the tracked Markdown, or a step before
-            the check (harden-runner, checkout) failed. The job log says
-            which: lychee lists each failing URL with the file it is in.
+            The weekly `links` workflow did not pass: `lychee` found one
+            or more broken links in the tracked Markdown, a step (the
+            check itself included) failed, or the job was cancelled. The
+            run page and job log say which: lychee lists each failing URL
+            with the file it is in.
 
             Run:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
