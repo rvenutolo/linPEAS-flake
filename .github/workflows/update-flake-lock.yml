@@ -481,7 +481,7 @@ jobs:
           label: update-flake-lock-failure
           title: "update-flake-lock: weekly bump failed"
           body: |
-            The weekly `update-flake-lock` cron failed.
+            The `update-flake-lock` run failed.
 
             - Trigger: `${{ github.event_name }}`
             - compute-lock conclusion: `${{ needs.compute-lock.result }}`

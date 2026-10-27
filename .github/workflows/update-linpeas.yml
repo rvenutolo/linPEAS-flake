@@ -437,7 +437,7 @@ jobs:
           label: update-linpeas-failure
           title: "update-linpeas: cron failed"
           body: |
-            The daily `update-linpeas` cron failed before opening / merging a pin-bump PR.
+            The `update-linpeas` run failed before opening / merging a pin-bump PR.
 
             - Trigger: `${{ github.event_name }}`
             - compute-pin conclusion: `${{ needs.compute-pin.result }}`

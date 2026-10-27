@@ -76,11 +76,12 @@ jobs:
           title: "trufflehog: verified secret detected, or the scan could not run"
           label-description: trufflehog found a verified secret outside a pull request, or the scan could not run
           body: |
-            The `trufflehog` workflow failed on a `${{ github.event_name }}`
-            run: either trufflehog reported a verified secret (one it
-            confirmed live against its provider) in the repository
-            history, or a step before the scan (harden-runner, checkout,
-            the trufflehog image pull) failed. The job log says which.
+            The `trufflehog` workflow did not pass on a
+            `${{ github.event_name }}` run: trufflehog reported a verified
+            secret (one it confirmed live against its provider) in the
+            repository history, or a step (the trufflehog image pull and
+            the scan itself included) failed or was cancelled. The job log
+            says which.
 
             Run:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

@@ -219,8 +219,10 @@ jobs:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
             To resolve: read the failing step's log, then dispatch the
-            daily sweep again (`gh workflow run actions-cache-prune.yml`),
-            which also evicts what a failed PR-close prune left. See
+            daily sweep again (`gh workflow run actions-cache-prune.yml`).
+            A sweep's orphan-ref pass picks up a failed PR-close prune:
+            it evicts the merge ref's cache, and the head ref's once the
+            branch is deleted. See
             docs/development/cache-cleanup.md. This issue auto-closes on
             the next clean run.
           github-token: ${{ secrets.GITHUB_TOKEN }}
