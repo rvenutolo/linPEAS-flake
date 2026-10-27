@@ -6,7 +6,7 @@ default:
 build:
   nix build .#linpeas
 
-# Run all flake checks
+# Run the host system's flake checks
 check:
   nix flake check
 

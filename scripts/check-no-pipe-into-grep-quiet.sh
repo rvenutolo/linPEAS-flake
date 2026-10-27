@@ -18,7 +18,7 @@
 # pipeline, which a parser reads as a plain word. It counts anywhere on a
 # line that is not a comment, quoted text and heredoc bodies included;
 # a comment-only line and a trailing comment (a `#` at line start or
-# after white space, outside quotes, through the end of the line, heredoc
+# after unescaped white space, outside quotes, through the end of the line, heredoc
 # bodies included) are exempt. `||` is not a pipe and `|&` is. A
 # pipe that ends one line, with or without a trailing backslash, joins
 # the next non-blank, non-comment line, and a hit there is reported at
@@ -96,8 +96,8 @@ readonly HIT_DIAG='pipe into quiet grep (grep can exit before its producer finis
 # word, so a quiet flag closing a quoted `eval` string still counts.
 # shellcheck disable=SC2016 # awk program: its $0 is awk's, not the shell's
 readonly HIT_PROGRAM='
-  # Cuts a trailing comment: a `#` at line start or after white space,
-  # outside quotes.
+  # Cuts a trailing comment: a `#` at line start or after unescaped white
+  # space, outside quotes.
   # Quotes and backslash escapes are tracked on this line alone, so a
   # quoted string spanning lines leaves its later lines read as code.
   function code_part(s,   i, c, sq, dq, prev) {
