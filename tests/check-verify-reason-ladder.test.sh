@@ -21,6 +21,30 @@ readonly FIXTURES="${REPO_ROOT}/tests/fixtures/verify-reason-ladder"
 
 failures=0
 
+# The notify job every generated workflow ends with: the lint reads the
+# reason list in its body, so a workflow without one cannot be checked.
+# It lists every token the generated ladders emit, so only the doc side
+# of the parity assertion can fail in those scenarios.
+# shellcheck disable=SC2016 # the text is workflow YAML, not shell to expand
+readonly NOTIFY_JOB='  notify:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          body: |
+            - `alpha-failed` — step alpha failed.
+            - `bravo-failed` — step bravo failed.
+            - `charlie-failed` — step charlie failed.
+            - `unknown` — attribution matched no known failed step.'
+
+# @description Append the standard notify job to a generated workflow
+# whose last top-level block is `jobs:`.
+# @arg $1 workflow file
+function append_notify() {
+  printf '%s\n' "${NOTIFY_JOB}" >>"$1"
+}
+
 # @description Run the script against one scenario; assert exit code and stderr.
 # @arg $1 scenario directory name under FIXTURES/
 # @arg $2 workflow file basename within that directory
@@ -205,6 +229,7 @@ jobs:
   verify:
     <<: ${order}
 EOF
+  append_notify "${dir}/workflow.yml"
   local got_exit=0
   VERIFY_WORKFLOW_OVERRIDE="${dir}/workflow.yml" \
     VERIFICATION_DOC_OVERRIDE="${FIXTURES}/good/verification.md" \
@@ -281,6 +306,7 @@ EOF
       printf '        env:\n          STEP_ALPHA: ${{ steps.step-alpha.outcome }}\n          STEP_BRAVO: ${{ steps.step-bravo.outcome }}\n'
     fi
   } >"${dir}/workflow.yml"
+  append_notify "${dir}/workflow.yml"
   local got_exit=0
   VERIFY_WORKFLOW_OVERRIDE="${dir}/workflow.yml" \
     VERIFICATION_DOC_OVERRIDE="${FIXTURES}/good/verification.md" \
@@ -315,9 +341,11 @@ function expect_twin() {
   local dir variant got_exit captures=()
   dir="$(mktemp --directory)"
   printf '%s\n' "$5" >"${dir}/aliased.yml"
+  append_notify "${dir}/aliased.yml"
   local variants=(aliased)
   if [[ -n $6 ]]; then
     printf '%s\n' "$6" >"${dir}/inline.yml"
+    append_notify "${dir}/inline.yml"
     variants+=(inline)
   fi
   for variant in "${variants[@]}"; do
@@ -727,7 +755,23 @@ function main() {
     'is never read by the reason ladder'
 
   expect 'bad-undocumented-reason' 'workflow.yml' 1 \
-    'is not documented in'
+    "reason token charlie-failed has no reason entry in ${FIXTURES}/bad-undocumented-reason/verification.md"
+
+  # A token named in prose, in another entry's text, or after a wrapped
+  # ` /` that the next line does not continue with a code span is not a
+  # reason entry, so it documents nothing.
+  expect 'bad-prose-only-doc' 'workflow.yml' 1 \
+    "reason token charlie-failed has no reason entry in ${FIXTURES}/bad-prose-only-doc/verification.md"
+
+  # The notify body is the second reason list a reader triages from.
+  expect 'bad-undocumented-body' 'workflow.yml' 1 \
+    'reason token charlie-failed has no reason entry in the notify body'
+
+  # A ` / `-separated run of tokens, wrapped across lines and opened by
+  # any list marker, documents each token, and a body written as an
+  # alias is read as its anchored text.
+  expect 'grouped-aliased-entries' 'workflow.yml' 0 ''
+  harness_assert_also '5 id-carrying steps, 4 env entries, 4 reason tokens)'
 
   expect 'bad-ladder-order' 'workflow.yml' 1 \
     'ladder tests STEP_CHARLIE before STEP_BRAVO, but the steps run in the opposite order'
@@ -769,6 +813,9 @@ function main() {
   expect_rewritten 'a jobs: key written as an alias is read' \
     's/^name: fixture-verify$/name: \&k jobs/; s/^jobs:$/*k :/; /^ *STEP_CHARLIE:/d' 1 \
     'DIR/workflow.yml: step id step-charlie has no steps.<id>.outcome entry in the attribution env'
+  expect_rewritten 'a workflow with no notify body cannot be checked' \
+    's/^  notify:$/  other:/' 2 \
+    'DIR/workflow.yml: job notify has no notify-workflow-result step with a body'
   expect_rewritten 'a jobs: key given twice is unreadable' \
     's/^name: fixture-verify$/name: \&k jobs\njobs: {}/; s/^jobs:$/*k :/' 2 \
     $'Error: jobs: is given more than once\nDIR/workflow.yml: could not evaluate workflow with yq (malformed?)'

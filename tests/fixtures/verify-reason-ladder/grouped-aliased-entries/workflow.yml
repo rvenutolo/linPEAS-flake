@@ -1,0 +1,62 @@
+name: fixture-verify
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+x-body: &body |
+  - `alpha-failed` /
+    `bravo-failed` / `charlie-failed` — a step of the first three failed.
+  + `delta-failed` — step delta failed.
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      reason: ${{ steps.attribute.outputs.reason }}
+    steps:
+      - name: step alpha
+        id: step-alpha
+        run: echo PAYLOAD_RAN
+      - name: step bravo
+        id: step-bravo
+        run: echo PAYLOAD_RAN
+      - name: step charlie
+        id: step-charlie
+        run: echo PAYLOAD_RAN
+      - name: step delta
+        id: step-delta
+        run: echo PAYLOAD_RAN
+      - name: attribute failure reason
+        id: attribute
+        if: always()
+        env:
+          STEP_ALPHA: ${{ steps.step-alpha.outcome }}
+          STEP_BRAVO: ${{ steps.step-bravo.outcome }}
+          STEP_CHARLIE: ${{ steps.step-charlie.outcome }}
+          STEP_DELTA: ${{ steps.step-delta.outcome }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          reason='ok'
+          if [[ ${STEP_ALPHA} == 'failure' ]]; then
+            reason='alpha-failed'
+          elif [[ ${STEP_BRAVO} == 'failure' ]]; then
+            reason='bravo-failed'
+          elif [[ ${STEP_CHARLIE} == 'failure' ]]; then
+            reason='charlie-failed'
+          elif [[ ${STEP_DELTA} == 'failure' ]]; then
+            reason='delta-failed'
+          fi
+          printf 'reason=%s\n' "${reason}" >> "${GITHUB_OUTPUT}"
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          body: *body

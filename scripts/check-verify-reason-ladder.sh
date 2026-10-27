@@ -4,7 +4,8 @@
 # @description Lint: the `attribute failure reason` step of
 # `verify-latest-release.yml` covers every id-carrying step of the
 # `verify` job, reads every env var it declares, documents every reason
-# token it emits, and walks the ladder in step-execution order.
+# token it emits in the verification doc and the notify body, and walks
+# the ladder in step-execution order.
 
 # The notify job turns the `reason` token into triage wording. A
 # verification step whose `id:` never reaches the attribution ladder
@@ -15,7 +16,7 @@
 # terminal branch produces is worse — a genuine tamper signal reported
 # under the same token as a clean run. The reason list in the
 # verification doc is a third copy of the same mapping and drifts the
-# same way.
+# same way, and so is the reason list in the notify job's issue body.
 #
 # Four assertions:
 #
@@ -27,8 +28,11 @@
 #      named somewhere in that step's `run:` body. An env entry no
 #      branch reads is a step whose failure the ladder cannot attribute.
 #   3. Docs parity — every `reason='<token>'` the ladder assigns, other
-#      than the initial `reason='ok'`, appears literally in the
-#      verification doc.
+#      than the initial `reason='ok'`, has a reason entry in the
+#      verification doc and in the body of the `notify` job's
+#      notify-workflow-result step: a list item opening with the token as
+#      a code span, alone or in a ` / `-separated run that may wrap onto
+#      the next line. A token named anywhere else documents nothing.
 #   4. Order — the order in which env var names are first tested in the
 #      ladder matches the execution order of the steps they map to. The
 #      ladder's contract is "the first failed step wins", which holds
@@ -80,7 +84,8 @@
 #   1  drift detected, including a reason-ladder-exempt marker that
 #      excuses nothing (details printed to stderr)
 #   2  missing yq / missing input file / unparsable workflow / a step
-#      id or attribution run: nested in aliases past sixteen passes
+#      id or attribution run: nested in aliases past sixteen passes /
+#      no notify-workflow-result step with a body in job `notify`
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -195,6 +200,18 @@ fi
 if [[ -z ${ladder_body} || ${ladder_body} == 'null' ]]; then
   printf '%s: could not evaluate a run body on the %q step\n' \
     "${WORKFLOW}" "${ATTRIBUTE_ID}" >&2
+  exit 2
+fi
+
+# The notify job's issue body carries the second reason list a reader
+# triages from. A body written as an alias is read as its anchored text.
+readonly NOTIFY_STEP="${JOBS_NODE} | .notify.steps[] | ${RESOLVE} | select(.uses | tag == \"!!str\") | select(.uses | test(\"notify-workflow-result\"))"
+if ! notify_body="$(yq eval "${YQ_MERGE_SPEC[@]}" "${NOTIFY_STEP} | .with.body" "${WORKFLOW}")"; then
+  printf '%s: could not evaluate the notify body with yq\n' "${WORKFLOW}" >&2
+  exit 2
+fi
+if [[ -z ${notify_body} || ${notify_body} == 'null' ]]; then
+  printf '%s: job notify has no notify-workflow-result step with a body\n' "${WORKFLOW}" >&2
   exit 2
 fi
 
@@ -383,10 +400,59 @@ if ((${#reason_tokens[@]} > 0)) && [[ ${reason_tokens[0]} == 'ok' ]]; then
   reason_tokens=("${reason_tokens[@]:1}")
 fi
 
+# A token is documented by a reason entry: a list item that opens with
+# the token as a code span, alone or in a ` / `-separated run of them
+# (`- `a` / `b` — ...`). A run that ends a line on ` /` carries on at
+# the first code span of the next line, as a wrapped entry does. A token
+# named anywhere else, in prose or in another entry's text, documents
+# nothing, since a reader scanning the list for it does not find it.
+function entry_tokens() {
+  local line rest wrapped=false
+  # shellcheck disable=SC2016 # the backticks are regex literals for Markdown code spans
+  local -r item_re='^[[:space:]]*[-*+][[:space:]]+`([^`]+)`(.*)$'
+  # shellcheck disable=SC2016 # the backticks are regex literals for Markdown code spans
+  local -r more_re='^[[:space:]]*/[[:space:]]*`([^`]+)`(.*)$'
+  local -r wrap_re='^[[:space:]]*/[[:space:]]*$'
+  while IFS= read -r line || [[ -n ${line} ]]; do
+    if [[ ${wrapped} == true ]]; then
+      rest="/${line}"
+    elif [[ ${line} =~ ${item_re} ]]; then
+      printf '%s\n' "${BASH_REMATCH[1]}"
+      rest="${BASH_REMATCH[2]}"
+    else
+      continue
+    fi
+    while [[ ${rest} =~ ${more_re} ]]; do
+      printf '%s\n' "${BASH_REMATCH[1]}"
+      rest="${BASH_REMATCH[2]}"
+    done
+    wrapped=false
+    if [[ ${rest} =~ ${wrap_re} ]]; then wrapped=true; fi
+  done
+}
+
+declare -A DOC_ENTRY=() BODY_ENTRY=()
+if ! doc_entries="$(entry_tokens <"${DOC}")"; then
+  printf 'could not read verification doc %s\n' "${DOC}" >&2
+  exit 2
+fi
+while IFS= read -r token; do
+  if [[ -n ${token} ]]; then DOC_ENTRY["${token}"]=1; fi
+done <<<"${doc_entries}"
+body_entries="$(entry_tokens <<<"${notify_body}")"
+while IFS= read -r token; do
+  if [[ -n ${token} ]]; then BODY_ENTRY["${token}"]=1; fi
+done <<<"${body_entries}"
+
 for token in ${reason_tokens+"${reason_tokens[@]}"}; do
-  if ! grep --fixed-strings --quiet -- "${token}" "${DOC}"; then
-    printf '%s: reason token %q is not documented in %s\n' \
+  if [[ -z ${DOC_ENTRY["${token}"]+set} ]]; then
+    printf '%s: reason token %q has no reason entry in %s\n' \
       "${WORKFLOW}" "${token}" "${DOC}" >&2
+    drift=1
+  fi
+  if [[ -z ${BODY_ENTRY["${token}"]+set} ]]; then
+    printf '%s: reason token %q has no reason entry in the notify body\n' \
+      "${WORKFLOW}" "${token}" >&2
     drift=1
   fi
 done

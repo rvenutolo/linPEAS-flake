@@ -261,9 +261,9 @@ the `attribute failure reason` step. Reasons:
     step the ladder checks had failed: the attribution step runs under
     `always()` and reads the job's `cancelled` status. Cancelling the
     whole run cancels the `notify` job too, so this token reaches an issue
-    only through a cancel of the job alone, such as its `timeout-minutes`,
-    and only if GitHub runs `always()` steps after that cancel, which this
-    repo has not yet observed. Not a verification result; re-run.
+    only through a cancel of the job alone, such as its `timeout-minutes`:
+    GitHub runs `always()` steps after a timeout cancel, with `job.status`
+    `cancelled`. Not a verification result; re-run.
 - `unknown` — the `verify` job produced no `reason` output at all: it
     never got a runner, or the runner was lost. Not a verification
     result; re-run.
@@ -289,13 +289,16 @@ of them. Alert fatigue is a security risk.
 ### Ladder coverage is linted<a name="ladder-coverage-is-linted"></a>
 
 The step ids, the attribution step's `env:` block, the `elif` ladder,
-and the reason list above are four hand-synced copies of one set.
+the reason list above and the notify body's reason list are five
+hand-synced copies of one set.
 `scripts/check-verify-reason-ladder.sh` binds them: every `id:`-carrying
 step in the `verify` job other than the attribution step itself is
 referenced by a `steps.<id>.outcome` entry
 in the attribution `env:`, every such env var is read by the ladder,
-every `reason` token the ladder emits appears somewhere on this page (a
-fixed-string match, not a check against the list above), and the
+every `reason` token the ladder emits has an entry in the list above
+and in the notify body's list (a list item opening with the token as a
+code span, alone or in a `/`-separated run; a mention in prose or in
+another entry's text does not count), and the
 ladder's branch order matches the steps' execution order — the order the
 "first failed step wins" rule depends on. A step, step id, env block,
 env value or attribution `run:` written as an alias (`run: *body`) is

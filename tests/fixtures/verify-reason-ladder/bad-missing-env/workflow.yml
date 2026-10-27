@@ -60,3 +60,15 @@ jobs:
             reason='charlie-failed'
           fi
           printf 'reason=%s\n' "${reason}" >> "${GITHUB_OUTPUT}"
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: ./.github/actions/notify-workflow-result
+        with:
+          body: |
+            - `alpha-failed` — step alpha failed.
+            - `bravo-failed` — step bravo failed.
+            - `charlie-failed` — step charlie failed.
+            - `unknown` — attribution matched no known failed step.
