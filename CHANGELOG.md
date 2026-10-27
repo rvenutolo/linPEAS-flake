@@ -6,6 +6,49 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261027-87d1fe16] - 2026-10-27
+
+### Chores
+- Bump linpeas to 20261027-87d1fe16 ([#1448](https://github.com/rvenutolo/linPEAS-flake/pull/1448))
+
+### Documentation
+- Fix the drift the cycle-closing docs audit found ([#1447](https://github.com/rvenutolo/linPEAS-flake/pull/1447))
+
+### Fixes
+- Send REST contents bodies to gh on stdin, not as an argument ([#1445](https://github.com/rvenutolo/linPEAS-flake/pull/1445))
+
+## [20261025-83d5b4d6] - 2026-10-26
+
+### CI
+- Run harden-runner in audit mode while block mode fails on westus2 ([#1441](https://github.com/rvenutolo/linPEAS-flake/pull/1441))
+- File an issue when a scheduled workflow fails ([#1401](https://github.com/rvenutolo/linPEAS-flake/pull/1401))
+
+### Chores
+- Bump linpeas to 20261025-83d5b4d6 ([#1424](https://github.com/rvenutolo/linPEAS-flake/pull/1424))
+
+### Features
+- Require upload-artifact paths to equal COMMITTABLE_PATHS ([#1405](https://github.com/rvenutolo/linPEAS-flake/pull/1405))
+
+### Fixes
+- Name an aliased job key by its anchored text in egress lint ([#1444](https://github.com/rvenutolo/linPEAS-flake/pull/1444))
+- Treat permissions write-all as write-scoped in fork-guard lint ([#1443](https://github.com/rvenutolo/linPEAS-flake/pull/1443))
+- Read YAML-aliased values as their anchored text in lints ([#1438](https://github.com/rvenutolo/linPEAS-flake/pull/1438))
+- Report unreadable files as could-not-run in three lints ([#1429](https://github.com/rvenutolo/linPEAS-flake/pull/1429))
+- Read aliased run: bodies in every lint that scans them ([#1428](https://github.com/rvenutolo/linPEAS-flake/pull/1428))
+- Declare python3 in the lint shell and its tool guard ([#1422](https://github.com/rvenutolo/linPEAS-flake/pull/1422))
+- Extend no-opaque-procsub to workflow and action run: bodies ([#1420](https://github.com/rvenutolo/linPEAS-flake/pull/1420))
+- Refuse push-refresh artifact paths with a symlinked parent ([#1417](https://github.com/rvenutolo/linPEAS-flake/pull/1417))
+- Fail actions-cache-prune when a cache listing fails ([#1415](https://github.com/rvenutolo/linPEAS-flake/pull/1415))
+- Match hook filters with Python re in hook-coverage lints ([#1413](https://github.com/rvenutolo/linPEAS-flake/pull/1413))
+- Match hook triggers with Python re in lock-derived-docs lint ([#1410](https://github.com/rvenutolo/linPEAS-flake/pull/1410))
+- Validate the PR head ref before pruning its caches ([#1404](https://github.com/rvenutolo/linPEAS-flake/pull/1404))
+- Run no git over the artifact in bumper push-and-merge jobs ([#1403](https://github.com/rvenutolo/linPEAS-flake/pull/1403))
+- Catch attached-argument bundles and long-option prefixes in quiet-grep lint ([#1400](https://github.com/rvenutolo/linPEAS-flake/pull/1400))
+- Tie decline-gate exit 1 to the CLOSED|MERGED arm ([#1399](https://github.com/rvenutolo/linPEAS-flake/pull/1399))
+
+### Refactor
+- Make the Claude skills slash-only and drop command wrappers ([#1418](https://github.com/rvenutolo/linPEAS-flake/pull/1418))
+
 ## [20261024-4542d30f] - 2026-10-24
 
 ### CI
