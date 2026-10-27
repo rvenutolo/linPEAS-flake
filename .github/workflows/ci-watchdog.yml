@@ -461,8 +461,9 @@ jobs:
             // eligibility predicate, and the notify composite applies the same one
             // before it holds off, so a run notify holds off on is one this loop
             // retries unless a newer push or schedule run of the same workflow
-            // and event replaces it or it falls outside the lookback. Candidates are runs whose latest attempt finished in
-            // the last 24 hours, so the first sweep after a deploy does not retry
+            // and event replaces it or it falls outside the lookback.
+            // Candidates are runs whose latest attempt finished in the last 24
+            // hours, so the first sweep after a deploy does not retry
             // old history. Runs are listed by creation over 72 hours, so a run
             // created before the lookback whose re-run finished inside it is
             // still listed; scripts/select-automated-runs.sh applies the lookback
