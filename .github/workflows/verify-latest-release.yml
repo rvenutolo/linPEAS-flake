@@ -495,7 +495,7 @@ jobs:
         with:
           result: ${{ needs.verify.result }}
           label: verify-latest-release-failure
-          title: "verify-latest-release: scheduled verification failed"
+          title: "verify-latest-release: verification failed"
           body: |
             The `verify-latest-release` run failed.
 
@@ -620,7 +620,7 @@ jobs:
             - `release-tag-fetch-failed` / `release-asset-download-failed`
               — `gh release view` / `gh release download` failed.
               Transient GitHub API or release-asset visibility lag.
-              Re-run the cron.
+              Re-run.
             - `unattributed` — the job failed but no ladder arm matched
               the failed step: either a step before the first
               verification step (harden-runner, checkout, setup-nix)
@@ -640,5 +640,5 @@ jobs:
             `upstream-sri-drift` on a hash mismatch, or
             `cross-registry-manifest-mismatch` or `manifest-tag-drift`
             on a mismatch, until resolved.
-          label-description: verify-latest-release scheduled check failed
+          label-description: verify-latest-release check failed
           github-token: ${{ secrets.GITHUB_TOKEN }}
