@@ -20,8 +20,8 @@ name: ci-watchdog
 # without a signature list, which would rot: `connection refused` is both
 # the CDN-blip signature and the harden-runner egress-block signature, and
 # the latter is a permanent configuration bug. Under `--policy automated`
-# a run is retried only when every counted job failed before its own work
-# started, lost its runner, or timed out, so a real regression on main is
+# a run is retried only when the classifier calls every counted job
+# transient (its header says which failures those are), so a real regression on main is
 # reported on its first attempt instead of being retried into silence.
 # That policy is also the predicate the notify composite applies before
 # it holds an issue off for a retry, so the two cannot disagree; it

@@ -254,8 +254,10 @@ full step timings, nothing expired and the empty one never started. The
 log archive answers the same way — download it and list its entries
 rather than reading one job's absence from it as expiry.
 
-The composite holds off on a transient cancel or failure that the CI
-watchdog is about to re-run. When its `result` is `failure` or
+The composite holds off on a transient cancel or failure, which the CI
+watchdog re-runs unless a newer `push` or `schedule` run of the same
+workflow replaces it or its latest attempt finished outside the
+watchdog's 24-hour lookback. When its `result` is `failure` or
 `cancelled`, it fetches its own run with `scripts/fetch-ci-run.sh` and
 classifies it with `scripts/classify-ci-run.sh --policy automated`, the
 predicate the watchdog's automated loop applies before it re-runs a

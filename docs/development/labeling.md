@@ -9,10 +9,9 @@ labels stay out of that manifest deliberately: every label a workflow
 hands to the `notify-workflow-result` composite is created on demand by
 the composite, `ci-watchdog.yml` and
 `docs-audit-reminder.yml` each create their own escalation label
-(`ci-watchdog`, `docs-audit`) inline, `reproducibility-check.yml`
-applies a `reproducibility` label that nothing in the tree creates, and
-Renovate and `update-flake-lock.yml` both apply a `dependencies` PR
-label that, like `reproducibility`, nothing in the tree creates.
+(`ci-watchdog`, `docs-audit`) inline, and Renovate and
+`update-flake-lock.yml` both apply a `dependencies` PR label that nothing
+in the tree creates.
 Auto-labeling is not a required check — it is
 cosmetic and must not block merge.
 
