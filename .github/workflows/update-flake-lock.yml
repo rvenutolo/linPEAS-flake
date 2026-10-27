@@ -479,7 +479,7 @@ jobs:
         with:
           result: ${{ needs.push-and-merge.result == 'skipped' && needs.compute-lock.result || needs.push-and-merge.result }}
           label: update-flake-lock-failure
-          title: "update-flake-lock: weekly bump failed"
+          title: "update-flake-lock: bump failed"
           body: |
             The `update-flake-lock` run failed.
 
