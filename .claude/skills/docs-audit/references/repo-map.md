@@ -274,7 +274,8 @@ otherwise, gated for freshness by CI. Confirm
 the current set with `just --list` (the recipes whose descriptions say
 "Regenerate …") and `ls scripts/refresh-*.sh` — plus the one generator both
 routes miss: git-cliff (the CHANGELOG row below). Do **not** propose prose/drift
-edits inside their `BEGIN/END` markers; a fix means fixing the generator.
+edits inside their `BEGIN/END` markers, or in the cells a marker-less row
+names; a fix means fixing the generator.
 
 | Generated target                                                                                                                                                                                                                                                                                                                              | Generator (recipe / script)                                                                                                  |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |

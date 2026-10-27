@@ -665,7 +665,8 @@ jobs:
           # and git run there would read a `.git/config` and
           # `.gitattributes` the artifact carries, so a configured filter
           # would run as a command while GH_TOKEN is in the environment.
-          # This job runs no git at all, on two conditions. `gh api`
+          # No step of this job after the artifact download runs git, on
+          # two conditions. `gh api`
           # expands `{owner}`, `{repo}` and `{branch}` placeholders
           # anywhere in an endpoint, the `?ref=` query included, and
           # without GH_REPO it resolves them by running `git remote` in

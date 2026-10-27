@@ -680,7 +680,9 @@ Credential split mirrors `update-flake-lock.yml`:
     name, inside that directory. On top of it, a step straight after the
     checkout hashes the floor and every file it sources, transitively
     (the list is read from their `source` lines, and any other shape of
-    `source` line fails the step), into a step output. Just before the
+    `source` line fails the step), into a step output. The `source` scan
+    matches a `source` or `.` command anywhere on a line, not only at its
+    start. Just before the
     commit step another step re-checks those hashes with
     `sha256sum --check --strict` and confirms the artifact directory
     resolves outside the workspace. That proves the floor and its
@@ -688,7 +690,7 @@ Credential split mirrors `update-flake-lock.yml`:
     run; nothing else in the checkout is relied on by `push-refresh`. The
     check runs no git, since a write that reached the checkout could also
     plant git state that hides a change or runs code, and no step of
-    `push-refresh` runs git at all: its commit step works inside the
+    `push-refresh` after the artifact is downloaded runs git: its commit step works inside the
     artifact directory, where an artifact-supplied `.git/config` and
     `.gitattributes` could make git run a filter command. That holds on
     two conditions. `gh api` expands `{owner}`, `{repo}` and `{branch}`
@@ -703,8 +705,7 @@ Credential split mirrors `update-flake-lock.yml`:
     under the artifact directory: a symlink anywhere on a committed path,
     the file or any parent directory, aborts the job before any PUT,
     since reading through it would reach outside the artifact directory.
-    The `source` scan matches a `source` or `.` command anywhere on a
-    line, not only at its start. download-artifact's traversal protection is also all
+    download-artifact's traversal protection is also all
     that guards the runner's file-command files (`GITHUB_ENV`,
     `GITHUB_PATH`) and so the step environment; the manifest does not
     cover those.
@@ -731,10 +732,9 @@ moment it goes red, and the PR it was meant to repair sits with a
 failing `flake-check` instead. A combination the job graph cannot
 produce classifies as `failure` too: an issue naming a drifted workflow
 beats the silence. `tests/classify-refresh-notify-result.test.sh` holds
-the matrix, including both ends of it — a failed `identify` reports, and
-a `ci` completion that is not a Renovate PR needing a refresh stays
-silent, and a runner-label refresh that finds no diff closes rather
-than files.
+the matrix: a failed `identify` reports, a `ci` completion that is not a
+Renovate PR needing a refresh stays silent, and a runner-label refresh
+that finds no diff closes rather than files.
 
 Not in required-checks. Lockfile refresh on a PR cannot block the
 PR's own merge gate (chicken-and-egg).
