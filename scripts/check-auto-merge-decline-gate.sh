@@ -7,10 +7,10 @@
 # before their `;;`), so a maintainer-closed (declined) or already-merged
 # PR is never silently resurrected by an auto-merging update workflow.
 
-# An auto-merging update workflow recreates a per-period branch and
-# calls `gh pr merge --auto`. Without inspecting PR state first, a
-# re-run in the same period overwrites a PR the maintainer explicitly
-# CLOSED (declined) or one already MERGED. The decline gate queries
+# An auto-merging update workflow recreates a per-version or per-day
+# branch and calls `gh pr merge --auto`. Without inspecting PR state
+# first, a re-run for the same version or day overwrites a PR the
+# maintainer explicitly CLOSED (declined) or one already MERGED. The decline gate queries
 # `gh pr view --json state` and aborts non-zero on CLOSED|MERGED. A PR
 # the workflow's own App closed is recreated inside that arm instead,
 # which this textual check neither requires nor forbids.
@@ -36,7 +36,8 @@
 # See docs/security/workflow-hardening.md.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
-# Exits 0 on full coverage, 1 on any drift, 2 on tooling error.
+# Exits 0 on full coverage, 1 on any drift (a workflow yq cannot evaluate
+# included), 2 on a tooling error such as a missing yq or an empty scan set.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

@@ -491,5 +491,6 @@ jobs:
             - `BUMP_APP_PRIVATE_KEY` invalid or App uninstalled (affects push-and-merge only)
             - `nixpkgs` input fetch failure (affects compute-lock)
             - Sanity-check rejected artifact (flake.lock garbage from compute-lock)
+            - Decline gate: a PR for the same day merged, or closed by anyone but the bumper App or by a closer that could not be read (affects push-and-merge only)
           label-description: update-flake-lock workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -237,15 +237,7 @@ lines of the page too, so it still lists it.
 What stays visible:
 
 - Blame on a seeded line names the commit that wrote its anchor, whose diff
-    then holds the seed. For eleven of the fifteen seeds that commit sits
-    outside every window the audit reads, so a reader gets there only from the
-    line. For `rendering-divergence` and `agreed-false-annotation` it is a
-    commit the ranking's wide window counts anyway, since it rewrote the page,
-    and it sits outside the priority set and the line list.
-- `wrong-check-count` and `drifted-cron` edit lines that commits after the
-    newest audit point wrote, so each seed reads in the priority set's diff as
-    that commit's text — where the unseeded line already sat. Only
-    re-anchoring them on older lines would move them out.
+    then holds the seed.
 - `generator-truncation` restores the text its line held before the fix that
     rewrote it, so its blame names the older commit, and the fix's diff no
     longer touches the line.

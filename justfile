@@ -6,7 +6,7 @@ default:
 build:
   nix build .#linpeas
 
-# Run all flake checks (formatting, pre-commit, lint-shell-tools, devshell-renderer-python, derivation build)
+# Run the host system's flake checks
 check:
   nix flake check
 

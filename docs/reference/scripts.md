@@ -1126,9 +1126,9 @@ The matcher is textual rather than a shell syntax tree, because the
 shape also lives inside strings a harness hands to `eval` as a real
 pipeline, which a parser reads as a plain word. It counts anywhere on a
 line that is not a comment, quoted text and heredoc bodies included;
-a comment-only line and a trailing comment (a `#` opening a word outside
-quotes, through the end of the line, heredoc bodies included) are
-exempt. `||` is not a pipe and `|&` is. A
+a comment-only line and a trailing comment (a `#` at line start or
+after unescaped white space, outside quotes, through the end of the line, heredoc
+bodies included) are exempt. `||` is not a pipe and `|&` is. A
 pipe that ends one line, with or without a trailing backslash, joins
 the next non-blank, non-comment line, and a hit there is reported at
 that next line.
@@ -3449,8 +3449,9 @@ nesting causes is bounded by the product of the two counts. Source after
 Run `fn <name> <slot>` for every name, at most
 `CHECK_WORKERS_OVERRIDE` (default `nproc`) at a time, with
 `slot="<result_dir>/<index>"` and the index zero-padded to three digits
-in roster order, so a batch holds at most 999 names: a wider index would
-sort out of roster order.
+in roster order. A batch holds at most 999 names, which keeps every
+index inside three digits with one to spare, so the slots sort in roster
+order.
 The function's stdout and stderr go to `<slot>.out`; the worker writes
 `<slot>.name`, `<slot>.rc` and `<slot>.secs` from its EXIT trap and
 prints `done: <name> pass` or `done: <name> FAIL` as each run finishes.

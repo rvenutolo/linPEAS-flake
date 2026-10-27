@@ -242,7 +242,7 @@ sequence (its harden-runner egress step comes first, as in every job):
     through a staging branch so the PR never loses its diff — and commit `CHANGELOG.md` via REST
     `PUT /contents` as the App identity (GitHub web-flow-signs the
     commit).
-1. Open a PR against `main` and enable auto-merge
+1. Open a PR against `main`, unless an open one was reused, and enable auto-merge
     (`gh pr merge --auto --merge --delete-branch`), then block until
     the PR merges: the wait is bounded to 35 minutes. A closed PR fails
     the job so `notify` files an issue. A PR still open at the deadline
@@ -265,8 +265,9 @@ sequence (its harden-runner egress step comes first, as in every job):
 The PR detour is mandatory: `protect-main` has `bypass_actors == []`
 and a `pull_request` rule, so direct `PUT /contents` to `branch=main`
 returns `HTTP 409 "Changes must be made through a pull request"`. The
-flow mirrors `update-linpeas.yml push-and-merge`, with one addition:
-the changelog job blocks until the PR merges.
+flow mirrors `update-linpeas.yml push-and-merge`; the changelog job
+also deletes the branch on merge (`--delete-branch`) and blocks until
+the PR merges.
 
 ## Recovery procedures
 
@@ -280,7 +281,7 @@ already exists on every recovery path, so the job's
 dispatch. With the input set, the job re-runs git-cliff over the full
 tag history and commits the corrected file — unless a
 `chore/changelog-<version>` PR for that version was already closed
-unmerged by a maintainer, in which case the commit step fails by design (see
+unmerged by anyone but the App, or by a closer the lookup could not read, in which case the commit step fails by design (see
 [auto-merge-decline-gate](../security/workflow-hardening.md#auto-merge-decline-gate)).
 A PR the App closed itself is recreated, and an open changelog branch
 is reused and rebuilt on `main` instead. (A

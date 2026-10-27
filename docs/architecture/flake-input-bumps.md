@@ -397,20 +397,29 @@ docker run --rm --pid=container:linpeas-target --volumes-from linpeas-target \
   | grep --count --extended-regexp '/bin/linpeas: (line )?[0-9]+: [^:]+: (command )?not found$'
 docker rm --force linpeas-target
 
-# 3. A folder sweep of a bind-mounted tree exits 0.
+# 3. A folder sweep of a bind-mounted tree exits 0, reports no mktemp,
+#    shell-arithmetic or unnamed-user error, and names the fixture crontab.
 mkdir --parents sweep-fixture/etc
 echo '* * * * * root echo FIXTURE_CRON' >sweep-fixture/etc/crontab
-docker run --rm --volume "${PWD}/sweep-fixture:/host:ro" \
-  "rvenutolo/linpeas:${VERSION}" -n -N -q -f /host >/dev/null 2>&1 \
+out="$(docker run --rm --volume "${PWD}/sweep-fixture:/host:ro" \
+  "rvenutolo/linpeas:${VERSION}" -n -N -q -f /host 2>&1)" \
   || echo "FAIL: -f sweep exited non-zero"
+for bad in 'mktemp: failed' 'value too great for base' 'cannot find name for user ID'; do
+  grep --quiet --fixed-strings "${bad}" <<<"${out}" && echo "FAIL: report contains '${bad}'"
+done
+grep --quiet --fixed-strings '/host/etc/crontab' <<<"${out}" \
+  || echo "FAIL: report does not mention the fixture crontab"
 rm --recursive --force sweep-fixture
 # Expect no FAIL line from 1 or 3 and a count of 0 from 2
 ```
 
-A `FAIL` line or a non-zero count means a tool the image expects is
-missing from the new nixpkgs. Compare `pkgs.buildEnv.paths` in
+A `FAIL` line from 1 or a non-zero count from 2 means a tool the image
+expects is missing from the new nixpkgs. Compare `pkgs.buildEnv.paths` in
 `nix/image.nix` against the missing tool's package name — usually a
-rename. Update the path list in the same PR.
+rename. Update the path list in the same PR. A `FAIL` line from 3
+points elsewhere: the writable `/tmp` and the `fakeNss` `/etc/passwd`
+in `nix/image.nix`, or the `dash` interpreter line `nix/linpeas.nix`
+writes.
 
 ### 9. Run `flake check`
 

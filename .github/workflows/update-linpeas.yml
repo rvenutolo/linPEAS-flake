@@ -449,5 +449,6 @@ jobs:
             - Asset-URL prefix check tripped (peass-ng moved their release host)
             - `digest` field missing or non-`sha256:` from upstream
             - Artifact upload/download failure (between compute-pin and push-and-merge)
+            - Decline gate: a PR for the same version merged, or closed by anyone but the bumper App or by a closer that could not be read (affects push-and-merge only)
           label-description: update-linpeas workflow failure
           github-token: ${{ secrets.GITHUB_TOKEN }}

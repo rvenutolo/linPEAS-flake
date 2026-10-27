@@ -380,9 +380,9 @@ else
   cat -- "${work}/fn-killed-by-signal.out" "${work}/fn-killed-by-signal.err" "${work}"/fn-killed-by-signal.result/*.out >&2
 fi
 
-# 16. too-many-entries — the slot index is three digits wide, so a batch
-# of more than 999 names is a usage error and no entry runs; past that
-# width the slots would no longer sort in roster order.
+# 16. too-many-entries — a batch of more than 999 names is a usage error
+# and no entry runs, which keeps every slot index inside three digits with
+# one to spare.
 # shellcheck disable=SC2016 # snippet is bash source text for a child process, not text to expand here
 run_scenario 'too-many-entries' 'run_parallel: at most 999 entries, got 1000' '
 function probe() { :; }

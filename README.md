@@ -84,8 +84,8 @@ nothing under it.
 **Live audit of a running container** — copy the script in and run
 it there, so every check sees the target's own processes, users and
 filesystem. Real use cases: CI hardening, forensics on a running
-workload. The image carries the same script as `/bin/linpeas`; run it
-with `sh`, which ignores the Nix-store interpreter line.
+workload. The image carries upstream's script as `/bin/linpeas`, identical
+to upstream from line 2 on; run it with `sh`, which ignores the Nix-store interpreter line.
 
 ```sh
 docker run --rm --entrypoint cat rvenutolo/linpeas:latest /bin/linpeas >linpeas.sh
@@ -350,7 +350,7 @@ pre-commit install --hook-type pre-commit --hook-type commit-msg   # one-time, w
 just                 # Default: list recipes
 just build           # Build the linpeas package
 just bump            # Manually refresh linpeas pin from upstream latest release
-just check           # Run all flake checks (formatting, pre-commit, lint-shell-tools, devshell-renderer-python, derivation build)
+just check           # Run the host system's flake checks
 just docs-audit-done # Record the current commit as the point the docs audit was last run against
 just fmt             # Format every file via treefmt
 just image           # Build the OCI image

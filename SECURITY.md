@@ -10,7 +10,8 @@ this repo), please email <venutolo@hotmail.com>. Do not open a public issue.
 
 This repo is a thin Nix-flake wrapper around upstream
 [peass-ng/PEASS-ng](https://github.com/peass-ng/PEASS-ng). It does not
-modify `linpeas.sh`. Vulnerabilities in LinPEAS itself should be reported
+change `linpeas.sh` beyond rewriting its interpreter line to a
+Nix-store `dash`; `linpeas.src` is upstream's file byte for byte. Vulnerabilities in LinPEAS itself should be reported
 upstream via the PEASS-ng project's reporting channels.
 
 ## Verification
