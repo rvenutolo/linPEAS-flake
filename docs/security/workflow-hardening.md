@@ -661,9 +661,13 @@ No `gh api` call in a `run:` block under `.github/workflows/*.yml` (or `.yaml`) 
 
 Linux caps a single argument at 128 KiB (`MAX_ARG_STRLEN`). A call such as `--field content="$(base64 --wrap=0 CHANGELOG.md)"` works until the file grows past that cap. After that it fails every run with `Argument list too long` (exit 126), with no change to the workflow, because the file just grew. Stdin has no such cap.
 
+{% raw %}
+
 A value carries file contents when it holds a command substitution whose output stage reads a file, or expands a variable the same block assigned from one, directly or through another such variable. The output stage is the last command of the substitution, and of a pipeline its last stage, so `$(cat f | base64)` counts and `$(jq --rawfile ... | gh api --input -)` does not. An output stage reads a file when it is `base64`, `cat` (unless its only input is a here-document), `jq` with `--rawfile`, `--slurpfile`, `--slurp`, `--raw-input` or a short-flag bundle holding `s` or `R`, or a bare redirect `$(<FILE)`. Other `jq` reads print one small value and do not count, nor does a length `${#x}`.
 
 The lint reads the arguments of each `gh api` command, and every array literal in a block that runs `gh api`, since an argument list is often built in an array and passed as `gh api "${args[@]}"`. Command words come from the `shfmt --tojson` parse tree, with each `${{ ... }}` expression replaced by a literal word first, as the runner substitutes it before the shell runs. Only a block that spells `gh` is parsed. Such a block that `shfmt` cannot parse is a finding, because its arguments were never read.
+
+{% endraw %}
 
 A value carried between steps, a variable set by `read`, `mapfile` or `printf -v`, a call made through a shell function or through a command word that is itself an expansion, and an array assigned in one block and used in another are not followed.
 
