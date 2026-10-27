@@ -257,9 +257,12 @@ the `attribute failure reason` step. Reasons:
     by hand; in the second case fix the attribution step. This is the
     token to watch for after adding a verification step without wiring
     its `id:` into the ladder.
+- `cancelled` — the `verify` job was cancelled after it started and no
+    step had failed: the attribution step runs under `always()` and reads
+    the job's `cancelled` status. Not a verification result; re-run.
 - `unknown` — the `verify` job produced no `reason` output at all: it
-    was cancelled, or the runner was lost, before the attribution step
-    ran. Not a verification result; re-run the cron.
+    never got a runner, or the runner was lost. Not a verification
+    result; re-run.
 
 `upstream-sri-drift` on a hash mismatch and
 `cross-registry-manifest-mismatch` on a mismatch warrant the
