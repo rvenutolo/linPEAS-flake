@@ -76,10 +76,11 @@ jobs:
           title: "gitleaks: secret detected, or the scan could not run"
           label-description: gitleaks found a secret outside a pull request, or the gitleaks scan could not run
           body: |
-            The `gitleaks` workflow failed on a `${{ github.event_name }}`
-            run: either gitleaks reported a secret in the repository
-            history, or a step before the scan (harden-runner, checkout)
-            failed. The job log says which.
+            The `gitleaks` workflow did not pass on a
+            `${{ github.event_name }}` run: gitleaks reported a secret in
+            the repository history, a step (the scan itself included)
+            failed, or the job was cancelled. The run page and job log say
+            which.
 
             Run:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

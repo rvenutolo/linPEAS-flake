@@ -8,7 +8,8 @@
 # or `ignore`, followed by one `<job>\t<class>\t<reason>` line for every
 # job that failed, was cancelled or timed out. `class` is `transient`
 # (infrastructure, worth a rerun), `real` (a step of the job's own work
-# failed) or `superseded` (cancelled by a newer run, never counted).
+# failed) or `superseded` (cancelled without timeout evidence, by a newer
+# run or otherwise; never counted).
 # Pure and side-effect free so the decision is unit-testable without a
 # workflow run.
 #

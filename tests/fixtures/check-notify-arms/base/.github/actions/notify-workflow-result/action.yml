@@ -207,8 +207,9 @@ runs:
             return;
           }
 
-          // Only the exact verdict `retry` holds off: the CI watchdog
-          // re-runs the run, and the re-run files if it fails again.
+          // Only the exact verdict `retry` holds off for a CI watchdog
+          // re-run; the re-run files once a failure is not retryable or the
+          // attempt cap is spent.
           // The classify step reports on any fetch or classifier error,
           // so a broken classifier never silences an issue.
           if (verdict === 'retry') {

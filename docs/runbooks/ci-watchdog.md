@@ -41,9 +41,8 @@ A `skipped` run never replaces anything: `renovate-flake-lock-refresh`, for
 one, concludes `skipped` on nearly every `ci` completion, and counting that
 as a newer run would hide the failure before it. A candidate that concluded
 `failure`, `cancelled` or `timed_out` is classified with
-`--policy automated`, which retries only when every counted job is
-transient — it failed in a setup step before the job's own work, lost its
-runner, or timed out — so a real regression is reported on its first
+`--policy automated`, which retries only when `scripts/classify-ci-run.sh`
+classifies every counted job transient, so a real regression is reported on its first
 attempt instead of being retried. The verdicts are `retry`, `exhausted`,
 `report` (a real failure, or a run the policy does not retry: nothing to
 do here, the workflow's own notify job files it) and `ignore`.
@@ -52,8 +51,10 @@ re-run them. A run the bot-PR loop already re-ran or escalated in the same
 sweep is skipped, so one sweep never acts on a run twice.
 
 The `notify-workflow-result` composite holds an issue off on exactly the
-`--policy automated` verdict `retry`, so every failure it holds off on is
-one this loop re-runs (see the hold-off paragraphs under
+`--policy automated` verdict `retry`, so a failure it holds off on is one
+this loop re-runs, unless a newer `push` or `schedule` run of the same
+workflow and event replaces it or its latest attempt finished outside the 24-hour
+lookback (see the hold-off paragraphs under
 [Cancelled-job attribution](../architecture/ci.md#cancelled-job-attribution)).
 
 `release-on-bump` is excluded from automated retries: the classifier
@@ -179,9 +180,9 @@ marker survives.
 
 ## When you get a `ci-watchdog: <workflow> (<event>) exhausted retries` issue
 
-The automated loop re-ran the newest `<event>` run of `<workflow>` until
-its 3-attempt budget was spent, and every attempt failed only for
-transient-shaped reasons (setup step, lost runner, timeout). The watchdog
+The automated loop re-ran a `<event>` run of `<workflow>` until its
+3-attempt budget was spent, and every attempt failed only for reasons the
+classifier calls transient. The watchdog
 files this issue only for a workflow that does not call the
 `notify-workflow-result` composite: one whose workflow file has no step
 `uses:` of it, neither the local path
@@ -209,7 +210,7 @@ Actions tab.
     close the issue when the workflow is green.
 
 The issue is deduped by title and commented on only when a later sweep
-sees a different exhausted run or attempt, exactly as for the bot-PR
+sees a different exhausted run, attempt or job classification, as for the bot-PR
 issue above.
 
 ## When the watchdog itself fails
@@ -264,7 +265,9 @@ tells you which of three things happened:
     `every automated run (sweep not started)`, because the automated loop
     never ran. A halt in the
     automated loop lists the candidate runs behind the halt point as
-    `run <id> (<workflow>, <event>)`. The next sweep picks them up. Both signals trigger it:
+    `run <id> (<workflow>, <event>)`. A halt while listing the automated
+    runs, after the bot-PR loop finished, lists only
+    `every automated run (enumeration halted)`. The next sweep picks them up. Both signals trigger it:
     a 403 on an Octokit call whose response carries `x-ratelimit-remaining: 0`
     or `retry-after`, and a `Command failed` error from
     `scripts/fetch-ci-run.sh` whose `gh:` stderr line names a rate limit and

@@ -1085,7 +1085,7 @@ marked-off blocks inside a hand-written page:
     [`auto-update.md`](../architecture/auto-update.md);
 1. the ephemeral-refs-gap block above.
 
-The last two are table columns inside a hand-written page, which
+The remaining two regions are table columns inside a hand-written page, which
 `refresh-runner-labels.sh` finds by the table's header row rather than by
 markers, so the rest of each table stays hand-written: the Runner column of the
 functional-gates table in [`ci.md`](../architecture/ci.md) and the CI tested

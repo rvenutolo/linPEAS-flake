@@ -50,7 +50,7 @@
 #           registry host)
 #        a `gh release upload` run  -> uploads.github.com
 #          (asset bytes POST to the uploads host, not the REST API host)
-#        the scorecard CLI (`nix develop --command scorecard` or
+#        the scorecard CLI (`command scorecard` or
 #        `scorecard --repo`, either substring)  -> api.securityscorecards.dev
 #                                                   AND api.osv.dev AND
 #                                                   api.deps.dev

@@ -9,8 +9,8 @@
 # empty output to score as data: either a clean pass that flags nothing
 # (fail-open) or a substantive violation the input never showed (a
 # tooling fault misdiagnosed as drift). That property holds for whatever
-# the producer is, so the rule does not ask: every `< <(...)` is a hit,
-# with no exemption.
+# the producer is, so the rule does not ask: every `< <(...)` on a
+# non-comment line is a hit, whatever its producer.
 #
 # `diff <(...) <(...)` stays legal: diff consumes both substitutions as
 # file arguments and its own exit status is what the caller acts on, so
@@ -39,8 +39,9 @@
 # (default: .github/workflows) and ACTIONS_DIR_OVERRIDE (default:
 # .github/actions) for fixtures.
 # Exit 0 clean, 1 on any hit, 2 on operational error: `yq` is missing, a
-# scan set is empty, `grep` cannot read a shell script, or `yq` cannot
-# read a workflow or action file or one of its steps.
+# scan set is empty, `grep` cannot read a shell script, `yq` cannot
+# read a workflow or action file or one of its steps, or a workflow holds
+# a job key the job list cannot carry.
 set -Eeuo pipefail
 IFS=$'\n\t'
 _lib_dir="${BASH_SOURCE[0]%/*}"

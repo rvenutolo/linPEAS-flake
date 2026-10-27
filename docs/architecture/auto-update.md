@@ -27,7 +27,8 @@ flowchart TD
 
 A failure anywhere in that chain files a deduped issue labelled
 `update-linpeas-failure`, titled `update-linpeas: cron failed`, through
-the `notify-workflow-result` composite. A no-op day — upstream tag equal
+the `notify-workflow-result` composite, after its transient hold-off
+(see [Cancelled-job attribution](ci.md#cancelled-job-attribution)). A no-op day — upstream tag equal
 to the current pin — collapses to success and files nothing, because
 `push-and-merge` skipping is not a failure.
 
@@ -36,8 +37,10 @@ worth checking first: an upstream PEASS-ng API rate-limit, a
 `BUMP_APP_PRIVATE_KEY` that is invalid or whose App was uninstalled
 (which can only affect `push-and-merge`), the asset-URL prefix check
 tripping because peass-ng moved their release host, a missing or
-non-`sha256:` `digest` field upstream, or an artifact handoff failure
-between the two jobs. The rate-limit and missing-digest cases are upstream conditions the next
+non-`sha256:` `digest` field upstream, an artifact handoff failure
+between the two jobs, or the decline gate refusing because a PR for the
+same version merged or was closed by anyone but the bumper App or by a
+closer that could not be read (also `push-and-merge` only). The rate-limit and missing-digest cases are upstream conditions the next
 cron tick retries on its own. The credential case and the moved-release-host
 case each need action first: the expected prefix is a hardcoded literal in
 `scripts/bump-linpeas.sh` and again in the workflow's own re-validation step,

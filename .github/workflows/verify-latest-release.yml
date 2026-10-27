@@ -462,6 +462,7 @@ jobs:
           elif [[ ${VERIFY_BLOB_SBOM_AMD64} == 'failure' ]]; then reason='sbom-amd64-blob-sig-failed'
           elif [[ ${VERIFY_BLOB_SBOM_ARM64} == 'failure' ]]; then reason='sbom-arm64-blob-sig-failed'
           elif [[ ${JOB_STATUS} == 'failure' ]]; then reason='unattributed'
+          elif [[ ${JOB_STATUS} == 'cancelled' ]]; then reason='cancelled'
           fi
           printf 'reason=%s\n' "${reason}" >> "${GITHUB_OUTPUT}"
           printf 'attributed reason: %s\n' "${reason}"
@@ -496,7 +497,7 @@ jobs:
           label: verify-latest-release-failure
           title: "verify-latest-release: scheduled verification failed"
           body: |
-            The scheduled `verify-latest-release` cron failed.
+            The `verify-latest-release` run failed.
 
             - Trigger: `${{ github.event_name }}`
             - Verify conclusion: `${{ needs.verify.result }}`
@@ -628,9 +629,11 @@ jobs:
               Treat the failure as unexplained until triaged by hand; only
               the second case is a bug to file against this workflow's
               `attribute failure reason` step.
+            - `cancelled` — the `verify` job was cancelled after it
+              started, such as by its timeout, and no step the ladder
+              checks had failed. Not a verification result; re-run.
             - `unknown` — the `verify` job emitted no reason at all: it
-              was cancelled, or the runner was lost, before the
-              attribution step ran. Re-run the cron.
+              never got a runner, or the runner was lost. Re-run.
 
             Investigate the `verify` job logs for the failing step. Do
             NOT merge any subsequent pin bumps if the reason is

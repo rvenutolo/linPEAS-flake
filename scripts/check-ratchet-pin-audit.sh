@@ -28,9 +28,9 @@
 # merge specification says.
 #
 # A value written as an alias is read as its anchored text, as GitHub
-# Actions reads it; a job's permissions, a first step's `uses:` or the
-# concurrency group that still holds an alias after sixteen resolving
-# passes is refused with exit 2.
+# Actions reads it; an `on:`, a job's permissions, a first step's `uses:`
+# or the concurrency group that still holds an alias after sixteen
+# resolving passes is refused with exit 2.
 #
 # WORKFLOW_PATH_OVERRIDE points at an alternate workflow file
 # (used by tests/check-ratchet-pin-audit.test.sh fixtures).
@@ -292,7 +292,7 @@ if ! notify_perms="$(read_workflow "${PERMS_ROWS//@JOB@/notify}" 'the permission
 fi
 
 # The notify composite classifies its own run before it files (it holds
-# off on a transient the CI watchdog re-runs), and that fetch reads the
+# off on a transient failure, for a CI watchdog re-run), and that fetch reads the
 # run's jobs and their annotations, so the job needs `actions: read` and
 # `checks: read` beside the `issues: write` it files with.
 if [[ ${notify_perms} != "actions:read,checks:read,issues:write" ]]; then

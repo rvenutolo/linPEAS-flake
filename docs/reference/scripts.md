@@ -1082,8 +1082,8 @@ feeds — never the producer's. A failed producer hands the consumer
 empty output to score as data: either a clean pass that flags nothing
 (fail-open) or a substantive violation the input never showed (a
 tooling fault misdiagnosed as drift). That property holds for whatever
-the producer is, so the rule does not ask: every `< <(...)` is a hit,
-with no exemption.
+the producer is, so the rule does not ask: every `< <(...)` on a
+non-comment line is a hit, whatever its producer.
 
 `diff <(...) <(...)` stays legal: diff consumes both substitutions as
 file arguments and its own exit status is what the caller acts on, so
@@ -1112,8 +1112,9 @@ Honors SCRIPTS_DIR_OVERRIDE (default: scripts), WORKFLOWS_DIR_OVERRIDE
 (default: .github/workflows) and ACTIONS_DIR_OVERRIDE (default:
 .github/actions) for fixtures.
 Exit 0 clean, 1 on any hit, 2 on operational error: `yq` is missing, a
-scan set is empty, `grep` cannot read a shell script, or `yq` cannot
-read a workflow or action file or one of its steps.
+scan set is empty, `grep` cannot read a shell script, `yq` cannot
+read a workflow or action file or one of its steps, or a workflow holds
+a job key the job list cannot carry.
 
 ### scripts/check-no-pipe-into-grep-quiet.sh
 
@@ -1168,8 +1169,9 @@ under that directory instead of listed by `git ls-files`, and paths are
 reported relative to it.
 
 Exits 0 when clean, 1 on any hit, 2 on operational error: a required
-tool is missing, the scan set is empty, a file cannot be read, or `yq`
-cannot read a workflow or one of its steps.
+tool is missing, the scan set is empty, a file cannot be read, `yq`
+cannot read a workflow or one of its steps, or a workflow holds a job
+key the job list cannot carry.
 
 ### scripts/check-notify-arms.sh
 
@@ -1277,8 +1279,9 @@ Exit codes: 0 every marker matches its job's derived arms and every
 scanner notify job carries its markers, 1 a marker disagrees with the
 derived arms, names a job that is not a notify job, is malformed, sits on
 a line an HTML block holds, sits in the wrong body, or a docs marker
-declaring cancelled has no cancel word beside it, or a scanner notify job
-is missing a marker or files on no arm (details printed to stderr), 2
+declaring cancelled has no cancel word beside it, a scanner notify job
+is missing a marker or files on no arm, or a workflow's `jobs:` holds a
+key GitHub Actions refuses (details printed to stderr), 2
 the check could not run: a required tool is missing, the composite or a
 scanner workflow is missing or has changed, a `yq` read of the composite
 or of a workflow fails, as it does on a file it cannot parse (the line
@@ -2303,17 +2306,21 @@ Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
 Decide whether release-on-bump's changelog job may hand a
 changelog PR still open at its deadline to the CI watchdog. Reads the
 JSON of `gh pr view --json autoMergeRequest,mergeStateStatus,statusCheckRollup`
-on stdin and prints one line: `handoff` when the watchdog will act on
-the PR, or `fail<TAB><reason>` when it will not, in which case the job
-fails and its notify job files.
+on stdin and prints one line: `handoff` when the PR is in the shape the
+watchdog acts on, or `fail<TAB><reason>` when it is not, in which case
+the job fails and its notify job files.
 
 The watchdog acts only on a bot PR with auto-merge armed and a failed
 workflow run on its head, so all three of these must hold to hand off:
 auto-merge is armed (`autoMergeRequest` is not null); the merge state
 is not `BEHIND` (auto-merge never updates the branch, so the PR waits
 forever) or `DIRTY` (a conflict); and at least one check run on the
-head concluded `FAILURE`, `CANCELLED` or `TIMED_OUT`, which is what the
-watchdog re-runs. A PR whose checks are all still pending or green past
+head concluded `FAILURE`, `CANCELLED` or `TIMED_OUT`. The watchdog
+re-runs failures and timeout cancels, not a superseded or manual
+cancel, and the `statusCheckRollup` this script reads carries no
+annotation to tell those cancels apart, so every `CANCELLED` counts here: a PR whose only red check is a
+superseded or manual cancel is handed off and gets no watchdog action.
+A PR whose checks are all still pending or green past
 the deadline has nothing for the watchdog to re-run, and a required
 check that never started leaves no failed run at all, so both fail
 here rather than sit open with no issue. A hung check is cancelled by
@@ -2355,7 +2362,8 @@ annotations) and prints a verdict line, `retry`, `exhausted`, `report`
 or `ignore`, followed by one `<job>\t<class>\t<reason>` line for every
 job that failed, was cancelled or timed out. `class` is `transient`
 (infrastructure, worth a rerun), `real` (a step of the job's own work
-failed) or `superseded` (cancelled by a newer run, never counted).
+failed) or `superseded` (cancelled without timeout evidence, by a newer
+run or otherwise; never counted).
 Pure and side-effect free so the decision is unit-testable without a
 workflow run.
 

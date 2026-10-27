@@ -246,7 +246,7 @@ A hand-authored `allowed-endpoints:` list has nothing binding it to what the job
     - A `run:` step invoking `gh attestation verify` requires `tuf-repo.github.com` — verification refreshes GitHub's TUF root before checking the bundle.
     - `peter-evans/dockerhub-description` requires `hub.docker.com` — the action authenticates against and PATCHes the Docker Hub web API to publish the repository README; it never reaches a registry host.
     - `./.github/actions/setup-nix` requires `cache.nixos.org` and `releases.nixos.org` — the composite downloads the installer from the second, and every nix command it enables substitutes from the first, so a job running it without both either fails to install nix or rebuilds every derivation from source. This is the mirror of assertion 7: that one binds a present host to a tool that must be able to reach it, this one binds a present tool to the hosts it must be able to reach.
-    - `DeterminateSystems/flakehub-cache-action` is banned outright: no job may use it, and no allowlist may carry a flakehub or Determinate Systems host.
+    - `DeterminateSystems/flakehub-cache-action` is banned outright: no job may use it, and no allowlist may carry a flakehub or Determinate Systems host on the lint's `DENYLIST`.
 
     These are instances of a general hazard, not the full set: a redirect to any host outside the allowlist is the defect class. A `github.com/.../releases/download` URL 302s to `release-assets.githubusercontent.com` (covered above); a `nixos.org/manual` URL 302s to `nix.dev` (not covered — `nixos.org` is a lychee link-check target host, outside this lint's tool-inventory scope). Extending the table for a new redirecting host means pinning both the source URL pattern and the host it lands on.
 

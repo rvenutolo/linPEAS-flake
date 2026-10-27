@@ -247,11 +247,14 @@ sequence (its harden-runner egress step comes first, as in every job):
     the PR merges: the wait is bounded to 35 minutes. A closed PR fails
     the job so `notify` files an issue. A PR still open at the deadline
     is handed to `ci-watchdog`, which retries its failed checks, and the
-    job succeeds with a warning, only when the watchdog will act on it:
+    job succeeds with a warning, only when the PR is in the shape the
+    watchdog acts on:
     auto-merge is armed, the PR is neither behind `main` nor in
     conflict, and at least one check run on its head concluded
     `FAILURE`, `CANCELLED` or `TIMED_OUT`
-    (`scripts/changelog-pr-handoff.sh` decides). Any other open PR —
+    (`scripts/changelog-pr-handoff.sh` decides). The watchdog does not
+    re-run a superseded or manual cancel, so a PR whose only red check is
+    one is handed off and gets no watchdog action. Any other open PR —
     auto-merge not armed, behind `main` (auto-merge never updates the
     branch), conflicting, or with every check still pending or green,
     such as a required check that never started — fails the job, so

@@ -101,8 +101,9 @@
 # scanner notify job carries its markers, 1 a marker disagrees with the
 # derived arms, names a job that is not a notify job, is malformed, sits on
 # a line an HTML block holds, sits in the wrong body, or a docs marker
-# declaring cancelled has no cancel word beside it, or a scanner notify job
-# is missing a marker or files on no arm (details printed to stderr), 2
+# declaring cancelled has no cancel word beside it, a scanner notify job
+# is missing a marker or files on no arm, or a workflow's `jobs:` holds a
+# key GitHub Actions refuses (details printed to stderr), 2
 # the check could not run: a required tool is missing, the composite or a
 # scanner workflow is missing or has changed, a `yq` read of the composite
 # or of a workflow fails, as it does on a file it cannot parse (the line
@@ -163,7 +164,7 @@ readonly -a SCANNER_WORKFLOWS=(
 # opens its success branch: the input wiring and every line that decides
 # whether a result files, closes or does nothing. Update it only after
 # checking that the arm model below still describes the composite.
-readonly COMPOSITE_SHA256='8b745b7fb37fd912f7819c1cdb30896ca09723c5b09b164f0284937e82d1dd4f'
+readonly COMPOSITE_SHA256='c4f3f99a8a0b16fd0287e95ec5f6b746d385f283d03f68557c33da439fc15e25'
 
 function die2() {
   printf 'notify-arms: %s\n' "$1" >&2

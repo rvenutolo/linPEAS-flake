@@ -100,14 +100,16 @@ tree.)
     octoscan's rule set is narrowed only
     by the suppression set in `scripts/octoscan-scan.sh` — two disabled
     rules (`local-action`, `dangerous-write`) and a single `--ignore` regex
-    carrying two alternatives, each with its rationale in that script's
-    header.
+    built from `IGNORE_PATTERN` plus one alternative per
+    `RUNNER_LABEL_SUPPRESSIONS` label, each with its rationale in that
+    script's header.
     Promotion would also force removing its PR paths filter. It stays
     advisory and path-filtered.
     - **Adding a suppression (operational):** a further rule or pattern is
         suppressed only for a confirmed false positive — three or more
         distinct occurrences, or one duplicating an existing zizmor or CodeQL
-        finding one-to-one. Add it to `DISABLE_RULES` or `IGNORE_PATTERN` in
+        finding one-to-one. Add it to `DISABLE_RULES`, `IGNORE_PATTERN` or
+        `RUNNER_LABEL_SUPPRESSIONS` in
         `scripts/octoscan-scan.sh` (`--filter-triggers external` is a
         further lever the script leaves unused) and document it in that script's
         `Suppressions` header beside the flag it extends.

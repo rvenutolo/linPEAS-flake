@@ -9,7 +9,11 @@ SHA-pinned action ref carrying a trailing `# <tag>` comment that it does not ski
 detected drift, an upstream API failure, a ratchet tool failure, an
 unclassified error, or a cancelled run — the workflow opens a single
 deduped umbrella issue labeled `ratchet-drift`, or comments on an
-already-open one. The issue body's `Reason:` line names the reason of the
+already-open one. A scheduled run that the classifier finds failed only
+for transient reasons is held off first: the notify composite files
+nothing while it waits for a [CI watchdog](ci-watchdog.md) re-run, and
+files when a later attempt fails for another reason or the retries are spent.
+The issue body's `Reason:` line names the reason of the
 run that opened it; a later failure's comment carries only the run
 link (a later cancelled run's comment says it was cancelled), so when
 the issue has been re-commented, read the newest run's log for its
@@ -186,9 +190,9 @@ grep could not read the workflow set for `uses:` lines.
     `upstream-api-failure`, `ratchet-tool-failure`, `unknown`), not
     the heuristic strings — so widening it is a single-file change.
     It reads a value written as an alias (`body: *b`) as its anchored
-    text, as GitHub Actions does; a job's permissions, a first step's
-    `uses:` or the concurrency group that still holds an alias after
-    sixteen resolving passes is refused with exit 2.
+    text, as GitHub Actions does; an `on:`, a job's permissions, a first
+    step's `uses:` or the concurrency group that still holds an alias
+    after sixteen resolving passes is refused with exit 2.
 1. If the workflow glob matched zero files, a refactor moved
     workflows out from under `.github/workflows/`. Adjust the glob
     in the `audit pins` step, keeping both `*.yml` and `*.yaml`
@@ -207,7 +211,10 @@ cancelled run as an infrastructure failure rather than a finding: with
 a `[!WARNING]` banner at the top of the issue body when the cancelled
 run is the one that opened the issue, and in its comment when it
 re-commented an already-open one. Look for that flag first: a
-cancelled run says nothing about pin drift, so re-run it. For a failed
+cancelled run says nothing about pin drift, so re-run it. A scheduled
+run cancelled by its timeout is held off for the CI watchdog's re-runs
+first, so by the time it files those re-runs may be spent: find out why
+it keeps timing out before re-running it again. For a failed
 earlier step, read its log and re-run once it is fixed; it says nothing
 about pin drift either. For an unhandled error, inspect the run log
 directly, add classification for the new failure mode, and update both
