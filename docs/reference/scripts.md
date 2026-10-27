@@ -1082,8 +1082,8 @@ feeds — never the producer's. A failed producer hands the consumer
 empty output to score as data: either a clean pass that flags nothing
 (fail-open) or a substantive violation the input never showed (a
 tooling fault misdiagnosed as drift). That property holds for whatever
-the producer is, so the rule does not ask: every `< <(...)` is a hit,
-with no exemption.
+the producer is, so the rule does not ask: every `< <(...)` on a
+non-comment line is a hit, whatever its producer.
 
 `diff <(...) <(...)` stays legal: diff consumes both substitutions as
 file arguments and its own exit status is what the caller acts on, so
@@ -1112,8 +1112,9 @@ Honors SCRIPTS_DIR_OVERRIDE (default: scripts), WORKFLOWS_DIR_OVERRIDE
 (default: .github/workflows) and ACTIONS_DIR_OVERRIDE (default:
 .github/actions) for fixtures.
 Exit 0 clean, 1 on any hit, 2 on operational error: `yq` is missing, a
-scan set is empty, `grep` cannot read a shell script, or `yq` cannot
-read a workflow or action file or one of its steps.
+scan set is empty, `grep` cannot read a shell script, `yq` cannot
+read a workflow or action file or one of its steps, or a workflow holds
+a job key the job list cannot carry.
 
 ### scripts/check-no-pipe-into-grep-quiet.sh
 
@@ -1168,8 +1169,9 @@ under that directory instead of listed by `git ls-files`, and paths are
 reported relative to it.
 
 Exits 0 when clean, 1 on any hit, 2 on operational error: a required
-tool is missing, the scan set is empty, a file cannot be read, or `yq`
-cannot read a workflow or one of its steps.
+tool is missing, the scan set is empty, a file cannot be read, `yq`
+cannot read a workflow or one of its steps, or a workflow holds a job
+key the job list cannot carry.
 
 ### scripts/check-notify-arms.sh
 
@@ -1277,8 +1279,9 @@ Exit codes: 0 every marker matches its job's derived arms and every
 scanner notify job carries its markers, 1 a marker disagrees with the
 derived arms, names a job that is not a notify job, is malformed, sits on
 a line an HTML block holds, sits in the wrong body, or a docs marker
-declaring cancelled has no cancel word beside it, or a scanner notify job
-is missing a marker or files on no arm (details printed to stderr), 2
+declaring cancelled has no cancel word beside it, a scanner notify job
+is missing a marker or files on no arm, or a workflow's `jobs:` holds a
+key GitHub Actions refuses (details printed to stderr), 2
 the check could not run: a required tool is missing, the composite or a
 scanner workflow is missing or has changed, a `yq` read of the composite
 or of a workflow fails, as it does on a file it cannot parse (the line

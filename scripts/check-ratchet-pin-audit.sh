@@ -28,9 +28,9 @@
 # merge specification says.
 #
 # A value written as an alias is read as its anchored text, as GitHub
-# Actions reads it; a job's permissions, a first step's `uses:` or the
-# concurrency group that still holds an alias after sixteen resolving
-# passes is refused with exit 2.
+# Actions reads it; an `on:`, a job's permissions, a first step's `uses:`
+# or the concurrency group that still holds an alias after sixteen
+# resolving passes is refused with exit 2.
 #
 # WORKFLOW_PATH_OVERRIDE points at an alternate workflow file
 # (used by tests/check-ratchet-pin-audit.test.sh fixtures).

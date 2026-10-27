@@ -52,8 +52,9 @@
 # reported relative to it.
 #
 # Exits 0 when clean, 1 on any hit, 2 on operational error: a required
-# tool is missing, the scan set is empty, a file cannot be read, or `yq`
-# cannot read a workflow or one of its steps.
+# tool is missing, the scan set is empty, a file cannot be read, `yq`
+# cannot read a workflow or one of its steps, or a workflow holds a job
+# key the job list cannot carry.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
