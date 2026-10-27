@@ -2066,7 +2066,8 @@ full 40-hex SHA, or is a local path-relative reference.
 Lint: the `attribute failure reason` step of
 `verify-latest-release.yml` covers every id-carrying step of the
 `verify` job, reads every env var it declares, documents every reason
-token it emits, and walks the ladder in step-execution order.
+token it emits in the verification doc and the notify body, and walks
+the ladder in step-execution order.
 
 ### scripts/check-workflow-ascii-space.sh
 

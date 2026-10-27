@@ -107,7 +107,7 @@ Enforced by `scripts/check-auto-merge-decline-gate.sh`. Wired as the `lint-workf
 
 ## verify-reason-ladder
 
-The `attribute failure reason` step of `verify-latest-release.yml` covers every `id:`-carrying step of the `verify` job other than itself, reads every env var it declares, documents every reason token it emits, and walks the ladder in step-execution order — four assertions binding four hand-synced copies of the same mapping.
+The `attribute failure reason` step of `verify-latest-release.yml` covers every `id:`-carrying step of the `verify` job other than itself, reads every env var it declares, documents every reason token it emits as a list entry in the verification doc and in the notify body, and walks the ladder in step-execution order — four assertions binding five hand-synced copies of the same mapping.
 
 The escape hatch is a `# reason-ladder-exempt: <reason>` comment on the same line as a step's `id:` key, for a step that legitimately carries an id without being a verification outcome; the rationale must be non-empty.
 
