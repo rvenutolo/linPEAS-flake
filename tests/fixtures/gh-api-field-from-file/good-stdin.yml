@@ -1,0 +1,17 @@
+name: good-stdin
+on: push
+permissions: {}
+jobs:
+  put:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: put
+        run: |
+          set -Eeuo pipefail
+          content_file="$(mktemp)"
+          base64 --wrap=0 -- notes.md >"${content_file}"
+          tip_sha="$(jq --null-input --rawfile content "${content_file}" \
+            '{message: "docs: update notes", content: $content}' |
+            gh api --method PUT "repos/${REPO}/contents/notes.md" --input - --jq .commit.sha)"
+          gh api --method PATCH "repos/${REPO}/git/refs/heads/main" --raw-field sha="${tip_sha}"

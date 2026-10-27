@@ -1,0 +1,12 @@
+name: bad-cat
+on: push
+permissions: {}
+jobs:
+  put:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: put
+        run: |
+          set -Eeuo pipefail
+          gh api "repos/${REPO}/issues/1/comments" --raw-field body="$(cat notes.md)"

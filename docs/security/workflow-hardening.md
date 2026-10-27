@@ -655,6 +655,22 @@ A job key the job list cannot carry, or a merge key directly under `jobs:`, is a
 
 Enforced by `scripts/check-run-block-strict.sh`. Wired as the `lint-workflow-security` CI job (member check `run-block-strict`) and as a pre-commit hook.
 
+## gh-api-field-from-file
+
+No `gh api` call in a `run:` block under `.github/workflows/*.yml` (or `.yaml`) or `.github/actions/**/action.yml` (or `.yaml`) passes a file's contents as one `--field`, `--raw-field`, `-f` or `-F` argument. A request body built from a file is written with `jq --rawfile` and sent on stdin with `gh api --input -`. `-F name=@FILE` is also fine, because gh reads that file itself.
+
+Linux caps a single argument at 128 KiB (`MAX_ARG_STRLEN`). A call such as `--field content="$(base64 --wrap=0 CHANGELOG.md)"` works until the file grows past that cap. After that it fails every run with `Argument list too long` (exit 126), with no change to the workflow, because the file just grew. Stdin has no such cap.
+
+A value carries file contents when it holds a command substitution whose output stage reads a file, or expands a variable the same block assigned from one, directly or through another such variable. The output stage is the last command of the substitution, and of a pipeline its last stage, so `$(cat f | base64)` counts and `$(jq --rawfile ... | gh api --input -)` does not. An output stage reads a file when it is `base64`, `cat` (unless its only input is a here-document), `jq` with `--rawfile`, `--slurpfile`, `--slurp`, `--raw-input` or a short-flag bundle holding `s` or `R`, or a bare redirect `$(<FILE)`. Other `jq` reads print one small value and do not count, nor does a length `${#x}`.
+
+The lint reads the arguments of each `gh api` command, and every array literal in a block that runs `gh api`, since an argument list is often built in an array and passed as `gh api "${args[@]}"`. Command words come from the `shfmt --tojson` parse tree, with each `${{ ... }}` expression replaced by a literal word first, as the runner substitutes it before the shell runs. Only a block that spells `gh` is parsed. Such a block that `shfmt` cannot parse is a finding, because its arguments were never read.
+
+A value carried between steps, a variable set by `read`, `mapfile` or `printf -v`, a call made through a shell function or through a command word that is itself an expansion, and an array assigned in one block and used in another are not followed.
+
+A job key the job list cannot carry, or a merge key directly under `jobs:`, is a counted finding and the file's jobs are not read; see "Job keys and merge lists in the `jobs:` reads" in `docs/development/linting.md`.
+
+Enforced by `scripts/check-gh-api-field-from-file.sh`. Wired as the `lint-workflow-security` CI job (member check `gh-api-field-from-file`) and as a pre-commit hook.
+
 ## fork-guard-release
 
 Every workflow job that holds a guard-required write scope includes a fork-guard `if:` clause containing `github.repository == 'rvenutolo/linPEAS-flake'`.

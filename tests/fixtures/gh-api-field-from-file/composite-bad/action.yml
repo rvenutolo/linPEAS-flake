@@ -1,0 +1,9 @@
+name: composite-bad
+description: fixture
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -Eeuo pipefail
+        gh api --method PUT "repos/${REPO}/contents/notes.md" --field content="$(base64 --wrap=0 notes.md)"

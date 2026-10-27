@@ -89,6 +89,7 @@ readonly -a ROWS=(
   "exit-contract-documented|check-exit-contract-documented.sh|scripts|SCRIPTS_DIR_OVERRIDE=${EMPTY}"
   "fork-guard-release|check-fork-guard-release.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
   "freshness-hook-scripts|check-freshness-hook-watches-modules.sh|repo shell scripts|ROOT_OVERRIDE=${NIX_ROOT}"
+  "gh-api-field-from-file|check-gh-api-field-from-file.sh|workflow and composite-action files|WORKFLOWS_DIR_OVERRIDE=${EMPTY},ACTIONS_DIR_OVERRIDE=${EMPTY}"
   "gh-api-version-header|check-gh-api-version-header.sh|repo shell scripts|SCRIPTS_DIR_OVERRIDE=${EMPTY}"
   "guard-exit-code|check-guard-exit-code.sh|repo shell scripts|SCRIPTS_DIR_OVERRIDE=${EMPTY}"
   "harden-runner-block|check-harden-runner-block.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
