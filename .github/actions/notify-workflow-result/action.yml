@@ -35,7 +35,9 @@ description: "Open/update a deduped issue on workflow failure or cancellation; c
 # Every other outcome files: the verdicts `report`, `exhausted` and
 # `ignore`, and any failure to fetch or classify (the step warns and
 # reports), because a broken classifier must never silence an issue.
-# `success` and `skipped` never classify. Callers' jobs need
+# `success` and `skipped` never classify, and neither does a caller that
+# passes `hold-off` other than `true`: it files on the first failure, for
+# a run the watchdog would never select (see the input). Callers' jobs need
 # `actions: read` and `checks: read` for the fetch
 # (tests/notify-caller-permissions.test.sh asserts both on every job
 # that calls this composite). The scripts are read from the caller's
@@ -101,6 +103,16 @@ inputs:
   github-token:
     description: "GitHub token with issues:write (e.g. secrets.GITHUB_TOKEN)."
     required: true
+  hold-off:
+    description: >-
+      `true` (the default) holds a transient failure off for a CI watchdog
+      re-run, as the TRANSIENT HOLD-OFF header describes. Any other value
+      files on the first failure. A caller passes `false` when its run
+      can conclude `success` with a failed job (a job-level
+      `continue-on-error`): the watchdog selects only failed or cancelled
+      runs, so a held-off failure in such a run is never re-run or filed.
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -113,6 +125,7 @@ runs:
       continue-on-error: true
       env:
         RESULT: ${{ inputs.result }}
+        HOLD_OFF: ${{ inputs.hold-off }}
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
         set -Eeuo pipefail
@@ -121,6 +134,13 @@ runs:
         # result leaves the verdict empty.
         if [[ ${RESULT} != 'failure' && ${RESULT} != 'cancelled' ]]; then
           printf 'verdict=\n' >>"${GITHUB_OUTPUT}" || true
+          exit 0
+        fi
+        # A caller that opted out files on the first failure, without
+        # fetching or classifying the run.
+        if [[ ${HOLD_OFF} != 'true' ]]; then
+          printf 'hold-off is %s, so the failure is reported without classifying the run\n' "${HOLD_OFF@Q}"
+          printf 'verdict=report\n' >>"${GITHUB_OUTPUT}" || true
           exit 0
         fi
         verdict='report'

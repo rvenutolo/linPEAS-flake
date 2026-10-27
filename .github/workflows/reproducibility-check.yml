@@ -336,6 +336,11 @@ jobs:
           # `compare` decides, read through its `completed` output because
           # `continue-on-error` hides its failure from its own result.
           result: ${{ (needs.build-a.result == 'failure' || needs.build-b.result == 'failure') && 'failure' || (needs.build-a.result == 'cancelled' || needs.build-b.result == 'cancelled' || needs.compare.result == 'cancelled') && 'cancelled' || needs.compare.result == 'skipped' && 'skipped' || needs.compare.outputs.completed == 'true' && 'success' || 'failure' }}
+          # `compare`'s job-level continue-on-error lets the run conclude
+          # `success` with `compare` failed, and the CI watchdog selects only
+          # failed or cancelled runs, so a held-off failure would never be
+          # re-run or filed.
+          hold-off: "false"
           label: reproducibility
           title: "reproducibility-check: builds differ, or the check could not run"
           label-description: two independent builds of linpeas or the image differ, or the check could not run

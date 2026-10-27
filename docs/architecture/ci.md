@@ -265,7 +265,11 @@ predicate the watchdog's automated loop applies before it re-runs a
 [CI retry watchdog runbook](../runbooks/ci-watchdog.md)). That policy
 never retries `release-on-bump`, whose re-runs are not idempotent, or
 `ci-watchdog`, which never re-runs itself, so their notify jobs file on
-the first failure. The verdict
+the first failure. A caller that passes the composite `hold-off: 'false'`
+files on the first failure as well, without classifying the run;
+`reproducibility-check` does, because its `compare` job's
+`continue-on-error` can leave a failed run concluding `success`, which
+the watchdog never selects. The verdict
 `retry` means every counted job failed for infrastructure reasons and the
 attempt cap is not spent, so the composite prints a notice naming the
 attempt and the classified jobs and files nothing; the re-run reaches the
