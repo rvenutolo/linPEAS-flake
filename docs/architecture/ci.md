@@ -269,7 +269,8 @@ the first failure. The verdict
 `retry` means every counted job failed for infrastructure reasons and the
 attempt cap is not spent, so the composite prints a notice naming the
 attempt and the classified jobs and files nothing; the re-run reaches the
-composite again and files if it fails again. Any other verdict files as
+composite again and files once a failure is not retryable or the attempt
+cap is spent. Any other verdict files as
 before, so a run that exhausts its attempts, or that has a failed step of
 its own work, still gets its issue. A fetch or classifier error also files, with a
 workflow warning: a broken classifier must never silence an issue. The

@@ -28,8 +28,9 @@ description: "Open/update a deduped issue on workflow failure or cancellation; c
 # automated, the same predicate the CI watchdog applies before it re-runs
 # a run. On the exact verdict `retry` the run is one the watchdog
 # re-runs unless a newer push or schedule run of the same workflow and
-# event replaces it or it falls outside the watchdog's lookback, so the composite files nothing and prints a notice; the re-run
-# reaches this composite again, and files if it fails again for a reason
+# event replaces it or it falls outside the watchdog's lookback, so the
+# composite files nothing and prints a notice; the re-run reaches this
+# composite again, and files if it fails again for a reason
 # that is not retryable or once the attempt cap is spent (`exhausted`).
 # Every other outcome files: the verdicts `report`, `exhausted` and
 # `ignore`, and any failure to fetch or classify (the step warns and
@@ -209,7 +210,8 @@ runs:
           }
 
           // Only the exact verdict `retry` holds off for a CI watchdog
-          // re-run, and the re-run files if it fails again.
+          // re-run; the re-run files once a failure is not retryable or the
+          // attempt cap is spent.
           // The classify step reports on any fetch or classifier error,
           // so a broken classifier never silences an issue.
           if (verdict === 'retry') {

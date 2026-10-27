@@ -292,7 +292,7 @@ if ! notify_perms="$(read_workflow "${PERMS_ROWS//@JOB@/notify}" 'the permission
 fi
 
 # The notify composite classifies its own run before it files (it holds
-# off on a transient the CI watchdog re-runs), and that fetch reads the
+# off on a transient failure, for a CI watchdog re-run), and that fetch reads the
 # run's jobs and their annotations, so the job needs `actions: read` and
 # `checks: read` beside the `issues: write` it files with.
 if [[ ${notify_perms} != "actions:read,checks:read,issues:write" ]]; then
