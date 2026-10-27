@@ -1,0 +1,14 @@
+name: good-no-gh-api
+on: push
+permissions: {}
+jobs:
+  put:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: put
+        run: |
+          set -Eeuo pipefail
+          notes_b64="$(base64 --wrap=0 notes.md)"
+          curl_args=(--field content="${notes_b64}")
+          printf 'no gh call reads %s argument(s)\n' "${#curl_args[@]}"

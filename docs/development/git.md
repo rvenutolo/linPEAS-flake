@@ -175,6 +175,7 @@ Hooks (alphabetical):
 | `flake-show-fresh`                  | flake-show block in docs/reference/flake-outputs.md matches current flake outputs.                                                                       |
 | `fork-guard-release`                | Release-grade jobs include github.repository fork guard.                                                                                                 |
 | `freshness-hook-watches-modules`    | Every flake-evaluating freshness hook watches every source its evaluation reads.                                                                         |
+| `gh-api-field-from-file`            | No gh api call in a workflow or composite run: block passes file contents as one --field/-f/-F argument.                                                 |
 | `gh-api-version-header`             | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.                                                                     |
 | `gh-attestation-repo`               | gh attestation verify pins --repo rvenutolo/linPEAS-flake.                                                                                               |
 | `harden-runner-block`               | Every harden-runner step uses egress-policy: block (or marked temporary audit) with non-empty allowed-endpoints.                                         |

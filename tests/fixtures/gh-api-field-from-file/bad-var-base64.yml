@@ -1,0 +1,15 @@
+name: bad-var-base64
+on: push
+permissions: {}
+jobs:
+  put:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: put
+        run: |
+          set -Eeuo pipefail
+          content_b64="$(base64 --wrap=0 -- notes.md)"
+          gh api --method PUT "repos/${REPO}/contents/notes.md" \
+            --field message="docs: update notes" \
+            --field content="${content_b64}"

@@ -213,6 +213,25 @@ in
     pass_filenames = false;
     language = "system";
   };
+  # No gh api call in a workflow or composite run: block passes a file's
+  # contents as one --field/--raw-field/-f/-F argument: Linux caps one
+  # argument at 128 KiB, so the call fails once the file grows past it.
+  # See docs/security/workflow-hardening.md.
+  gh-api-field-from-file = {
+    enable = true;
+    name = "gh-api-field-from-file";
+    description = "No gh api call in a workflow or composite run: block passes file contents as one --field/-f/-F argument.";
+    entry = "${pkgs-unstable.writeShellScript "gh-api-field-from-file-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:${parserToolPath}:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-gh-api-field-from-file.sh
+    ''}";
+    files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*/action\\.ya?ml|scripts/check-gh-api-field-from-file\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   # Asserts only scripts/bump-linpeas.sh mutates
   # linpeas-pin.json — the release-on-bump trigger contract
   # depends on this isolation invariant.

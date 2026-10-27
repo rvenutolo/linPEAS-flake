@@ -799,6 +799,13 @@ and `excludes` filters, every nix module that attribute is defined or
 transposed by. Filters are evaluated as pre-commit evaluates them, with
 Python `re.search`; a filter that does not compile is a could-not-run.
 
+### scripts/check-gh-api-field-from-file.sh
+
+Lint: no `gh api` call in a workflow or composite-action
+`run:` block passes a file's contents as one `--field`, `--raw-field`,
+`-f` or `-F` argument. A request body built from a file goes to
+`gh api --input -` on stdin.
+
 ### scripts/check-gh-api-version-header.sh
 
 Lint: every `gh api` invocation and every `api.github.com`

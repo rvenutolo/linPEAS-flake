@@ -670,7 +670,8 @@ reads take one of four shapes:
     is exploded first. One pass suffices where the reads after it
     follow aliases by path and explode each leaf where they read it:
     the step lists of `check-no-opaque-procsub.sh`,
-    `check-no-pipe-into-grep-quiet.sh` and `check-run-block-strict.sh`,
+    `check-no-pipe-into-grep-quiet.sh`, `check-run-block-strict.sh` and
+    `check-gh-api-field-from-file.sh`,
     the `rules:` map of `check-commitlint-config-explicit.sh`, and the
     `concurrency:` map of `check-workflow-concurrency.sh`, whose single
     pass resolves a `group:` key or value written as an alias. Two
@@ -927,9 +928,9 @@ the whole job and must search what an alias or a merge key brings in
 hands the matched job alone to `explode`.
 
 A number `yq` printed in an earlier read goes back through `env`.
-`check-run-block-strict.sh` looks up no job by its key: its rows hold
-the document, job position and step index `yq` printed, and its reads
-find the job by them.
+`check-run-block-strict.sh` and `check-gh-api-field-from-file.sh` look
+up no job by its key: their rows hold the document, job position and
+step index `yq` printed, and their reads find the job by them.
 
 No script passes `yq`'s `--security-disable-env-ops`, which also turns
 off `strenv`, or `--security-disable-file-ops`; with nothing spliced

@@ -41,6 +41,7 @@ lint-workflow-security:
   - verify-reason-ladder
   - lock-derived-docs
   - notify-label-descriptions
+  - gh-api-field-from-file
 lint-script-hygiene:
   - script-shebang-pipefail
   - harness-preamble

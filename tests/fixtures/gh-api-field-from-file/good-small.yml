@@ -1,0 +1,28 @@
+name: good-small
+on: push
+permissions: {}
+jobs:
+  put:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: put
+        run: |
+          set -Eeuo pipefail
+          blob_sha="$(gh api "repos/${REPO}/contents/notes.md" --jq .sha)"
+          notes_b64="$(base64 --wrap=0 notes.md)"
+          notes_bytes="$(printf '%s' "${notes_b64}" | wc --bytes)"
+          pin="$(jq --raw-output .version linpeas-pin.json)"
+          notes="$(cat <<'NOTES'
+          short release note
+          NOTES
+          )"
+          gh api --method PUT "repos/${REPO}/contents/notes.md" \
+            --field message="chore: bump to ${pin}" \
+            --field sha="${blob_sha}" \
+            --field size="${#notes_b64}" \
+            --field bytes="${notes_bytes}" \
+            --raw-field owner="${REPO%%/*}" \
+            --raw-field note="${notes}" \
+            --field expr="${{ github.sha }}" \
+            -F content=@notes.md

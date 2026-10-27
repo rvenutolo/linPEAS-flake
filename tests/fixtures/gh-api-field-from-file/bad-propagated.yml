@@ -1,0 +1,14 @@
+name: bad-propagated
+on: push
+permissions: {}
+jobs:
+  put:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: put
+        run: |
+          set -Eeuo pipefail
+          raw="$(<notes.md)"
+          body="${raw}"
+          gh api "repos/${REPO}/issues/1/comments" --raw-field body="${body}"

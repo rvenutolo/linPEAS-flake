@@ -1,0 +1,13 @@
+name: bad-pipeline
+on: push
+permissions: {}
+jobs:
+  put:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: put
+        run: |
+          set -Eeuo pipefail
+          gh api --method PUT "repos/${REPO}/contents/notes.md" \
+            --field content="$(cat notes.md | base64 --wrap=0)"
