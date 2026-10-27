@@ -67,6 +67,7 @@ readonly -a HARNESSES=(
   'ci-watchdog-coverage|ci-watchdog-coverage.test.sh|'
   'select-automated-runs|select-automated-runs.test.sh|'
   'notify-caller-permissions|notify-caller-permissions.test.sh|'
+  'notify-hold-off|notify-hold-off.test.sh|'
   'changelog-pr-handoff|changelog-pr-handoff.test.sh|'
   'classify-pr-cache-refs|classify-pr-cache-refs.test.sh|'
   'lib-log|lib-log.test.sh|'

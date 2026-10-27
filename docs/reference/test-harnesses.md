@@ -161,6 +161,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/mark-docs-audit.test.sh`                | `scripts/mark-docs-audit.sh`                        | —                                            |
 | `tests/md-fence-shapes.test.sh`                | `scripts/check-manifest-digest-pinned.sh`           | —                                            |
 | `tests/notify-caller-permissions.test.sh`      | `.github/actions/notify-workflow-result/action.yml` | —                                            |
+| `tests/notify-hold-off.test.sh`                | `.github/actions/notify-workflow-result/action.yml` | —                                            |
 | `tests/octoscan-scan.test.sh`                  | `scripts/octoscan-scan.sh`                          | —                                            |
 | `tests/repo-root-guard.test.sh`                | `scripts/*.sh`                                      | —                                            |
 | `tests/retry-command.test.sh`                  | `scripts/retry-command.sh`                          | —                                            |
