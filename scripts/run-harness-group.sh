@@ -31,8 +31,8 @@
 # Exit codes:
 #   0 — every harness passed, or --print-roster completed.
 #   1 — at least one harness failed its test or its enforce stage.
-#   2 — usage error: an unknown or extra argument, a roster name written
-#       twice, or a worker that left no status.
+#   2 — could not run, for example: an unknown or extra argument, a
+#       roster name written twice, or a worker that left no status.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

@@ -27,8 +27,9 @@ source "${_lib_self_dir}/enumerate.sh"
 # @description Run `fn <name> <slot>` for every name, at most
 # `CHECK_WORKERS_OVERRIDE` (default `nproc`) at a time, with
 # `slot="<result_dir>/<index>"` and the index zero-padded to three digits
-# in roster order, so a batch holds at most 999 names: a wider index would
-# sort out of roster order.
+# in roster order. A batch holds at most 999 names, which keeps every
+# index inside three digits with one to spare, so the slots sort in roster
+# order.
 # The function's stdout and stderr go to `<slot>.out`; the worker writes
 # `<slot>.name`, `<slot>.rc` and `<slot>.secs` from its EXIT trap and
 # prints `done: <name> pass` or `done: <name> FAIL` as each run finishes.

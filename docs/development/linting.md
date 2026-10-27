@@ -1106,7 +1106,7 @@ rather than inside `nix flake check`. Each also has a
 most of those regenerate before asserting `--check`, which tests the generator
 rather than the committed file; `refresh-flake-show`, `refresh-pin-parity`,
 `refresh-ephemeral-refs-gap` and `refresh-runner-labels` are the four that
-`--check` the tree as committed. A block hand-edited past the hooks — through
+`--check` the tree as committed. A block owned by one of the other generators, hand-edited past the hooks — through
 the web UI, or with `--no-verify` — is therefore caught by the next regeneration, not by CI.
 
 Fixing content inside one of these regions means editing its generator — or,
