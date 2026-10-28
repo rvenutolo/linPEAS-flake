@@ -59,10 +59,9 @@ readonly WORKFLOWS_DIR="${WORKFLOWS_DIR_OVERRIDE:-.github/workflows}"
 # GitHub's labels API caps a description at 100 characters.
 readonly MAX_DESCRIPTION=100
 
-# The composite is referenced two ways: the local path, and a pinned
-# self-reference for the workflows that must resolve it at a fixed SHA.
-# Matching on the trailing path segment covers both without pinning this
-# lint to either spelling.
+# A step is matched on the composite's path segment, not on the local
+# `./` form alone, so this lint reads a step however it spells the
+# reference; `uses-no-self-reference` is what keeps that spelling local.
 readonly COMPOSITE_SUFFIX='.github/actions/notify-workflow-result'
 
 function main() {

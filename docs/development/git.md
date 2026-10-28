@@ -218,6 +218,7 @@ Hooks (alphabetical):
 | `treefmt-config-fresh`              | treefmt-config block in docs/reference/treefmt-config.md matches the evaluated treefmt config.                                                           |
 | `typos`                             | Spell-check across the repo.                                                                                                                             |
 | `upload-artifact-strict`            | Every actions/upload-artifact sets with.if-no-files-found: error.                                                                                        |
+| `uses-no-self-reference`            | No uses: reference names this repository by slug; its own actions use the ./ path.                                                                       |
 | `uses-sha-pinned`                   | Every uses: reference is SHA-pinned.                                                                                                                     |
 | `verify-reason-ladder`              | Every verify-job step id is mapped to a documented reason token, in execution order.                                                                     |
 | `workflow-concurrency`              | Every workflow declares a top-level concurrency.group.                                                                                                   |

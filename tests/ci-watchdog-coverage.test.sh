@@ -208,22 +208,34 @@ else
   done
   printf 'on: push\n%sjobs:\n  a:\n    env:\n      DEEP: *d17\n%s      - uses: ./.github/actions/notify-workflow-result\n' \
     "${notify_nest}" "${notify_job}" >"${notify_dir}/unread-alias.yml"
+  # A slug reference to the composite is banned by uses-no-self-reference,
+  # so it is not a call: a workflow written that way reads as calling no
+  # notify, and the watchdog files.
   notify_outs=()
+  notify_slug_outs=()
   for notify_case in inline uses-alias pinned-inline pinned-alias deep-alias unread-alias; do
     notify_rc=0
     yq "${notify_expr}" "${notify_dir}/${notify_case}.yml" >"${notify_dir}/${notify_case}.out" 2>&1 || notify_rc=$?
     printf 'harness-assert-outcome: exit=%d\n' "${notify_rc}" >>"${notify_dir}/${notify_case}.out"
-    notify_outs+=("${notify_dir}/${notify_case}.out")
-    if [[ $(<"${notify_dir}/${notify_case}.out") == $'1\nharness-assert-outcome: exit=0' ]]; then
-      printf 'OK   notify-call count: %s counts one call\n' "${notify_case}"
+    notify_want=1
+    if [[ ${notify_case} == pinned-* ]]; then
+      notify_want=0
+      notify_slug_outs+=("${notify_dir}/${notify_case}.out")
     else
-      printf 'FAIL notify-call count: %s printed %q, want 1 and exit 0\n' \
-        "${notify_case}" "$(<"${notify_dir}/${notify_case}.out")" >&2
+      notify_outs+=("${notify_dir}/${notify_case}.out")
+    fi
+    if [[ $(<"${notify_dir}/${notify_case}.out") == "${notify_want}"$'\nharness-assert-outcome: exit=0' ]]; then
+      printf 'OK   notify-call count: %s counts %d call(s)\n' "${notify_case}" "${notify_want}"
+    else
+      printf 'FAIL notify-call count: %s printed %q, want %d and exit 0\n' \
+        "${notify_case}" "$(<"${notify_dir}/${notify_case}.out")" "${notify_want}" >&2
       failures=1
     fi
   done
-  # Every case is meant to print the same count, so they are one record.
+  # The cases in each group are meant to print the same count, so each
+  # group is one record.
   harness_assert_record 'notify-call count: aliased and inline notify steps' '' "${notify_outs[@]}"
+  harness_assert_record 'notify-call count: a slug reference is not a call' '' "${notify_slug_outs[@]}"
 fi
 
 harness_assert_verify || failures=1

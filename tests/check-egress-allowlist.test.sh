@@ -101,11 +101,6 @@ expect bad-notify-extra-host.yml 1 "cache.nixos.org"
 # the pure shape's three steps, so the extra host is still refused.
 expect bad-mixed-case-notify-checkout.yml 1 "composite and nothing else, yet allowlists cache.nixos.org"
 expect bad-mixed-case-notify-harden-runner.yml 1 "composite and nothing else, yet allowlists cache.nixos.org"
-expect good-notify-sha-pinned.yml 0 ""
-# The SHA-pinned self-reference has to be discovered, not merely tolerated: a
-# clean run over the matching pinned job says nothing about whether the job
-# was read at all, so the pinned form gets a violating job of its own.
-expect bad-notify-sha-pinned-missing-host.yml 1 "github.com:443"
 expect good-notify-extended.yml 0 ""
 expect bad-notify-extended-missing.yml 1 "api.github.com:443"
 

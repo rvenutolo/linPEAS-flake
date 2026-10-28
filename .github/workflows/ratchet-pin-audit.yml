@@ -149,14 +149,6 @@ jobs:
               # anything after is an in-repo path. The API only accepts the top-level repo.
               IFS=/ read -ra _parts <<<"${repo}"
               repo_root="${_parts[0]}/${_parts[1]}"
-              # Skip self-references: `uses: <this-repo>/.github/actions/<name>@<sha>` is
-              # functionally a local action invocation via absolute slug. The SHA is the
-              # repo's own main-branch HEAD as Renovate maintains it; no canonical tag
-              # exists to compare against.
-              self_repo="${GITHUB_REPOSITORY:-rvenutolo/linPEAS-flake}"
-              if [[ "${repo_root}" == "${self_repo}" ]]; then
-                continue
-              fi
               # Floating-major tags (vN) retarget on every release; the
               # audit cannot distinguish a benign move from an attack.
               # Skip before any API call to avoid wasted requests and a

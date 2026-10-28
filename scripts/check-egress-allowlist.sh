@@ -136,12 +136,10 @@
 #
 #      Discovery is by property, not by name: a subject is any job with a
 #      step whose `uses:` names notify-workflow-result, which covers the
-#      `./.github/actions/...` form, the SHA-pinned self-reference (used
-#      where a `pull_request` event must not run a PR branch's copy of the
-#      composite), and the next notify job nobody has written yet. No
-#      job-name list and no workflow-path list means a new notify job is
-#      governed on the day it is written rather than on the day someone
-#      remembers to widen a lint.
+#      `./.github/actions/...` form and the next notify job nobody has
+#      written yet. No job-name list and no workflow-path list means a new
+#      notify job is governed on the day it is written rather than on the
+#      day someone remembers to widen a lint.
 #
 #      Two branches, keyed on whether the job does anything beyond
 #      notifying:

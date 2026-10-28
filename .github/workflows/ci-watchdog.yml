@@ -474,8 +474,8 @@ jobs:
             const runLabel = (r) => `run ${r.id} (${r.name}, ${r.event})`;
 
             const notifyCallers = new Map();
-            // Whether the workflow file calls the notify-workflow-result composite,
-            // by its local path or by its pinned self-reference (pages.yml).
+            // Whether the workflow file calls the notify-workflow-result composite
+            // by its local path, the only form uses-no-self-reference admits.
             // Such a workflow files its own issue on the final attempt, and a second
             // filer would mean two issues for one failure. A file that cannot be
             // read counts as calling no notify, so the watchdog files: a broken
@@ -490,7 +490,7 @@ jobs:
                   const count = execFileSync(
                     'yq',
                     [
-                      '[.jobs[].steps[]? | select(((.uses | explode(.)) // "") | test("^([.]/|rvenutolo/linPEAS-flake/)[.]github/actions/notify-workflow-result(@|$)"))] | length',
+                      '[.jobs[].steps[]? | select(((.uses | explode(.)) // "") | test("^[.]/[.]github/actions/notify-workflow-result$"))] | length',
                       `${process.env.GITHUB_WORKSPACE}/${path}`,
                     ],
                     execOpts,

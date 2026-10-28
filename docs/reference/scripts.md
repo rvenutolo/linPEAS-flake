@@ -2055,6 +2055,13 @@ Lint: every step whose `uses:` starts with
 workflow under `.github/workflows/*.yml` sets
 `with.if-no-files-found: error` so empty-glob bugs hard-fail.
 
+### scripts/check-uses-no-self-reference.sh
+
+Lint: no `uses:` in `.github/workflows/*.yml` (or
+`.yaml`) or `.github/actions/**/*.yml` (or `.yaml`) names this
+repository by its owner/repo slug. This repository's own actions and
+reusable workflows are reached by the path-relative `./` form.
+
 ### scripts/check-uses-sha-pinned.sh
 
 Lint: every `uses:` in `.github/workflows/*.yml` (or

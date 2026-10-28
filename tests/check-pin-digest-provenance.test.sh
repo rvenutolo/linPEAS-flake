@@ -393,7 +393,7 @@ function main() {
   # file inventories, so a scenario silently driving the wrong tree fails
   # on the numbers rather than matching a sibling's banner.
   run_scenario 'unchanged tree passes' 'base' deny 0 \
-    'pin digest provenance OK: 16 pin(s) across 5 file(s)'
+    'pin digest provenance OK: 16 pin(s) across 4 file(s)'
   run_scenario 'semver digest repoint fails' 'head-semver-repoint' deref-none 1 \
     'digest repointed under unchanged version: actions/checkout (v4.3.1): bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -> dddddddddddddddddddddddddddddddddddddddd'
   # The same head tree as the scenario above, separated only by what the
@@ -457,9 +457,6 @@ function main() {
     'pin digest provenance OK: 6 pin(s) across 4 file(s)'
   run_scenario 'file rename plus repoint fails' 'head-file-rename-repoint' deref-none 1 \
     'digest repointed under unchanged version: actions/checkout (v4.3.1): bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -> 5555555555555555555555555555555555555555'
-  run_scenario 'self-reference pin repoint under unchanged comment passes' \
-    'head-self-reference-repoint' deny 0 \
-    'pin digest provenance OK: 6 pin(s) across 5 file(s)'
   run_scenario 'floating repoint compare-API 404 fails as violation, not exit 2' \
     'head-floating-repoint' compare-not-found 1 \
     'compare API reports no such commit'
