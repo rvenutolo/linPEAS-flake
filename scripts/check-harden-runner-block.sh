@@ -3,18 +3,12 @@
 #
 # @description Lint: every step-security/harden-runner step uses
 # egress-policy: block with a non-empty allowed-endpoints list,
-# preventing network-level egress to unlisted hosts. Audit mode passes
-# only under the comment linking the upstream block-mode bug.
+# preventing network-level egress to unlisted hosts.
 
 # Asserts every step-security/harden-runner step in
 # .github/workflows/*.yml uses egress-policy: block with a non-empty
 # allowed-endpoints list, locking in that posture so no step reverts
 # to audit or ships an empty allowlist — see docs/security/trust-model.md.
-# One exception: `egress-policy: audit` passes when the key's head
-# comment links https://github.com/step-security/harden-runner/issues/708,
-# the upstream bug that makes block mode drop allowed hosts on westus2
-# runners. The allowlist must still be non-empty there. Delete the
-# exception when block mode returns.
 # A step is a harden-runner step when its `uses:` holds
 # `step-security/harden-runner@`, its ASCII letters in either case.
 #
@@ -48,11 +42,6 @@ readonly DIR="${OVERRIDE:-${DEFAULT_DIR}}"
 # lint's reach.
 HARDEN_RUNNER_RE="$(ascii_fold_regex step-security/harden-runner)@"
 readonly HARDEN_RUNNER_RE
-# The upstream issue a temporary audit-mode step must link in the head
-# comment of its egress-policy key. The comment is read as an array's
-# first element because `key` on an absent key yields no value at all,
-# which would drop the step's whole row from the read.
-readonly AUDIT_MARKER_RE='github[.]com/step-security/harden-runner/issues/708'
 
 if ! command -v yq >/dev/null 2>&1; then
   printf 'yq not found on PATH\n' >&2
@@ -106,25 +95,23 @@ for f in "${selected_files[@]}"; do
     | to_entries[] as $j
     | $j.value.steps[]
     | select((.uses | explode(.)) // "" | test("'"${HARDEN_RUNNER_RE}"'"))
-    | ($j.key | explode(.) | tostring) + "\t" + ((.with."egress-policy" | explode(.)) // "null") + "\t" + (([.with."egress-policy" | key | head_comment] | .[0]) // "" | tostring | test("'"${AUDIT_MARKER_RE}"'") | tostring) + "\t" + (((.with."allowed-endpoints" | explode(.)) // "null") | sub("\n"; " "))
+    | ($j.key | explode(.) | tostring) + "\t" + ((.with."egress-policy" | explode(.)) // "null") + "\t" + (((.with."allowed-endpoints" | explode(.)) // "null") | sub("\n"; " "))
   ' "${f}")"; then
     printf '%s: could not evaluate workflow with yq (malformed, or non-string allowed-endpoints?)\n' "${f}" >&2
     failed=$((failed + 1))
     continue
   fi
 
-  while IFS=$'\t' read -r job policy marked endpoints; do
+  while IFS=$'\t' read -r job policy endpoints; do
     [[ -z ${job} ]] && continue
-    if [[ ${policy} == "audit" && ${marked} == "true" ]]; then
-      :
-    elif [[ ${policy} != "block" ]]; then
+    if [[ ${policy} != "block" ]]; then
       printf '%s: job %q harden-runner egress-policy %q is not block\n' "${f}" "${job}" "${policy}" >&2
       failed=$((failed + 1))
       continue
     fi
     trimmed="${endpoints//[$' \t\n']/}"
     if [[ ${endpoints} == "null" || -z ${trimmed} ]]; then
-      printf '%s: job %q has %s mode but empty allowed-endpoints\n' "${f}" "${job}" "${policy}" >&2
+      printf '%s: job %q has block mode but empty allowed-endpoints\n' "${f}" "${job}" >&2
       failed=$((failed + 1))
     fi
   done <<<"${rows}"
