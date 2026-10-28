@@ -6,6 +6,22 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261028-1e84d916] - 2026-10-28
+
+### Chores
+- Bump linpeas to 20261028-1e84d916 ([#1456](https://github.com/rvenutolo/linPEAS-flake/pull/1456))
+
+### Documentation
+- Fix the drift the cycle-closing docs audit found ([#1451](https://github.com/rvenutolo/linPEAS-flake/pull/1451))
+
+### Features
+- Lint gh api arguments built from file contents ([#1450](https://github.com/rvenutolo/linPEAS-flake/pull/1450))
+
+### Fixes
+- File reproducibility-check failures without the transient hold-off ([#1454](https://github.com/rvenutolo/linPEAS-flake/pull/1454))
+- Require a reason entry per ladder token in the doc and notify body ([#1453](https://github.com/rvenutolo/linPEAS-flake/pull/1453))
+- Drop the trigger from notify titles of dispatchable workflows ([#1452](https://github.com/rvenutolo/linPEAS-flake/pull/1452))
+
 ## [20261027-87d1fe16] - 2026-10-27
 
 ### Chores
