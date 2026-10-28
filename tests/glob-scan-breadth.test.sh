@@ -129,6 +129,7 @@ readonly -a ROWS=(
   "test-reachable|check-test-reachable.sh|doc-freshness harnesses|TESTS_DIR_OVERRIDE=${EMPTY}"
   "tool-guarded|check-tool-guarded.sh|scripts|SCRIPTS_DIR_OVERRIDE=${EMPTY}"
   "upload-artifact-strict|check-upload-artifact-strict.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
+  "uses-no-self-reference|check-uses-no-self-reference.sh|workflow and composite-action YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
   "uses-sha-pinned|check-uses-sha-pinned.sh|workflow and composite-action YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
   "workflow-ascii-space|check-workflow-ascii-space.sh|workflow and composite-action YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY},ACTIONS_DIR_OVERRIDE=${EMPTY}"
   "workflow-concurrency|check-workflow-concurrency.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
