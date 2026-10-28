@@ -3,9 +3,9 @@
 #
 # @description Lint: the `attribute failure reason` step of
 # `verify-latest-release.yml` covers every id-carrying step of the
-# `verify` job, reads every env var it declares, documents every reason
-# token it emits in the verification doc and the notify body, and walks
-# the ladder in step-execution order.
+# `verify` job, reads every env var it declares, gives every reason token
+# it assigns after the initial `ok` a list entry in the verification doc
+# and the notify body, and walks the ladder in step-execution order.
 
 # The notify job turns the `reason` token into triage wording. A
 # verification step whose `id:` never reaches the attribution ladder

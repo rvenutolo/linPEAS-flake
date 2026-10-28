@@ -27,11 +27,14 @@
 # guarded. A release whose changelog never lands stays unguarded until some
 # later changelog commit exists, and two releases stacking up inside the window
 # would exclude both. That is tolerable because a changelog that does not land
-# is signalled elsewhere first: a changelog job that fails, or whose PR is
-# still open at its deadline with nothing for the CI watchdog to re-run, files
-# through the release-on-bump notify path, and a PR handed to the watchdog
-# because a check failed is re-run and, once its retries are exhausted, filed
-# by the watchdog. This check is the backstop, not the primary signal.
+# is usually signalled elsewhere first: a changelog job that fails, or whose
+# PR is still open at its deadline with nothing for the CI watchdog to re-run,
+# files through the release-on-bump notify path, and a PR handed to the
+# watchdog because a check failed is re-run and, once its retries are
+# exhausted, filed by the watchdog. A PR handed off whose only red check is a
+# cancel the watchdog does not re-run is signalled by neither (see
+# scripts/changelog-pr-handoff.sh). This check is the backstop, not the
+# primary signal.
 #
 # git-cliff is invoked only via the flake-pinned `.#git-cliff` output, per the
 # nix-run-pinned invariant. Offline and deterministic: git-cliff parses the PR

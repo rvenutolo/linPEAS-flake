@@ -1509,11 +1509,11 @@ jobs:
           # never re-run to rebase it). Fail on a closed PR so the notify job
           # surfaces it; a re-run (force-republish) then recovers. A PR still
           # open at the deadline is handed to ci-watchdog, and the step
-          # succeeds, only when the PR is in the shape the watchdog acts on:
-          # auto-merge armed, not behind main or conflicting, and a failed,
-          # cancelled or timed-out check on its head
-          # (scripts/changelog-pr-handoff.sh decides; its header names the
-          # cancel the watchdog does not re-run). Any other open
+          # succeeds, only when auto-merge is armed, the PR is not behind
+          # main or conflicting, and a check on its head failed, was
+          # cancelled or timed out (scripts/changelog-pr-handoff.sh decides;
+          # its header names the cancels the watchdog does not re-run, which
+          # are handed off all the same). Any other open
           # PR fails the step, so notify files rather than leave a PR open
           # that nothing will ever re-run or report. The hand-off read is the
           # only call made with the job token (ROLLUP_TOKEN): statusCheckRollup
