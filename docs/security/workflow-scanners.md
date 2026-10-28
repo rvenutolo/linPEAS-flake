@@ -159,9 +159,9 @@ tree.)
     file, since it is handed the directory rather than a matched file
     list. Both paths read the same `zizmor.yml` and the same inline
     `# zizmor: ignore[...]` comments, so neither is a check on the
-    other's suppressions. The watchdog pages a finding, a scan that
-    could not start because a step before it or `nix develop` itself
-    failed, or a cancelled job, as a deduped
+    other's suppressions. The watchdog pages a finding, a failed step
+    (`nix develop` and zizmor itself included, as when zizmor errors
+    rather than reports), or a cancelled job, as a deduped
     `zizmor-drift` issue <!-- notify-arms: zizmor-drift-check.yml/notify = failure cancelled -->,
     closed on the next clean run; a rule change arrives
     with the `flake.lock` bump whose PR `flake-check` already re-scans the

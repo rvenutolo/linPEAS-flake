@@ -185,14 +185,15 @@ The automated loop re-ran a `<event>` run of `<workflow>` until its
 classifier calls transient. The watchdog
 files this issue only for a workflow that does not call the
 `notify-workflow-result` composite: one whose workflow file has no step
-`uses:` of it, neither the local path
-`./.github/actions/notify-workflow-result` nor the pinned self-reference
-`rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@<sha>`.
+`uses:` of its local path, `./.github/actions/notify-workflow-result`.
+A `uses:` naming the composite by this repository's slug is not read as
+a call; the `uses-no-self-reference` lint refuses that form.
 A `uses:` written as a YAML alias is read as its anchored text; a root
 `jobs` key written as an alias is not resolved, so its workflow reads as
 calling no notify and the watchdog files.
-A workflow that calls it files its own issue through
-it on the final attempt, and the watchdog only prints a notice, so one
+A workflow that calls it files its own issue through it no later than
+the final attempt (on the first, when it passes the composite
+`hold-off: 'false'`), and the watchdog only prints a notice, so one
 failure never gets two issues. If the watchdog cannot read the workflow
 file to tell, it logs a warning and files, because an unfiled exhausted
 run is the worse mistake. A real failure in a workflow without a notify
@@ -226,9 +227,10 @@ sweep rather than held off for a retry nobody would run. The `notify`
 job is skipped when `retry` is skipped, as on a no-op `workflow_run`
 completion, and the next successful sweep closes the issue.
 
-While sweeps fail, every failure another workflow's notify job held off
-for a retry is neither re-run nor filed, and bot PRs stuck on a transient
-failure stay stuck. Read the failed `retry` log as the next section
+While sweeps fail, a failure another workflow's notify job held off for a
+retry is neither re-run nor filed when the failing sweep did not reach
+it (a halted sweep, or the item that errored), and a bot PR stuck on a
+transient failure the sweep did not reach stays stuck. Read the failed `retry` log as the next section
 describes, fix the cause, and then run a sweep by hand (see
 [Forcing a run](#forcing-a-run)). That sweep picks up a held-off
 failure whose latest attempt finished in the last 24 hours; an older one

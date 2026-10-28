@@ -1851,7 +1851,7 @@ jobs:
 
             If `image-amd64` or `image-arm64` failed, the per-arch job may have left a partially-published state (orphan arch-suffixed tag on one registry, missing on the other). The push loop is ordered `docker.io` then `ghcr.io`, so today the typical orphan is a docker.io `{version}-{arch}` tag with no matching ghcr.io tag.
 
-            Full step-by-step recovery — including the quote-safe Docker Hub API snippets and the `DOCKERHUB_TOKEN_DELETE` scope requirement — lives in [`docs/runbooks/dockerhub-recovery.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/docs/runbooks/dockerhub-recovery.md). Follow it end-to-end before closing this issue.
+            Full step-by-step recovery — including the quote-safe Docker Hub API snippets and the `DOCKERHUB_TOKEN_DELETE` scope requirement — lives in [`docs/runbooks/dockerhub-recovery.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/docs/runbooks/dockerhub-recovery.md). Follow it end-to-end: the next successful `release-on-bump` run closes this issue on its own, which can come before the recovery is done.
 
             ## Common Docker Hub causes
 

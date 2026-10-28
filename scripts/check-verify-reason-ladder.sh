@@ -14,9 +14,9 @@
 # clean-run initializer, but nothing says which step broke. That is a
 # gap this lint exists to keep closed, because the alternative a missing
 # terminal branch produces is worse — a genuine tamper signal reported
-# under the same token as a clean run. The reason list in the
-# verification doc is a third copy of the same mapping and drifts the
-# same way, and so is the reason list in the notify job's issue body.
+# under the same token as a clean run. The reason lists in the notify
+# job's issue body and in the verification doc are further copies of
+# the same mapping and drift the same way.
 #
 # Four assertions:
 #

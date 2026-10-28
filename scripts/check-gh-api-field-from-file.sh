@@ -65,7 +65,8 @@
 # followed. Only a block that spells `gh` is parsed, since no other block
 # can hold a `gh api` command word. Such a block is read as bash whatever
 # its `shell:` says, so a step in another language is reported as
-# unparsable rather than skipped.
+# unparsable when `shfmt` rejects it, and is scanned as bash when it
+# does not, rather than skipped.
 #
 # A job key the job list cannot carry (see scripts/lib/job-keys.sh) is a
 # counted finding, and the file's jobs are not read.
@@ -78,10 +79,11 @@
 # fixture run never reaches the real .github/ tree.
 # Exits 0 when no call passes file contents as an argument, 1 on any
 # offender, unreadable workflow or unparsable run: block, 2 when the scan
-# could not run: `yq`, `shfmt` or `jq` is absent, the workflow and
-# composite-action globs match no file, WORKFLOW_FILE_FILTER selects none
-# of the files they matched, or a read of one step's run: block or its
-# job's key fails once the file's steps have been listed.
+# could not run: `yq`, `shfmt`, `jq` or `base64` is absent, the workflow
+# and composite-action globs match no file, WORKFLOW_FILE_FILTER selects
+# none of the files they matched, a read of one step's run: block or its
+# job's key fails once the file's steps have been listed, a block read
+# that way cannot be decoded, or `jq` fails reading a block's parse tree.
 # LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set.
 #
 # payload-subject-exempt: matches only because it names the literal string "gh api" as the pattern it reports on — it issues no API call, and its input is this repo's own workflow YAML read through yq and shfmt, whose unreadable and unparsable cases it already reports

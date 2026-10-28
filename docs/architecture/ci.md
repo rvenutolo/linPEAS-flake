@@ -224,8 +224,11 @@ Do not collapse into single `failure` classification.
 
 ## Cancelled-job attribution
 
-A job conclusion of `cancelled` has two causes, and `needs.<job>.result`
-carries the same token for both:
+A cancel of the whole run (an operator's cancel, or a newer run in the
+same concurrency group) cancels every job in it that has not finished,
+`always()` notify jobs included. A `cancelled` conclusion
+on one job of a run that otherwise went on has two causes, and
+`needs.<job>.result` carries the same token for both:
 
 - the job was never scheduled onto a runner, and the platform cancelled
     it while it waited;
@@ -254,8 +257,9 @@ full step timings, nothing expired and the empty one never started. The
 log archive answers the same way — download it and list its entries
 rather than reading one job's absence from it as expiry.
 
-The composite holds off on a transient cancel or failure, which the CI
-watchdog re-runs unless a newer `push` or `schedule` run of the same
+The composite holds off on a failure the classifier counts as transient
+(a cancel counts only with timeout evidence), which the CI watchdog
+re-runs unless a newer `push` or `schedule` run of the same
 workflow and event replaces it or its latest attempt finished outside the
 watchdog's 24-hour lookback. When its `result` is `failure` or
 `cancelled`, it fetches its own run with `scripts/fetch-ci-run.sh` and
@@ -268,18 +272,17 @@ never retries `release-on-bump`, whose re-runs are not idempotent, or
 the first failure. A caller that passes the composite `hold-off: 'false'`
 files on the first failure as well, without classifying the run;
 `reproducibility-check` does, because its `compare` job's
-`continue-on-error` can leave a failed run concluding `success`, which
-the watchdog never selects. The verdict
+`continue-on-error` can leave a run with a failed `compare` job
+concluding `success`, which the watchdog never selects. The verdict
 `retry` means every counted job failed for infrastructure reasons and the
 attempt cap is not spent, so the composite prints a notice naming the
 attempt and the classified jobs and files nothing; the re-run reaches the
 composite again and files once a failure is not retryable or the attempt
-cap is spent. Any other verdict files as
-before, so a run that exhausts its attempts, or that has a failed step of
+cap is spent. Any other verdict files, so a run that exhausts its attempts, or that has a failed step of
 its own work, still gets its issue. A fetch or classifier error also files, with a
 workflow warning: a broken classifier must never silence an issue. The
 fetch needs `actions: read` and `checks: read` on every job that calls the
-composite, by its local path or its pinned self-reference
+composite by its local path
 (`tests/notify-caller-permissions.test.sh` asserts both scopes on every
 such job), and is bounded at 180 seconds; a timeout reports like any other
 fetch error.

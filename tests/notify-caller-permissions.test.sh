@@ -3,12 +3,13 @@
 # @subject .github/actions/notify-workflow-result/action.yml
 #
 # Asserts that every job calling the notify-workflow-result composite
-# by its local path (`./.github/actions/notify-workflow-result`), the
-# only form `uses-no-self-reference` admits, grants `actions` and `checks` at read or write. The composite fetches
-# its own run's jobs and their check-run annotations to decide whether
-# to hold an issue off; without either scope the fetch fails, the
-# composite files on every transient failure the CI watchdog is about to
-# retry, and nothing else notices. A job's own `permissions:` wins over
+# by its local path (`./.github/actions/notify-workflow-result`) grants
+# `actions` and `checks` at read or write. A slug reference, which
+# `uses-no-self-reference` refuses, is not read as a call. The composite
+# fetches its own run's jobs and their check-run annotations to decide
+# whether to hold an issue off; without either scope the fetch fails,
+# the composite files on every transient failure the CI watchdog is
+# about to retry, and nothing else notices. A job's own `permissions:` wins over
 # the workflow's, as GitHub reads them; `read-all` and `write-all` grant
 # both.
 #

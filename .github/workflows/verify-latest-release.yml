@@ -495,7 +495,7 @@ jobs:
         with:
           result: ${{ needs.verify.result }}
           label: verify-latest-release-failure
-          title: "verify-latest-release: verification failed"
+          title: "verify-latest-release: verification failed, or the job could not run"
           body: |
             The `verify-latest-release` run failed.
 

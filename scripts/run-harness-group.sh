@@ -13,7 +13,7 @@
 # script (safe on PR). Every other entry runs test-only (no enforce
 # script). bump-linpeas downloads a release asset and rewrites
 # linpeas-pin.json on its live path, so it runs test-only here — its own
-# bump runs from release-on-bump.yml, never from this shared job.
+# bump runs from update-linpeas.yml, never from this shared job.
 #
 # The roster as a shared declaration — `--print-roster` writes every
 # entry to stdout verbatim, one per line, and exits 0 without running a

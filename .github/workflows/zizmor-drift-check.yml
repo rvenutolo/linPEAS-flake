@@ -19,8 +19,8 @@ name: zizmor-drift-check
 # directory argument: rewriting this step to invoke the hook would
 # collapse the two paths into one and cost that coverage.
 #
-# On a failed or cancelled run — a finding, or a scan that could not
-# start — opens, or comments on, a deduped `zizmor-drift` tracking
+# On a failed or cancelled run — a finding, or a scan that did not
+# complete — opens, or comments on, a deduped `zizmor-drift` tracking
 # issue via the notify-workflow-result composite. On the next clean
 # run, the composite closes any open `zizmor-drift` issue(s).
 #

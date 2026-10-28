@@ -20,31 +20,18 @@ the issue has been re-commented, read the newest run's log for its
 reason. Match the reason against the sections below. The issue
 auto-closes on the next clean run.
 
-Two classes of upstream ref are skipped before any API call (a local
-`./` action, which names no upstream, is dropped earlier). Each still
-has a PR-time backstop, described below.
+Floating-major pins (`# vN`) are skipped before any API call (a local
+`./` action, which names no upstream, is dropped earlier), because such
+a tag retargets on every release, so a benign move is indistinguishable
+from an attack. Their integrity rests on the immutable digest pin,
+Renovate currency, and the PR-time `check-pin-digest-provenance.sh`
+gate, which requires a floating-major digest move to be reachable from
+the upstream default branch — see
+[pin convention](../architecture/pin-convention.md).
 
-Floating-major pins (`# vN`) are skipped because such a tag retargets on
-every release, so a benign move is indistinguishable from an attack.
-Their integrity rests on the immutable digest pin, Renovate currency, and
-the PR-time `check-pin-digest-provenance.sh` gate, which requires a
-floating-major digest move to be reachable from the upstream default
-branch — see [pin convention](../architecture/pin-convention.md).
-
-This repo's own composite-action self-references are skipped because they
-have no upstream tag to compare against: Renovate's `pinDigests` rule
-tracks this repo's own `main` HEAD, not an upstream release. The
-digest-provenance gate skips them for the same reason, so their PR-time
-backstop is `check-uses-sha-pinned.sh` (the `uses-sha-pinned` member of
-`lint-workflow-security`), backing the GitHub-side `sha_pinning_required`
-setting and still requiring a full 40-hex SHA — see
-[repo config](../security/repo-config.md). `check-patch-tag-pins.sh` also
-reads these lines and demands a versioned `# vX.Y[.Z]` tag, but against
-the tree it runs only as the `patch-tag-pins` pre-commit hook and gates no
-merge (its fixture tests do run in `harness-group`) — see
-[pin convention](../architecture/pin-convention.md); this repo publishes
-no release tags on its composite actions, so its self-reference carries an
-inline `# patch-tag-exception:` marker.
+A `uses:` naming this repository by its owner/repo slug is not skipped.
+The `uses-no-self-reference` lint refuses that form at PR time — see
+[workflow hardening](../security/workflow-hardening.md#uses-no-self-reference).
 
 This runbook is linked inline from the auto-filed issue body.
 

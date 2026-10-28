@@ -475,9 +475,11 @@ jobs:
 
             const notifyCallers = new Map();
             // Whether the workflow file calls the notify-workflow-result composite
-            // by its local path, the only form uses-no-self-reference admits.
-            // Such a workflow files its own issue on the final attempt, and a second
-            // filer would mean two issues for one failure. A file that cannot be
+            // by its local path; a slug reference, which uses-no-self-reference
+            // refuses, reads as no call. Such a workflow files its own issue no
+            // later than the final attempt (on the first when it passes
+            // `hold-off: 'false'`), and a second filer would mean two issues for
+            // one failure. A file that cannot be
             // read counts as calling no notify, so the watchdog files: a broken
             // check must never leave an exhausted run with no issue at all. A step's
             // `uses:` written as a YAML alias is read as its anchored text.
@@ -663,15 +665,16 @@ jobs:
           label: ci-watchdog-failure
           title: "ci-watchdog: the retry sweep itself failed"
           body: |
-            The `ci-watchdog` workflow's own `retry` job failed, so this sweep
-            did not finish retrying or filing.
+            The `ci-watchdog` workflow's own `retry` job failed or was
+            cancelled, so this sweep may not have finished retrying or filing.
 
             - Trigger: `${{ github.event_name }}`
             - `retry` conclusion: `${{ needs.retry.result }}`
 
             Failures that a workflow's notify job held off for a retry may be
-            waiting: until a sweep succeeds they are neither re-run nor filed.
-            Bot PRs stuck on a transient failure stay stuck too.
+            waiting: one the failing sweep did not reach is neither re-run nor
+            filed until a sweep does. Bot PRs stuck on a transient failure the
+            sweep did not reach stay stuck too.
 
             What to do: the "When the watchdog itself fails" section of
             https://github.com/rvenutolo/linPEAS-flake/blob/main/docs/runbooks/ci-watchdog.md

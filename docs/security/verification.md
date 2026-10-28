@@ -282,21 +282,25 @@ Folding all reasons into a single failure body trains
 the maintainer to skim-read auto-filed issues — exactly the wrong reflex
 when the failure is a real SRI drift or a one-sided registry rollback.
 
-Cron-notify callers whose job can fail more than one way tell the ways
-apart, in the body or by label, so a reader acts on the failure in front
-of them. Alert fatigue is a security risk.
+Several cron-notify callers whose job can fail more than one way tell
+the ways apart, by label (`codeql`, `octoscan`, `image-cve-scan`) or by
+a reason in the body (`verify-latest-release`), so a reader acts on the
+failure in front of them; others file every way under one label and say
+in the body that the run page and job log tell which. Alert fatigue is a security risk.
 
 ### Ladder coverage is linted<a name="ladder-coverage-is-linted"></a>
 
 The step ids, the attribution step's `env:` block, the `elif` ladder,
 the reason list above and the notify body's reason list are five
-hand-synced copies of one set.
+hand-synced copies of one mapping. The two lists also carry `unknown`,
+the notify job's fallback when no reason arrives, and carry no entry for
+`ok`, the clean-run initializer.
 `scripts/check-verify-reason-ladder.sh` binds them: every `id:`-carrying
 step in the `verify` job other than the attribution step itself is
 referenced by a `steps.<id>.outcome` entry
 in the attribution `env:`, every such env var is read by the ladder,
-every `reason` token the ladder emits has an entry in the list above
-and in the notify body's list (a list item opening with the token as a
+every `reason` token the ladder assigns after the initial `ok` has an
+entry in a list on this page and in the notify body's list (a list item opening with the token as a
 code span, alone or in a `/`-separated run; a mention in prose or in
 another entry's text does not count), and the
 ladder's branch order matches the steps' execution order — the order the
@@ -321,10 +325,11 @@ exemption.
 
 `gitleaks.yml` scans the full git history (`fetch-depth: 0`) on push to
 main, every PR, a weekly Friday cron, and manual dispatch. Required
-check named `gitleaks` in the `protect-main` ruleset. A failed run
-outside a pull request (a push to main, the cron, or a dispatch) files
-a deduped `gitleaks-failure` issue through its `notify` job, and the next
-passing run closes it; a pull request run's failure shows on the PR.
+check named `gitleaks` in the `protect-main` ruleset. A failed or
+cancelled run outside a pull request (a push to main, the cron, or a
+dispatch) files a deduped `gitleaks-failure` issue through its `notify`
+job, and the next passing run outside a pull request closes it; a pull
+request run's failure shows on the PR.
 
 - Uses only `secrets.GITHUB_TOKEN` — PR-triggered workflow secret
     allowlist invariant holds.
@@ -346,8 +351,8 @@ to main, every PR, a weekly Friday cron, and manual dispatch. Required
 check named `trufflehog` in the `protect-main` ruleset. It runs with
 `extra_args: --only-verified`, so a finding is a credential TruffleHog
 reached the issuing provider to confirm is live — not a pattern match.
-Like gitleaks, a failed run outside a pull request files a deduped
-`trufflehog-failure` issue through its `notify` job.
+Like gitleaks, a failed or cancelled run outside a pull request files a
+deduped `trufflehog-failure` issue through its `notify` job.
 
 Gitleaks and TruffleHog are a deliberate pair: they carry different
 detector sets, and a secret shape one misses is the reason the other
