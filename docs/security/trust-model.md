@@ -221,8 +221,6 @@ Exception for a non-`GITHUB_TOKEN` secret requires documenting here BEFORE relax
 
 `step-security/harden-runner` is the **first step** in every job in every workflow, with `egress-policy: block` and a per-job `allowed-endpoints:` allowlist (a shared baseline plus job-specific hosts; rotating families wildcarded). Block mode drops egress to any host outside the allowlist, denying a compromised step an exfiltration path.
 
-Every step currently runs `egress-policy: audit` instead, because block mode drops connections to allowed hosts on GitHub-hosted `westus2` runners and hangs the job (upstream harden-runner bug: [step-security/harden-runner#708](https://github.com/step-security/harden-runner/issues/708)). Audit mode records egress but enforces nothing, so while it is in force a compromised step has an exfiltration path; `disable-sudo` and the file-tampering monitor still apply. The change carries a [security-review entry](https://github.com/rvenutolo/linPEAS-flake/blob/main/CONTRIBUTING.md#security-review-entries). Each audit step keeps its allowlist and carries a `# TODO: restore egress-policy block` comment above its `egress-policy` key linking the upstream issue.
-
 - Do not remove from any job.
 - Keep as first step, before `actions/checkout`, `cachix/install-nix-action`, or any network step. eBPF monitor must install before any I/O.
 - Do not add to composite actions — caller job already has it.

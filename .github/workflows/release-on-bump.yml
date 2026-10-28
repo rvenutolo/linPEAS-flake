@@ -58,11 +58,9 @@ jobs:
       tag-exists: ${{ steps.exists.outputs.exists }}
       write-latest: ${{ steps.latest.outputs.write-latest }}
     steps:
-      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -314,11 +312,9 @@ jobs:
       arm64-ghcr-digest: ${{ steps.classify.outputs.arm64-ghcr-digest }}
       arm64-hub-digest: ${{ steps.classify.outputs.arm64-hub-digest }}
     steps:
-      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           # Anonymous registry reads only: no cosign (no sigstore
           # hosts), no Nix, no docker login. buildx imagetools inspect
           # reads a public manifest via the registry + its CDN/auth.
@@ -450,11 +446,9 @@ jobs:
       ghcr_digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
       hub_digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
     steps:
-      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -784,11 +778,9 @@ jobs:
       ghcr_digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
       hub_digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
     steps:
-      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -1070,11 +1062,9 @@ jobs:
       ghcr_index_digest: ${{ steps.create.outputs.ghcr_index_digest }}
       hub_index_digest: ${{ steps.create.outputs.hub_index_digest }}
     steps:
-      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -1254,11 +1244,9 @@ jobs:
       pull-requests: read
       statuses: read
     steps:
-      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >
             *.actions.githubusercontent.com:443
             *.blob.core.windows.net:443
@@ -1581,11 +1569,9 @@ jobs:
       attestations: read
       packages: read
     steps:
-      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           # No timestamp.sigstore.dev: this job only verifies (cosign
           # verify / verify-blob), and the TSA is signing-only.
           allowed-endpoints: >
@@ -1807,11 +1793,9 @@ jobs:
       checks: read
       issues: write
     steps:
-      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
-          # TODO: restore egress-policy block once block mode stops dropping allowed hosts on
-          # westus2 runners: https://github.com/step-security/harden-runner/issues/708
-          egress-policy: audit
+          egress-policy: block
           allowed-endpoints: >
             api.github.com:443
             github.com:443

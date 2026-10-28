@@ -126,7 +126,7 @@ budgeted defense-in-depth posture rather than redundancy — is documented in
 
 ## Runner egress
 
-Every job's first step is `step-security/harden-runner` with a per-job `allowed-endpoints:` allowlist. `egress-policy: block` is the policy, under which the eBPF monitor enforces the allowlist; every step runs `egress-policy: audit` for now, which only records egress, because block mode drops allowed hosts on `westus2` runners (upstream harden-runner bug: [step-security/harden-runner#708](https://github.com/step-security/harden-runner/issues/708)). See [harden-runner](../security/trust-model.md#harden-runner). The monitor must remain the first step in every job. A missed host appears as a blocked-egress failure and is fixed forward by extending that job's allowlist.
+Every job's first step is `step-security/harden-runner` with a per-job `allowed-endpoints:` allowlist. Every step runs `egress-policy: block`, under which the eBPF monitor enforces the allowlist. See [harden-runner](../security/trust-model.md#harden-runner). The monitor must remain the first step in every job. A missed host appears as a blocked-egress failure and is fixed forward by extending that job's allowlist.
 
 ## Pages workflow
 
