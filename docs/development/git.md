@@ -178,7 +178,7 @@ Hooks (alphabetical):
 | `gh-api-field-from-file`            | No gh api call in a workflow or composite run: block passes file contents as one --field/-f/-F argument.                                                 |
 | `gh-api-version-header`             | Every gh api / api.github.com call in scripts passes an X-GitHub-Api-Version header.                                                                     |
 | `gh-attestation-repo`               | gh attestation verify pins --repo rvenutolo/linPEAS-flake.                                                                                               |
-| `harden-runner-block`               | Every harden-runner step uses egress-policy: block (or marked temporary audit) with non-empty allowed-endpoints.                                         |
+| `harden-runner-block`               | Every harden-runner step uses egress-policy: block with non-empty allowed-endpoints.                                                                     |
 | `harden-runner-first`               | Every workflow job's first step is step-security/harden-runner.                                                                                          |
 | `harness-assert-wired`              | Every output-asserting tests/\*.test.sh is wired to the discrimination gate.                                                                             |
 | `job-timeout-minutes`               | Every workflow job declares an explicit timeout-minutes.                                                                                                 |

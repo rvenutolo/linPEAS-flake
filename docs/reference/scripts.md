@@ -940,8 +940,7 @@ guard this pass classified, 2 on operational error.
 
 Lint: every step-security/harden-runner step uses
 egress-policy: block with a non-empty allowed-endpoints list,
-preventing network-level egress to unlisted hosts. Audit mode passes
-only under the comment linking the upstream block-mode bug.
+preventing network-level egress to unlisted hosts.
 
 ### scripts/check-harden-runner-first.sh
 

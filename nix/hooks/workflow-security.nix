@@ -74,14 +74,11 @@
   # Asserts every step-security/harden-runner step uses
   # egress-policy: block with a non-empty allowed-endpoints list.
   # Locks in the block-mode posture so a revert to audit or an
-  # empty allowlist is caught before merge. Audit passes only under a
-  # head comment linking the upstream block-mode bug
-  # (https://github.com/step-security/harden-runner/issues/708); remove
-  # that exception from the script when block mode returns.
+  # empty allowlist is caught before merge.
   harden-runner-block = {
     enable = true;
     name = "harden-runner-block";
-    description = "Every harden-runner step uses egress-policy: block (or marked temporary audit) with non-empty allowed-endpoints.";
+    description = "Every harden-runner step uses egress-policy: block with non-empty allowed-endpoints.";
     entry = "${pkgs-unstable.writeShellScript "harden-runner-block-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
