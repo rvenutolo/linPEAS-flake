@@ -344,8 +344,9 @@ jobs:
       # carries no App key, checks out with `persist-credentials: false`, and
       # runs under a harden-runner egress allowlist, which bounds egress while
       # the step is in block mode but only records it while the temporary
-      # audit mode is in force. A SHA-pinned self-reference, as pages.yml uses
-      # for its notify step, closes the gap without waiting on actionlint.
+      # audit mode is in force. A SHA-pinned self-reference would close the
+      # gap without waiting on actionlint, but `uses-no-self-reference` bans
+      # it: nothing bumps such a pin, so the job would run a stale composite.
       - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

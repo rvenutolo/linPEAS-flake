@@ -57,11 +57,6 @@ readonly HEAD_DIR="${HEAD_DIR_OVERRIDE:-.}"
 readonly OCTOSCAN_FILE="scripts/octoscan-scan.sh"
 readonly OCTOSCAN_IMAGE="ghcr.io/synacktiv/octoscan"
 readonly GH_API_VERSION_HEADER="X-GitHub-Api-Version: 2022-11-28"
-# Mirrors the self_repo skip in ratchet-pin-audit.yml: a `uses:` pin
-# whose owner/repo is this repo has no upstream release tag to
-# repoint against — Renovate's pinDigests rule tracks this repo's own
-# main HEAD, not an upstream tag.
-readonly SELF_REPO="${GITHUB_REPOSITORY:-rvenutolo/linPEAS-flake}"
 
 function die_op() {
   printf 'pin-digest-provenance: %s\n' "$1" >&2
@@ -84,20 +79,6 @@ function is_scanned_pin_file() {
   [[ ${path} =~ ^\.github/workflows/[^/]+\.ya?ml$ ]] && return 0
   [[ ${path} =~ ^\.github/actions/(.*/)?action\.ya?ml$ ]] && return 0
   return 1
-}
-
-# True if a `uses:` path's owner/repo segment is this repo itself — a
-# self-reference pin (e.g. an absolute-slug invocation of one of this
-# repo's own composite actions). Such a pin tracks this repo's own
-# main HEAD, not an upstream release tag, so it has no comparable
-# version label and no upstream to repoint against.
-# @arg $1 uses path (owner/repo[/subpath])
-function is_self_reference() {
-  local -r path="$1"
-  local -a parts
-  IFS=/ read -ra parts <<<"${path}"
-  ((${#parts[@]} >= 2)) || return 1
-  [[ "${parts[0]}/${parts[1]}" == "${SELF_REPO}" ]]
 }
 
 # Emit the scanned file list (paths relative to ROOT) under a real
@@ -256,9 +237,6 @@ function extract_pins() {
       version="${BASH_REMATCH[3]}"
       # Local composite actions have no upstream to repoint.
       [[ ${path} == .* ]] && continue
-      # Self-reference pins have no upstream tag either; skip before
-      # the shape guard below ever sees this line (see is_self_reference).
-      is_self_reference "${path}" && continue
       printf '%s|%s|%s|%s\n' "${file}" "${path}" "${version}" "${sha}"
       continue
     fi

@@ -33,9 +33,7 @@ per the ratchet-pin-audit runbook.
 
 A ref that cannot name a versioned tag carries an inline marker on the
 same line: a publisher that tags only majors leaves no versioned tag for
-the comment to name, so the comment may remain `# v<major>`; this repo's
-own self-referenced composite action names no upstream tag at all (see
-Enforcement below). A pin that names the SHA of an annotated tag object
+the comment to name, so the comment may remain `# v<major>`. A pin that names the SHA of an annotated tag object
 rather than the release commit is a different case: the inventory
 script's SHA-equality lookup against `gh api repos/<owner>/<repo>/tags`
 returns no match for it, but if its comment names a versioned tag it
@@ -81,20 +79,14 @@ by convention, say why this ref cannot name a versioned tag.
     floating-major digest moves to be reachable from the upstream
     default branch.
 
-    Self-reference pins — a `uses:` whose owner/repo is this repo's own —
-    are excluded for a different reason: they name no upstream tag at
-    all, since Renovate's `pinDigests` rule tracks this repo's own `main`
-    HEAD. The digest-provenance gate excludes them too. Both
-    self-reference forms are live. The `./`-relative form
-    (`uses: ./.github/actions/…`) is content-addressed by the checkout
-    itself and skipped by `scripts/check-uses-sha-pinned.sh` as well. The
-    `owner/repo@sha` form is what these exclusions actually act on: it is
-    used where a `pull_request` event must not run a PR branch's copy of
-    the composite, and `scripts/check-uses-sha-pinned.sh` still holds it
-    to a full 40-hex SHA at PR time. The `patch-tag-pins` hook reads that
-    line too, and since this repo publishes no release tags on its
-    composite actions the comment can name no version — so the pin carries
-    a `# patch-tag-exception:` marker.
+    This repo's own actions are reached by the `./`-relative form
+    (`uses: ./.github/actions/…`), which is content-addressed by the
+    checkout and names no upstream at all, so the audit, the
+    digest-provenance gate and `scripts/check-uses-sha-pinned.sh` skip
+    it. A `uses:` naming this repo by its owner/repo slug is refused by
+    the `uses-no-self-reference` lint (see
+    [workflow hardening](../security/workflow-hardening.md#uses-no-self-reference)):
+    nothing bumps such a pin, so it would run a stale copy.
 
 - Bulk remediation: when comment drift is tree-wide,
     `scripts/inventory-action-pin-tags.sh` builds a TSV of each pin's

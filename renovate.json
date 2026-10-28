@@ -17,13 +17,6 @@
       "automerge": true
     },
     {
-      "description": "Self-reference to local composite action pinned by SHA. Renovate's github-actions manager treats `owner/repo/path@sha` uniformly, so pinDigests above covers the bump path. This rule exists to document intent and to ensure the self-reference is not accidentally excluded by a future matcher.",
-      "matchManagers": ["github-actions"],
-      "matchPackageNames": ["rvenutolo/linPEAS-flake"],
-      "pinDigests": true,
-      "automerge": true
-    },
-    {
       "description": "Nix install URL: scoped automerge for the same reason as github-actions. The custom manager below extracts the version from the pinned Nix install URL. matchDepNames narrows this rule to 'nix'; every other custom-regex dependency in this file carries its own automerge rule below, so each scope stays explicit per dependency rather than blanket.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["nix"],

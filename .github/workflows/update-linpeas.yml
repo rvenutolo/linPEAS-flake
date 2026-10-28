@@ -432,7 +432,7 @@ jobs:
       - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
         with:
           # Collapse "compute-pin success + push-and-merge skipped"
-          # (no-op cron day) to overall success.
+          # (no-op run: the pin did not change) to overall success.
           result: ${{ needs.push-and-merge.result == 'skipped' && needs.compute-pin.result || needs.push-and-merge.result }}
           label: update-linpeas-failure
           title: "update-linpeas: run failed"

@@ -196,11 +196,14 @@ This accepts one blind spot: only tags predating the last `CHANGELOG.md` commit
 are covered. A release whose changelog never lands stays uncovered until some
 later changelog commit exists, and two releases stacking up inside the window
 would exclude both. That is tolerable because a changelog that does not land
-is signalled elsewhere first: a changelog job that fails, or whose PR is still
-open at its deadline with nothing for `ci-watchdog` to re-run, files through
-the `release-on-bump` notify path, and a PR handed to the watchdog because a
-check failed is re-run and, once its retries are exhausted, filed by the
-watchdog. This check is the backstop, not the primary signal.
+is usually signalled elsewhere first: a changelog job that fails, or whose PR
+is still open at its deadline with nothing for `ci-watchdog` to re-run, files
+through the `release-on-bump` notify path, and a PR handed to the watchdog
+because a check failed is re-run and, once its retries are exhausted, filed by
+the watchdog. A PR handed off whose only red check is a cancel the watchdog
+does not re-run is signalled by neither (see the hand-off step under
+[End-to-end sequence](#end-to-end-sequence)). This check is the backstop, not
+the primary signal.
 
 The exclusion depends on an ordering property of `release-on-bump.yml`, and
 changing that workflow can silently weaken this guard. The release job creates
@@ -247,14 +250,14 @@ sequence (its harden-runner egress step comes first, as in every job):
     the PR merges: the wait is bounded to 35 minutes. A closed PR fails
     the job so `notify` files an issue. A PR still open at the deadline
     is handed to `ci-watchdog`, which retries its failed checks, and the
-    job succeeds with a warning, only when the PR is in the shape the
-    watchdog acts on:
-    auto-merge is armed, the PR is neither behind `main` nor in
-    conflict, and at least one check run on its head concluded
-    `FAILURE`, `CANCELLED` or `TIMED_OUT`
+    job succeeds with a warning, only when auto-merge is armed, the PR
+    is neither behind `main` nor in conflict, and at least one check run
+    on its head concluded `FAILURE`, `CANCELLED` or `TIMED_OUT`
     (`scripts/changelog-pr-handoff.sh` decides). The watchdog does not
-    re-run a superseded or manual cancel, so a PR whose only red check is
-    one is handed off and gets no watchdog action. Any other open PR —
+    re-run a cancel that carries no timeout evidence (superseded, manual,
+    or one that never got a runner), and the check rollup cannot tell
+    such a cancel apart, so a PR whose only red check is one is handed
+    off, gets no watchdog action, and files nothing. Any other open PR —
     auto-merge not armed, behind `main` (auto-merge never updates the
     branch), conflicting, or with every check still pending or green,
     such as a required check that never started — fails the job, so

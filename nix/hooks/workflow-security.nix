@@ -23,6 +23,21 @@
     pass_filenames = false;
     language = "system";
   };
+  uses-no-self-reference = {
+    enable = true;
+    name = "uses-no-self-reference";
+    description = "No uses: reference names this repository by slug; its own actions use the ./ path.";
+    entry = "${pkgs-unstable.writeShellScript "uses-no-self-reference-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-uses-no-self-reference.sh
+    ''}";
+    files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|scripts/check-uses-no-self-reference\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   patch-tag-pins = {
     enable = true;
     name = "patch-tag-pins";

@@ -3,9 +3,9 @@
 #
 # @description Lint: the `attribute failure reason` step of
 # `verify-latest-release.yml` covers every id-carrying step of the
-# `verify` job, reads every env var it declares, documents every reason
-# token it emits in the verification doc and the notify body, and walks
-# the ladder in step-execution order.
+# `verify` job, reads every env var it declares, gives every reason token
+# it assigns after the initial `ok` a list entry in the verification doc
+# and the notify body, and walks the ladder in step-execution order.
 
 # The notify job turns the `reason` token into triage wording. A
 # verification step whose `id:` never reaches the attribution ladder
@@ -14,9 +14,9 @@
 # clean-run initializer, but nothing says which step broke. That is a
 # gap this lint exists to keep closed, because the alternative a missing
 # terminal branch produces is worse — a genuine tamper signal reported
-# under the same token as a clean run. The reason list in the
-# verification doc is a third copy of the same mapping and drifts the
-# same way, and so is the reason list in the notify job's issue body.
+# under the same token as a clean run. The reason lists in the notify
+# job's issue body and in the verification doc are further copies of
+# the same mapping and drift the same way.
 #
 # Four assertions:
 #

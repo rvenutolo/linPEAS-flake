@@ -107,7 +107,7 @@ Enforced by `scripts/check-auto-merge-decline-gate.sh`. Wired as the `lint-workf
 
 ## verify-reason-ladder
 
-The `attribute failure reason` step of `verify-latest-release.yml` covers every `id:`-carrying step of the `verify` job other than itself, reads every env var it declares, documents every reason token it emits as a list entry in the verification doc and in the notify body, and walks the ladder in step-execution order — four assertions binding five hand-synced copies of the same mapping.
+The `attribute failure reason` step of `verify-latest-release.yml` covers every `id:`-carrying step of the `verify` job other than itself, reads every env var it declares, documents every reason token it assigns after the initial `ok` as a list entry in the verification doc and in the notify body, and walks the ladder in step-execution order — four assertions binding five hand-synced copies of the same mapping.
 
 The escape hatch is a `# reason-ladder-exempt: <reason>` comment on the same line as a step's `id:` key, for a step that legitimately carries an id without being a verification outcome; the rationale must be non-empty.
 
@@ -674,6 +674,16 @@ A value carried between steps, a variable set by `read`, `mapfile` or `printf -v
 A job key the job list cannot carry, or a merge key directly under `jobs:`, is a counted finding and the file's jobs are not read; see "Job keys and merge lists in the `jobs:` reads" in `docs/development/linting.md`.
 
 Enforced by `scripts/check-gh-api-field-from-file.sh`. Wired as the `lint-workflow-security` CI job (member check `gh-api-field-from-file`) and as a pre-commit hook.
+
+## uses-no-self-reference
+
+No `uses:` in `.github/workflows/*.yml` (or `.yaml`) or `.github/actions/**/*.yml` (or `.yaml`) names this repository by its owner/repo slug, whether as an action (`<owner>/<repo>/.github/actions/<name>@<ref>`), the root action (`<owner>/<repo>@<ref>`) or a reusable workflow called at job level. This repository's own actions and workflows are reached by the path-relative `./` form, which runs a copy the caller controls: for an action, the copy in the job's checkout, whichever ref that is; for a reusable workflow, the copy at the caller's commit.
+
+A slug reference runs the copy at its ref instead. Pinned to a SHA, it freezes the caller on an old revision of a file this repository keeps changing. Renovate does not detect a self-reference that carries no version comment, so nothing moves the pin, and the caller misses every later change to the action without any check failing.
+
+The slug is `GITHUB_REPOSITORY`, defaulting to this repository's, and it matches with each ASCII letter in either case, as GitHub resolves an owner and repository name. A reference matches only when the slug is followed by `/` or `@`, so a repository whose name starts with this one's, a fork under another owner, and a `docker://` image whose path holds the slug all pass. `uses:` values are read the way `uses-sha-pinned` reads them, with a value or key written as a YAML alias read as its anchored text.
+
+Enforced by `scripts/check-uses-no-self-reference.sh`. Wired as the `lint-workflow-security` CI job (member check `uses-no-self-reference`) and as a pre-commit hook.
 
 ## fork-guard-release
 

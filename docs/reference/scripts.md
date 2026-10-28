@@ -220,11 +220,14 @@ Blind spot this accepts: only tags predating the last CHANGELOG.md commit are
 guarded. A release whose changelog never lands stays unguarded until some
 later changelog commit exists, and two releases stacking up inside the window
 would exclude both. That is tolerable because a changelog that does not land
-is signalled elsewhere first: a changelog job that fails, or whose PR is
-still open at its deadline with nothing for the CI watchdog to re-run, files
-through the release-on-bump notify path, and a PR handed to the watchdog
-because a check failed is re-run and, once its retries are exhausted, filed
-by the watchdog. This check is the backstop, not the primary signal.
+is usually signalled elsewhere first: a changelog job that fails, or whose
+PR is still open at its deadline with nothing for the CI watchdog to re-run,
+files through the release-on-bump notify path, and a PR handed to the
+watchdog because a check failed is re-run and, once its retries are
+exhausted, filed by the watchdog. A PR handed off whose only red check is a
+cancel the watchdog does not re-run is signalled by neither (see
+scripts/changelog-pr-handoff.sh). This check is the backstop, not the
+primary signal.
 
 git-cliff is invoked only via the flake-pinned `.#git-cliff` output, per the
 nix-run-pinned invariant. Offline and deterministic: git-cliff parses the PR
@@ -2055,6 +2058,13 @@ Lint: every step whose `uses:` starts with
 workflow under `.github/workflows/*.yml` sets
 `with.if-no-files-found: error` so empty-glob bugs hard-fail.
 
+### scripts/check-uses-no-self-reference.sh
+
+Lint: no `uses:` in `.github/workflows/*.yml` (or
+`.yaml`) or `.github/actions/**/*.yml` (or `.yaml`) names this
+repository by its owner/repo slug. This repository's own actions and
+reusable workflows are reached by the path-relative `./` form.
+
 ### scripts/check-uses-sha-pinned.sh
 
 Lint: every `uses:` in `.github/workflows/*.yml` (or
@@ -2065,9 +2075,9 @@ full 40-hex SHA, or is a local path-relative reference.
 
 Lint: the `attribute failure reason` step of
 `verify-latest-release.yml` covers every id-carrying step of the
-`verify` job, reads every env var it declares, documents every reason
-token it emits in the verification doc and the notify body, and walks
-the ladder in step-execution order.
+`verify` job, reads every env var it declares, gives every reason token
+it assigns after the initial `ok` a list entry in the verification doc
+and the notify body, and walks the ladder in step-execution order.
 
 ### scripts/check-workflow-ascii-space.sh
 
@@ -2307,20 +2317,23 @@ Bump linpeas-pin.json to the latest peass-ng/PEASS-ng release.
 Decide whether release-on-bump's changelog job may hand a
 changelog PR still open at its deadline to the CI watchdog. Reads the
 JSON of `gh pr view --json autoMergeRequest,mergeStateStatus,statusCheckRollup`
-on stdin and prints one line: `handoff` when the PR is in the shape the
-watchdog acts on, or `fail<TAB><reason>` when it is not, in which case
-the job fails and its notify job files.
+on stdin and prints one line: `handoff` when auto-merge is armed, the
+merge state is neither `BEHIND` nor `DIRTY`, and a check run on the
+head concluded `FAILURE`, `CANCELLED` or `TIMED_OUT`, or
+`fail<TAB><reason>` otherwise, in which case the job fails and its
+notify job files.
 
 The watchdog acts only on a bot PR with auto-merge armed and a failed
-workflow run on its head, so all three of these must hold to hand off:
-auto-merge is armed (`autoMergeRequest` is not null); the merge state
-is not `BEHIND` (auto-merge never updates the branch, so the PR waits
-forever) or `DIRTY` (a conflict); and at least one check run on the
-head concluded `FAILURE`, `CANCELLED` or `TIMED_OUT`. The watchdog
-re-runs failures and timeout cancels, not a superseded or manual
-cancel, and the `statusCheckRollup` this script reads carries no
-annotation to tell those cancels apart, so every `CANCELLED` counts here: a PR whose only red check is a
-superseded or manual cancel is handed off and gets no watchdog action.
+workflow run on its head, which the first and last conditions test
+(`autoMergeRequest` is not null; a red check run on the head). The
+merge-state condition is separate: a `BEHIND` PR waits forever, since
+auto-merge never updates the branch, and a `DIRTY` one has a conflict.
+The watchdog re-runs failures and timeout cancels, not a cancel that
+carries no timeout evidence (superseded, manual, or one that never got
+a runner), and the `statusCheckRollup` this script reads carries no
+annotation to tell those cancels apart, so every `CANCELLED` counts
+here: a PR whose only red check is such a cancel is handed off and gets
+no watchdog action.
 A PR whose checks are all still pending or green past
 the deadline has nothing for the watchdog to re-run, and a required
 check that never started leaves no failed run at all, so both fail

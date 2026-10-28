@@ -2,27 +2,26 @@
 # tests/notify-caller-permissions.test.sh
 # @subject .github/actions/notify-workflow-result/action.yml
 #
-# Asserts that every job calling the notify-workflow-result composite,
-# by its local path (`./.github/actions/notify-workflow-result`) or by
-# its pinned self-reference
-# (`rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@<sha>`),
-# grants `actions` and `checks` at read or write. The composite fetches
-# its own run's jobs and their check-run annotations to decide whether
-# to hold an issue off; without either scope the fetch fails, the
-# composite files on every transient failure the CI watchdog is about to
-# retry, and nothing else notices. A job's own `permissions:` wins over
+# Asserts that every job calling the notify-workflow-result composite
+# by its local path (`./.github/actions/notify-workflow-result`) grants
+# `actions` and `checks` at read or write. A slug reference, which
+# `uses-no-self-reference` refuses, is not read as a call. The composite
+# fetches its own run's jobs and their check-run annotations to decide
+# whether to hold an issue off; without either scope the fetch fails,
+# the composite files on every transient failure the CI watchdog is
+# about to retry, and nothing else notices. A job's own `permissions:` wins over
 # the workflow's, as GitHub reads them; `read-all` and `write-all` grant
 # both.
 #
 # The live tree is checked first, then must-fail scenarios, each on a
 # copy of the workflows, or on a workflow written for the scenario, in a
-# temporary directory: the pinned caller (pages.yml) without `checks` and
-# without `actions`, a local caller granting `checks: none`, a caller
-# inheriting a workflow-level block without them, and a pinned caller
-# granting `actions: none`. Controls with the same
-# shapes that do grant them, and a job that does not call the composite,
-# must pass, so a check that stopped reading `uses:` or `permissions:`
-# could not stay green.
+# temporary directory: pages.yml's caller without `checks` and without
+# `actions`, a caller granting `checks: none`, a caller inheriting a
+# workflow-level block without them, and a caller granting
+# `actions: none`. Controls with the same shapes that do grant them must
+# pass, so a check that stopped reading `uses:` or `permissions:` could
+# not stay green. A directory whose only reference to the composite is
+# by slug has no caller, as one with no reference at all has none.
 #
 # Exits 0 when every scenario behaves, 1 otherwise, and 2 when `yq` is
 # missing.
@@ -43,9 +42,10 @@ if ! command -v yq >/dev/null 2>&1; then
   exit 2
 fi
 
-# A `uses:` that reaches the composite: the local path, or the pinned
-# self-reference with or without a ref. Exported for yq's strenv().
-declare -rx NOTIFY_USES_RE='^([.]/|rvenutolo/linPEAS-flake/)[.]github/actions/notify-workflow-result(@|$)'
+# A `uses:` that reaches the composite: the local path. The same
+# expression ci-watchdog.yml's workflowCallsNotify uses. Exported for
+# yq's strenv().
+declare -rx NOTIFY_USES_RE='^[.]/[.]github/actions/notify-workflow-result$'
 
 # Prints `<job>\t<source>\t<actions>\t<checks>` for every job that
 # calls the composite, from the job's own permissions (`job`) or else the
@@ -190,30 +190,32 @@ function generated() {
 }
 
 readonly LOCAL_USES='./.github/actions/notify-workflow-result'
-readonly PINNED_USES='rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@0000000000000000000000000000000000000000'
+readonly SLUG_USES='rvenutolo/linPEAS-flake/.github/actions/notify-workflow-result@0000000000000000000000000000000000000000'
 
-# The pinned self-reference is the caller a local-path-only matcher
-# would miss, so the live scenario asserts that pages.yml was read.
+# pages.yml's notify job grants its scopes at job level, so the live
+# scenario asserts that a job-level grant was read.
 scenario live "${LIVE_DIR}" 0 'ok   pages.yml job notify: actions read, checks read, from job permissions'
 
-scenario pinned-without-checks "$(mutated_copy pinned-checks pages.yml 'del(.jobs.notify.permissions.checks)')" 1 \
+scenario pages-without-checks "$(mutated_copy pages-checks pages.yml 'del(.jobs.notify.permissions.checks)')" 1 \
   'FAIL pages.yml job notify calls notify-workflow-result without checks: read (has unset)'
-scenario pinned-without-actions "$(mutated_copy pinned-actions pages.yml 'del(.jobs.notify.permissions.actions)')" 1 \
+scenario pages-without-actions "$(mutated_copy pages-actions pages.yml 'del(.jobs.notify.permissions.actions)')" 1 \
   'FAIL pages.yml job notify calls notify-workflow-result without actions: read (has unset)'
 scenario local-without-checks "$(generated local-checks '{}' '{actions: read, checks: none, issues: write}' "${LOCAL_USES}")" 1 \
   'FAIL generated.yml job notify calls notify-workflow-result without checks: read (has none)'
 scenario inherited-without-scopes "$(generated inherited '{issues: write}' '' "${LOCAL_USES}")" 1 \
   'FAIL generated.yml job notify calls notify-workflow-result without actions: read (has unset)'
-scenario job-grants-none "$(generated none '{}' '{actions: none, checks: read, issues: write}' "${PINNED_USES}")" 1 \
+scenario job-grants-none "$(generated none '{}' '{actions: none, checks: read, issues: write}' "${LOCAL_USES}")" 1 \
   'FAIL generated.yml job notify calls notify-workflow-result without actions: read (has none)'
 
-scenario control-job-grants "$(generated job-grants '{}' '{actions: read, checks: write, issues: write}' "${PINNED_USES}")" 0 \
+scenario control-job-grants "$(generated job-grants '{}' '{actions: read, checks: write, issues: write}' "${LOCAL_USES}")" 0 \
   'ok   generated.yml job notify: actions read, checks write, from job permissions'
 scenario control-inherited "$(generated inherit-grants '{actions: read, checks: read}' '' "${LOCAL_USES}")" 0 \
   'ok   generated.yml job notify: actions read, checks read, from workflow permissions'
 scenario control-read-all "$(generated read-all 'read-all' '' "${LOCAL_USES}")" 0 \
   'ok   generated.yml job notify: actions read-all, checks read-all, from workflow permissions'
 scenario no-caller "$(generated no-caller '{}' '{}' 'actions/checkout@0000000000000000000000000000000000000000')" 2 \
+  'no job under'
+scenario slug-not-caller "$(generated slug '{}' '{}' "${SLUG_USES}")" 2 \
   'no job under'
 
 harness_assert_verify || failures=1

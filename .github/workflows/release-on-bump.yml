@@ -1509,11 +1509,11 @@ jobs:
           # never re-run to rebase it). Fail on a closed PR so the notify job
           # surfaces it; a re-run (force-republish) then recovers. A PR still
           # open at the deadline is handed to ci-watchdog, and the step
-          # succeeds, only when the PR is in the shape the watchdog acts on:
-          # auto-merge armed, not behind main or conflicting, and a failed,
-          # cancelled or timed-out check on its head
-          # (scripts/changelog-pr-handoff.sh decides; its header names the
-          # cancel the watchdog does not re-run). Any other open
+          # succeeds, only when auto-merge is armed, the PR is not behind
+          # main or conflicting, and a check on its head failed, was
+          # cancelled or timed out (scripts/changelog-pr-handoff.sh decides;
+          # its header names the cancels the watchdog does not re-run, which
+          # are handed off all the same). Any other open
           # PR fails the step, so notify files rather than leave a PR open
           # that nothing will ever re-run or report. The hand-off read is the
           # only call made with the job token (ROLLUP_TOKEN): statusCheckRollup
@@ -1851,7 +1851,7 @@ jobs:
 
             If `image-amd64` or `image-arm64` failed, the per-arch job may have left a partially-published state (orphan arch-suffixed tag on one registry, missing on the other). The push loop is ordered `docker.io` then `ghcr.io`, so today the typical orphan is a docker.io `{version}-{arch}` tag with no matching ghcr.io tag.
 
-            Full step-by-step recovery — including the quote-safe Docker Hub API snippets and the `DOCKERHUB_TOKEN_DELETE` scope requirement — lives in [`docs/runbooks/dockerhub-recovery.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/docs/runbooks/dockerhub-recovery.md). Follow it end-to-end before closing this issue.
+            Full step-by-step recovery — including the quote-safe Docker Hub API snippets and the `DOCKERHUB_TOKEN_DELETE` scope requirement — lives in [`docs/runbooks/dockerhub-recovery.md`](https://github.com/rvenutolo/linPEAS-flake/blob/main/docs/runbooks/dockerhub-recovery.md). Follow it end-to-end: the next successful `release-on-bump` run closes this issue on its own, which can come before the recovery is done.
 
             ## Common Docker Hub causes
 

@@ -161,7 +161,3 @@ and the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair against
     they are quarantined by `minimumReleaseAge` and, for pins inside
     the audit's scope, re-checked daily by `ratchet-pin-audit` (scope in
     its [runbook](../runbooks/ratchet-pin-audit.md)).
-1. A self-reference pin — a `uses:` whose owner/repo is this repo's
-    own — is exempt from this gate entirely: it has no upstream
-    release tag to repoint against, since Renovate's pinDigests rule
-    tracks this repo's own main HEAD rather than an upstream tag.
