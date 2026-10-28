@@ -677,7 +677,7 @@ Enforced by `scripts/check-gh-api-field-from-file.sh`. Wired as the `lint-workfl
 
 ## uses-no-self-reference
 
-No `uses:` in `.github/workflows/*.yml` (or `.yaml`) or `.github/actions/**/*.yml` (or `.yaml`) names this repository by its owner/repo slug, whether as an action (`<owner>/<repo>/.github/actions/<name>@<ref>`), the root action (`<owner>/<repo>@<ref>`) or a reusable workflow called at job level. This repository's own actions and workflows are reached by the path-relative `./` form, which runs the copy in the checkout.
+No `uses:` in `.github/workflows/*.yml` (or `.yaml`) or `.github/actions/**/*.yml` (or `.yaml`) names this repository by its owner/repo slug, whether as an action (`<owner>/<repo>/.github/actions/<name>@<ref>`), the root action (`<owner>/<repo>@<ref>`) or a reusable workflow called at job level. This repository's own actions and workflows are reached by the path-relative `./` form, which runs the caller's own revision of them: for an action, the copy in the checkout; for a reusable workflow, the copy at the caller's commit.
 
 A slug reference runs the copy at its ref instead. Pinned to a SHA, it freezes the caller on an old revision of a file this repository keeps changing. Renovate does not detect a self-reference that carries no version comment, so nothing moves the pin, and the caller misses every later change to the action without any check failing.
 

@@ -283,10 +283,9 @@ the maintainer to skim-read auto-filed issues — exactly the wrong reflex
 when the failure is a real SRI drift or a one-sided registry rollback.
 
 Several cron-notify callers whose job can fail more than one way tell
-the ways apart, by label (`codeql`, `octoscan`, `image-cve-scan`) or by
-a reason in the body (`verify-latest-release`), so a reader acts on the
-failure in front of them; others file every way under one label and say
-in the body that the run page and job log tell which. Alert fatigue is a security risk.
+the ways apart, for example by label (`codeql`, `octoscan`) or by a
+reason in the body (`verify-latest-release`), so a reader acts on the
+failure in front of them. Alert fatigue is a security risk.
 
 ### Ladder coverage is linted<a name="ladder-coverage-is-linted"></a>
 
