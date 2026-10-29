@@ -375,7 +375,9 @@ runs. Neither substitutes for the other, and dropping either needs a
 `dependency-review.yml` runs on every PR via
 `actions/dependency-review-action`. Required check named
 `dependency-review`. `fail-on-severity: moderate`,
-`comment-summary-in-pr: on-failure`.
+`comment-summary-in-pr: on-failure`. Its egress allowlist includes
+`api.securityscorecards.dev`, which the action queries for the OpenSSF
+Scorecard summary of each changed dependency.
 
 - The repo carries no traditional package manifests, so the action
     mostly scans `.github/workflows/**` `uses:` against the GitHub
