@@ -6,6 +6,18 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261029-a596a9f3] - 2026-10-29
+
+### CI
+- Allow OpenSSF Scorecard API in dependency review ([#1459](https://github.com/rvenutolo/linPEAS-flake/pull/1459))
+- Restore harden-runner block mode on v2.22.3 ([#1458](https://github.com/rvenutolo/linPEAS-flake/pull/1458))
+
+### Chores
+- Bump linpeas to 20261029-a596a9f3 ([#1460](https://github.com/rvenutolo/linPEAS-flake/pull/1460))
+
+### Documentation
+- Fix the drift the cycle-closing docs audit found ([#1455](https://github.com/rvenutolo/linPEAS-flake/pull/1455))
+
 ## [20261028-1e84d916] - 2026-10-28
 
 ### Chores
