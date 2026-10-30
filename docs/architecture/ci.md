@@ -126,7 +126,7 @@ budgeted defense-in-depth posture rather than redundancy — is documented in
 
 ## Runner egress
 
-Every job's first step is `step-security/harden-runner` with a per-job `allowed-endpoints:` allowlist. Every step runs `egress-policy: block`, under which the eBPF monitor enforces the allowlist. See [harden-runner](../security/trust-model.md#harden-runner). The monitor must remain the first step in every job. A missed host appears as a blocked-egress failure and is fixed forward by extending that job's allowlist.
+Every job's first step is `step-security/harden-runner` with a per-job `allowed-endpoints:` allowlist. Each harden-runner step sets `egress-policy: block`, under which the eBPF monitor enforces the allowlist. See [harden-runner](../security/trust-model.md#harden-runner). The monitor must remain the first step in every job. A missed host appears as a blocked-egress failure and is fixed forward by extending that job's allowlist.
 
 ## Pages workflow
 
@@ -257,7 +257,7 @@ full step timings, nothing expired and the empty one never started. The
 log archive answers the same way — download it and list its entries
 rather than reading one job's absence from it as expiry.
 
-The composite holds off on a failure the classifier counts as transient
+The `notify-workflow-result` composite holds off on a failure the classifier counts as transient
 (a cancel counts only with timeout evidence), which the CI watchdog
 re-runs unless a newer `push` or `schedule` run of the same
 workflow and event replaces it or its latest attempt finished outside the

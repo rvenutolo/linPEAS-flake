@@ -63,7 +63,9 @@ execution, secret exfiltration from third-party actions.
     (`allowed_actions: selected`).
 - Top-level `permissions: {}`; every job declares an explicit
     least-privilege `GITHUB_TOKEN` scope block.
-- `harden-runner` is the first step in every job.
+- `harden-runner` is the first step in every job, with
+    `egress-policy: block` and a per-job `allowed-endpoints:` allowlist,
+    which narrows where an exfiltrating step can send data.
 - PR-triggered workflows expose only `secrets.GITHUB_TOKEN`.
 
 See [`docs/security/repo-config.md`](repo-config.md)
