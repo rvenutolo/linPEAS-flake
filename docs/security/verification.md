@@ -322,8 +322,10 @@ exemption.
 
 ## Gitleaks secret scanning<a name="gitleaks-secret-scanning"></a>
 
-`gitleaks.yml` scans the full git history (`fetch-depth: 0`) on push to
-main, every PR, a weekly Friday cron, and manual dispatch. Required
+`gitleaks.yml` runs on push to main, every PR, a weekly Friday cron,
+and manual dispatch. On a push or a PR, `gitleaks-action` scans the
+commits that event adds; on the cron and a dispatch it scans the full
+history, which the checkout's `fetch-depth: 0` makes reachable. Required
 check named `gitleaks` in the `protect-main` ruleset. A failed or
 cancelled run outside a pull request (a push to main, the cron, or a
 dispatch) files a deduped `gitleaks-failure` issue through its `notify`
@@ -345,8 +347,10 @@ request run's failure shows on the PR.
 
 ## TruffleHog secret scanning<a name="trufflehog-secret-scanning"></a>
 
-`trufflehog.yml` scans the full git history (`fetch-depth: 0`) on push
-to main, every PR, a weekly Friday cron, and manual dispatch. Required
+`trufflehog.yml` runs on push to main, every PR, a weekly Friday cron,
+and manual dispatch, and scans the same ranges as gitleaks: the commits
+a push or a PR adds, and the full history (`fetch-depth: 0`) on the cron
+and a dispatch. Required
 check named `trufflehog` in the `protect-main` ruleset. It runs with
 `extra_args: --only-verified`, so a finding is a credential TruffleHog
 reached the issuing provider to confirm is live — not a pattern match.
