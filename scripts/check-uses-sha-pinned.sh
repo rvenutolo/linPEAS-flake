@@ -24,9 +24,11 @@
 # merge site is read as itself.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
-# Exits 0 on full coverage, 1 on any drift, 2 when the lint could not run
-# because yq is absent from PATH. Nothing was scanned in that case, so it
-# must not borrow the drift code.
+# Exits 0 on full coverage, 1 on any drift, 2 when the lint could not run:
+# yq is absent from PATH, the globs match no file, or
+# WORKFLOW_FILE_FILTER selects none of them. Nothing was scanned in any of
+# those cases, so they must not borrow the drift code.
+# LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set deliberately.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
