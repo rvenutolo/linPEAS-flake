@@ -210,7 +210,7 @@ the workflow and this runbook.
 ## Recovery
 
 Once the underlying drift is resolved (pins updated, PR merged) or
-the transient API failure clears, the next daily run will see
+the transient API failure clears, the next run will see
 `result=success` and the `ratchet-drift` issue auto-closes via the
 `notify-workflow-result` composite.
 

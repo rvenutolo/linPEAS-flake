@@ -265,7 +265,7 @@ jobs:
           label-description: action pin SHA drift, or the ratchet audit could not run
           title: "ratchet-pin-audit: action pin drift detected, or the audit could not run"
           body: |
-            The daily `ratchet-pin-audit` workflow flagged a failure.
+            The `ratchet-pin-audit` workflow flagged a failure.
 
             - Reason: `${{ needs.check.outputs.reason || 'unknown' }}`
             - Drifted refs (one per line):
@@ -324,6 +324,6 @@ jobs:
               failed, or the run was cancelled (a banner above, or the
               run's comment, says so). Inspect the run log directly.
 
-            This issue auto-closes once the next daily run sees a clean
+            This issue auto-closes once the next run sees a clean
             audit (`result=success`, `reason=none`).
           github-token: ${{ secrets.GITHUB_TOKEN }}
