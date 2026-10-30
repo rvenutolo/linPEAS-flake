@@ -31,7 +31,7 @@ Every workflow declares a top-level `concurrency:` block with a non-empty `group
 
 Without a concurrency group, cron pile-ups and back-to-back PR pushes can spawn parallel runs on the same ref. Beyond burning runner minutes on superseded work, parallel runs can race steps that touch shared remote state (`gh release create`, tag pushes, image manifest writes). Forcing every workflow to declare a group keeps each ref serialized to one in-flight run by default.
 
-`cancel-in-progress` is not required by this lint; the group alone is the load-bearing setting. Pipelines that must run to completion once started (e.g., `release-on-bump.yml`) deliberately set `cancel-in-progress: false` so back-to-back triggers queue instead of cancelling.
+`cancel-in-progress` is not required by this lint; the group alone is the load-bearing setting. Pipelines that must run to completion once started (e.g., `release-on-bump.yml`) deliberately set `cancel-in-progress: false` so a newer trigger waits for the run in progress instead of cancelling it; the group holds one pending run, so a third trigger cancels the pending second.
 
 The lint reads `concurrency:` and its `group:` as their anchored text when written as an alias (`concurrency: *c`), as it does a `group:` key written as one, so such a file reaches the verdict of the same file written inline, and judges each by its YAML kind. It reads a root key written as an alias of `concurrency` as that key and a file giving it twice, plain and as an alias, as one that does not parse, and reports a file `yq` reads as several YAML documents (GitHub Actions refuses a workflow file holding several) without reading it further. The script header states which shapes are read and which are reported as an unexpected shape.
 
