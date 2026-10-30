@@ -212,7 +212,7 @@ jobs:
 
             Remediation: inspect the failing step in the run log. If
             the cause is transient (registry auth, network), close
-            this issue once the next scheduled / push run is green.
+            this issue once the next run is green.
             If persistent (image breakage, octoscan regression),
             re-pin the digest or open an upstream issue.
           github-token: ${{ secrets.GITHUB_TOKEN }}
