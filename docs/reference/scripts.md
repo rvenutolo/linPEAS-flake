@@ -2608,8 +2608,12 @@ Range by event (`EVENT_NAME`, with `BASE_SHA` and `HEAD_SHA`):
                   checked-out commit (not every fetched ref).
 ```
 
-Usage: scripts/gitleaks-merge-diffs.sh \[--source <dir>\]
---source repository to scan (default: this repo's top level)
+Usage:
+
+```text
+  scripts/gitleaks-merge-diffs.sh [--source <dir>]
+  --source <dir>  repository to scan (default: this repo's top level)
+```
 
 Exits 0 when no merge diff in range holds a finding, 1 when gitleaks
 reports a finding, 2 when the scan cannot run (missing tool, unknown
