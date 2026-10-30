@@ -350,10 +350,10 @@ request run's failure shows on the PR.
 `trufflehog.yml` runs on push to main, every PR, a weekly Friday cron,
 and manual dispatch, and scans the same ranges as gitleaks: the commits
 a push or a PR adds, and the full history (`fetch-depth: 0`) on the cron
-and a dispatch. Required
-check named `trufflehog` in the `protect-main` ruleset. It runs with
-`extra_args: --only-verified`, so a finding is a credential TruffleHog
-reached the issuing provider to confirm is live — not a pattern match.
+and a dispatch. Required check named `trufflehog` in the `protect-main`
+ruleset. It runs with `extra_args: --only-verified`, so a finding is a
+credential TruffleHog reached the issuing provider to confirm is live —
+not a pattern match.
 Like gitleaks, a failed or cancelled run outside a pull request files a
 deduped `trufflehog-failure` issue through its `notify` job.
 
