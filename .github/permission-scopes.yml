@@ -12,8 +12,9 @@ actions-cache-prune.yml:
   notify: [issues]
 ci-watchdog.yml:
   retry: [actions, issues]
-  # Files the ci-watchdog-failure issue when a sweep fails, and closes it
-  # on the next successful one; without it a failed sweep is silent.
+  # Files the ci-watchdog-failure issue when a sweep fails or is
+  # cancelled, and closes it on the next successful one; without it a
+  # failed or cancelled sweep is silent.
   notify: [issues]
 codeql.yml:
   analyze: [security-events]

@@ -419,7 +419,7 @@ the Trivy job's result and its `has-finding` output:
     found a CRITICAL), or the job was cancelled (no runner, or its
     timeout) <!-- notify-arms: image-cve-scan.yml/image-cve-scan-trivy-notify-infra = failure cancelled -->.
     Remediation: inspect the failing step; if transient, close
-    once the next scheduled run is green.
+    once the next run is green.
 
 - NOT in required-checks (intentional — `update-flake-lock` must still
     land even if a CVE is present, with explicit maintainer awareness).

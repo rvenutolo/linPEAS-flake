@@ -318,7 +318,7 @@ why. Work from those:
     `Sweep halted by rate limit`, the errored item's 403 is the rate limit that
     triggered the halt; the items in its "not attempted" list get no
     `core.error` line at all because the sweep never reached them — nothing
-    to check there, they are simply picked up on the next scheduled run.
+    to check there, they are simply picked up on the next sweep.
 1. A `403` on `reRunWorkflowFailedJobs` specifically, with a message like
     "Unable to retry this workflow run because it was created over a month
     ago", is neither of those — GitHub refuses to re-run runs past roughly a

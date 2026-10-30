@@ -188,7 +188,7 @@ jobs:
 
             Remediation: inspect the failing step in the run log. If the
             cause is transient (auth, network), close the issue once the
-            next scheduled / push run is green. If the cause is
+            next run is green. If the cause is
             persistent (action breakage, permissions drift), fix or pin
             accordingly.
           github-token: ${{ secrets.GITHUB_TOKEN }}
