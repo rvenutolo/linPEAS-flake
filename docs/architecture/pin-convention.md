@@ -33,12 +33,7 @@ per the ratchet-pin-audit runbook.
 
 A ref that cannot name a versioned tag carries an inline marker on the
 same line: a publisher that tags only majors leaves no versioned tag for
-the comment to name, so the comment may remain `# v<major>`. A pin that names the SHA of an annotated tag object
-rather than the release commit is a different case: the inventory
-script's SHA-equality lookup against `gh api repos/<owner>/<repo>/tags`
-returns no match for it, but if its comment names a versioned tag it
-needs no marker — the hook's patch-tag regex passes it and the audit
-accepts either SHA:
+the comment to name, so the comment may remain `# v<major>`:
 
 ```yaml
 - uses: some/action@<sha> # v2 # patch-tag-exception: publisher only tags majors
@@ -46,6 +41,12 @@ accepts either SHA:
 
 The marker reason must be non-empty (the half that the lint checks) and,
 by convention, say why this ref cannot name a versioned tag.
+
+A pin that names the SHA of an annotated tag object rather than the
+release commit is a different case: the inventory script's SHA-equality
+lookup against `gh api repos/<owner>/<repo>/tags` returns no match for
+it, but if its comment names a versioned tag it needs no marker — the
+hook's patch-tag regex passes it and the audit accepts either SHA.
 
 ## Enforcement
 

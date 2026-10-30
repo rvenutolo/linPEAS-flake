@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Score docs-audit reports against the planted seed manifest.
 # Usage: score.sh <report.md> [<report.md> ...]
-# Reads $SEEDED_RESULTS_DIR/manifest-resolved.json (default: ./results).
+# Reads $SEEDED_RESULTS_DIR/manifest-resolved.json (default: results/ beside
+# this script).
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

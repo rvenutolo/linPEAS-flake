@@ -92,8 +92,9 @@ Paths below are relative to this file's directory — `cd` to the skill's
 
 ```sh
 bash seeded-defects/plant.sh
-# In the planted clone, edit the cluster map in
-# ../references/repo-map.md §2 to the configuration under test — that table
+# In the planted clone ($(cat seeded-defects/results/worktree-path.txt)),
+# edit the clone's own .claude/skills/docs-audit/references/repo-map.md §2
+# to the configuration under test — that table
 # is the only thing that sets reader granularity; no flag or env var
 # switches it, so measuring a second configuration means varying that
 # section and re-running.
