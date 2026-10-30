@@ -176,7 +176,7 @@ jobs:
           label: pin-stalled
           title: "stale-pin-check: pin not advancing, or the check could not run"
           body: |
-            The daily `stale-pin-check` watchdog flagged a failure.
+            The `stale-pin-check` watchdog flagged a failure.
 
             - Reason: `${{ needs.check.outputs.reason || 'unknown' }}`
             - Pinned version: `${{ needs.check.outputs.pin_version }}`

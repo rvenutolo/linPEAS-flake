@@ -6,9 +6,10 @@
 # preventing network-level egress to unlisted hosts.
 
 # Asserts every step-security/harden-runner step in
-# .github/workflows/*.yml uses egress-policy: block with a non-empty
-# allowed-endpoints list, locking in that posture so no step reverts
-# to audit or ships an empty allowlist — see docs/security/trust-model.md.
+# .github/workflows/*.yml (or .yaml) uses egress-policy: block with a
+# non-empty allowed-endpoints list, locking in that posture so no step
+# reverts to audit or ships an empty allowlist — see
+# docs/security/trust-model.md.
 # A step is a harden-runner step when its `uses:` holds
 # `step-security/harden-runner@`, its ASCII letters in either case.
 #
@@ -19,7 +20,11 @@
 # counted finding, and the file's jobs are not read.
 #
 # Honors WORKFLOWS_DIR_OVERRIDE + WORKFLOW_FILE_FILTER for fixtures.
-# Exits 0 on full coverage, 1 on any drift, 2 if yq is missing.
+# Exits 0 on full coverage, 1 on any drift. Exits 2 when the check
+# cannot run: `yq` is absent from PATH, the workflow globs match no
+# file, or WORKFLOW_FILE_FILTER selects none of the files they matched.
+# An empty scan set is a could-not-run rather than a clean tree;
+# LINT_ALLOW_EMPTY_SCAN=1 accepts one deliberately.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

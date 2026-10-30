@@ -322,9 +322,13 @@ exemption.
 
 ## Gitleaks secret scanning<a name="gitleaks-secret-scanning"></a>
 
-`gitleaks.yml` scans the full git history (`fetch-depth: 0`) on push to
-main, every PR, a weekly Friday cron, and manual dispatch. Required
-check named `gitleaks` in the `protect-main` ruleset. A failed or
+`gitleaks.yml` runs on push to main, every PR, a weekly Friday cron,
+and manual dispatch. On a PR, `gitleaks-action` scans the PR's commits.
+On a push it scans the pushed range with `--no-merges --first-parent`,
+which leaves out a merge commit and the branch it brought in, so a push
+that lands a merged PR scans no commit. The cron and a dispatch scan the
+full history, which the checkout's `fetch-depth: 0` makes reachable.
+Required check named `gitleaks` in the `protect-main` ruleset. A failed or
 cancelled run outside a pull request (a push to main, the cron, or a
 dispatch) files a deduped `gitleaks-failure` issue through its `notify`
 job, and the next passing run outside a pull request closes it; a pull
@@ -345,11 +349,14 @@ request run's failure shows on the PR.
 
 ## TruffleHog secret scanning<a name="trufflehog-secret-scanning"></a>
 
-`trufflehog.yml` scans the full git history (`fetch-depth: 0`) on push
-to main, every PR, a weekly Friday cron, and manual dispatch. Required
-check named `trufflehog` in the `protect-main` ruleset. It runs with
-`extra_args: --only-verified`, so a finding is a credential TruffleHog
-reached the issuing provider to confirm is live — not a pattern match.
+`trufflehog.yml` runs on push to main, every PR, a weekly Friday cron,
+and manual dispatch. It scans the commits between a push's before and
+after SHAs or a PR's base and head, the branches merge commits bring in
+included, and the full history (`fetch-depth: 0`) on the cron and a
+dispatch. Required check named `trufflehog` in the `protect-main`
+ruleset. It runs with `extra_args: --only-verified`, so a finding is a
+credential TruffleHog reached the issuing provider to confirm is live —
+not a pattern match.
 Like gitleaks, a failed or cancelled run outside a pull request files a
 deduped `trufflehog-failure` issue through its `notify` job.
 

@@ -134,8 +134,8 @@ jobs:
           title: "docs-audit-reminder: drift pressure could not be measured"
           label-description: docs-audit-reminder could not measure CI drift pressure or update its issue
           body: |
-            The monthly `docs-audit-reminder` workflow failed, so this
-            month's docs-audit drift pressure was not reported. Drift
+            The `docs-audit-reminder` workflow failed, so this run's
+            docs-audit drift pressure was not reported. Drift
             pressure itself never fails the run: this is the pressure
             script erroring, a GitHub API call failing, or
             `.github/docs-audit-state` being unreadable.

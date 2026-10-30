@@ -273,12 +273,15 @@ rejects either host on a job that carries it without a Nix-reaching
 step or a rationale-bearing `# egress-nix-exempt:` comment, so copying
 them into a new job's allowlist by habit fails the lint rather than
 passing it. Block mode drops any egress to a host outside
-the allowlist, so a compromised step cannot exfiltrate a credential (App
-token, Docker Hub PAT, signing key) to an attacker-controlled host.
+the allowlist, which narrows where a compromised step can send a
+credential such as the App token or the Docker Hub PAT.
 Rotating host families — Actions cache/artifact storage
 (`*.blob.core.windows.net`), the hosted-runner control plane
 (`*.githubapp.com`), and the Actions runtime
-(`*.actions.githubusercontent.com`) — are matched by wildcard.
+(`*.actions.githubusercontent.com`) — are matched by wildcard. Block
+mode does not close every path: the hosts a job's allowlist carries
+stay reachable, the GitHub hosts and any of those wildcarded families
+it carries among them.
 
 When a job legitimately needs a new endpoint, add it to that job's
 `allowed-endpoints:`; never relax a job back to audit.

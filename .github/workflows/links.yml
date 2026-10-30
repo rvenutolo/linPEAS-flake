@@ -79,9 +79,9 @@ jobs:
           result: ${{ needs.lychee.result }}
           label: links-failure
           title: "links: broken Markdown link(s), or the link check could not run"
-          label-description: weekly lychee link check found broken links, or the check could not run
+          label-description: lychee link check found broken links, or the check could not run
           body: |
-            The weekly `links` workflow did not pass: `lychee` found one
+            The `links` workflow did not pass: `lychee` found one
             or more broken links in the tracked Markdown, a step (the
             check itself included) failed, or the job was cancelled. The
             run page and job log say which: lychee lists each failing URL

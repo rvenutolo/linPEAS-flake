@@ -106,7 +106,7 @@ jobs:
           label: flake-lock-stale
           title: "flake-lock-staleness-check: an input has stopped moving, or the check could not run"
           body: |
-            The daily `flake-lock-staleness-check` watchdog failed:
+            The `flake-lock-staleness-check` watchdog failed:
             either a top-level `flake.lock` input has a
             `locked.lastModified` older than the bound declared for it in
             `scripts/check-flake-lock-staleness.sh`, or the check could

@@ -229,7 +229,7 @@ completion, and the next successful sweep closes the issue.
 
 While sweeps fail, a failure another workflow's notify job held off for a
 retry is neither re-run nor filed when the failing sweep did not reach
-it (a halted sweep, or the item that errored), and a bot PR stuck on a
+it, and a bot PR stuck on a
 transient failure the sweep did not reach stays stuck. Read the failed `retry` log as the next section
 describes, fix the cause, and then run a sweep by hand (see
 [Forcing a run](#forcing-a-run)). That sweep picks up a held-off

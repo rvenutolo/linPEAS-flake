@@ -38,9 +38,11 @@ on:
 permissions: {}
 
 concurrency:
-  # Serialize on `main` rather than per-SHA so back-to-back pin bumps queue
-  # through the release pipeline sequentially. Avoids parallel-runs racing
-  # the `gh release create` step on the same upstream tag.
+  # Serialize on `main` rather than per-SHA so two runs never overlap, and
+  # a newer run waits for the one in progress rather than cancelling it.
+  # The group holds one pending run: a third run queued behind it cancels
+  # the pending one. Avoids parallel-runs racing the `gh release create`
+  # step on the same upstream tag.
   group: release-on-bump-main
   cancel-in-progress: false
 

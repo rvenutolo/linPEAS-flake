@@ -59,8 +59,10 @@ The workflow:
     repoints it.
 - Skips the changelog job (release notes are NOT rewritten).
 
-Run sequentially per tag (workflow concurrency group
-`release-on-bump-main` serializes anyway).
+Run sequentially per tag: wait for each backfill run to finish before
+dispatching the next. The `release-on-bump-main` concurrency group keeps
+one run pending behind the one in progress, so a third dispatch cancels
+the queued second.
 
 ## Verification
 

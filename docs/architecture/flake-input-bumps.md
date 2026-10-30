@@ -729,7 +729,8 @@ outputs, so its failure and its ordinary early exit look identical from
 the gate. That matters most here, because this workflow reacts to
 someone else's PR — a red run in the Actions tab has no watcher at the
 moment it goes red, and the PR it was meant to repair sits with a
-failing `flake-check` instead. A combination the job graph cannot
+failing `flake-check` (lock refresh) or `doc-freshness` (runner-label
+refresh) instead. A combination the job graph cannot
 produce classifies as `failure` too: an issue naming a drifted workflow
 beats the silence. `tests/classify-refresh-notify-result.test.sh` holds
 the matrix, including these cases: a failed `identify` reports, a `ci` completion that is not a

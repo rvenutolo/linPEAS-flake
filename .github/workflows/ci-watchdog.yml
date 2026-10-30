@@ -52,9 +52,9 @@ name: ci-watchdog
 # workflow and event, deduped by title. A watchdog that gives up silently
 # recreates the bug it exists to fix, and so does one that fails
 # silently: the `notify` job files a `ci-watchdog-failure` issue through
-# the notify-workflow-result composite when the `retry` job fails, on
-# the first failure, because the classifier never retries this
-# workflow's own runs.
+# the notify-workflow-result composite when the `retry` job fails or is
+# cancelled, on the first failure, because the classifier never retries
+# this workflow's own runs.
 #
 # An error against one PR or run is caught and confined to it: the sweep
 # still processes every remaining item, and the job fails at the end
@@ -627,12 +627,13 @@ jobs:
               );
             }
 
-  # A sweep that fails leaves every failure the notify composite held off
-  # for a retry neither retried nor filed, and a red watchdog run is
-  # otherwise the only sign. The classifier never retries this workflow's
-  # own runs, so this files on the first failed sweep. A skipped `retry`
-  # (a no-op `workflow_run` completion, or a fork) has nothing to report
-  # or close, so the job is skipped with it rather than start a runner.
+  # A sweep that fails leaves a failure the notify composite held off for
+  # a retry neither retried nor filed when the sweep did not reach it, and
+  # a red watchdog run is otherwise the only sign. The classifier never
+  # retries this workflow's own runs, so this files on the first failed
+  # sweep. A skipped `retry` (a no-op `workflow_run` completion, or a
+  # fork) has nothing to report or close, so the job is skipped with it
+  # rather than start a runner.
   notify:
     name: notify
     needs: retry

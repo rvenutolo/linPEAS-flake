@@ -219,11 +219,11 @@ Exception for a non-`GITHUB_TOKEN` secret requires documenting here BEFORE relax
 
 ## harden-runner
 
-`step-security/harden-runner` is the **first step** in every job in every workflow, with `egress-policy: block` and a per-job `allowed-endpoints:` allowlist (a shared baseline plus job-specific hosts; rotating families wildcarded). Block mode drops egress to any host outside the allowlist, denying a compromised step an exfiltration path.
+`step-security/harden-runner` is the **first step** in every job in every workflow, with `egress-policy: block` and a per-job `allowed-endpoints:` allowlist (a shared baseline plus job-specific hosts; rotating families wildcarded). Block mode drops egress to any host outside the allowlist, which narrows where a compromised step can send data; the hosts the allowlist carries, the shared GitHub baseline and any wildcarded family it carries among them, stay reachable.
 
 - Do not remove from any job.
 - Keep as first step, before `actions/checkout`, `cachix/install-nix-action`, or any network step. eBPF monitor must install before any I/O.
-- Do not add to composite actions — caller job already has it.
+- Do not add to composite actions — caller job already has it. Neither harden-runner lint scans `.github/actions/`, so review holds this rule.
 
 Enforced by `scripts/check-harden-runner-first.sh` via the `lint-workflow-security` CI job (member check `harden-runner-first`) and a pre-commit hook. Lint parses every job in `.github/workflows/*.yml` (or `.yaml`) with `yq` and rejects any job whose first step is not `step-security/harden-runner@<40-hex-sha>`. The owner and repository are matched with their ASCII letters in either case; the SHA is forty lower-case hex digits. A first step's `uses:` written as an alias (`uses: *action`) is read as its anchored text.
 
