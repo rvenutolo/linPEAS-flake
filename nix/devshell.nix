@@ -52,6 +52,9 @@
           ratchet
           scorecard
           zizmor
+          # Test tooling for tests/gitleaks-merge-diffs.test.sh only: the
+          # gitleaks workflow runs the binary gitleaks-action installs.
+          gitleaks
           yamllint
           prettier
           config.treefmt.build.wrapper

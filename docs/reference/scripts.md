@@ -2584,6 +2584,42 @@ Exit codes:
 Generate docs/\_data/dashboard.yml for the MkDocs site
 by aggregating pin metadata and live GitHub REST API data.
 
+### scripts/gitleaks-merge-diffs.sh
+
+Scan the diffs of merge commits for secrets with gitleaks.
+`gitleaks-action` scans push and pull-request ranges with
+`--no-merges --first-parent`, and `git log -p` shows a merge with an
+empty patch, so a change made only in a merge commit (a hand-resolved
+conflict) reaches no other scan. This pass selects the merge commits in
+the event's range and diffs each against its first parent. That diff
+also repeats what the merged side carried, which other scans already
+cover; the redundancy is accepted, because a normal patch is the format
+gitleaks parses and the narrower combined-diff formats are not.
+
+Range by event (`EVENT_NAME`, with `BASE_SHA` and `HEAD_SHA`):
+
+```text
+  pull_request — BASE_SHA..HEAD_SHA; a base absent from the clone is a
+                  setup failure.
+  push         — BASE_SHA..HEAD_SHA; an all-zero, empty or absent base
+                  scans the full history of HEAD_SHA, so a push is
+                  never scanned as empty.
+  schedule, workflow_dispatch — the full history of HEAD, the
+                  checked-out commit (not every fetched ref).
+```
+
+Usage:
+
+```text
+  scripts/gitleaks-merge-diffs.sh [--source <dir>]
+  --source <dir>  repository to scan (default: this repo's top level)
+```
+
+Exits 0 when no merge diff in range holds a finding, 1 when gitleaks
+reports a finding, 2 when the scan cannot run (missing tool, unknown
+argument or event, missing or unresolvable SHA, or gitleaks failing
+without a finding).
+
 ### scripts/inventory-action-pin-tags.sh
 
 Enumerate every SHA-pinned `uses:` in
