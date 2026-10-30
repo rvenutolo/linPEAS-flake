@@ -155,6 +155,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/docs-audit-pressure.test.sh`            | `scripts/docs-audit-pressure.sh`                    | —                                            |
 | `tests/fetch-ci-run.test.sh`                   | `scripts/fetch-ci-run.sh`                           | —                                            |
 | `tests/gen-dashboard-data.test.sh`             | `scripts/gen-dashboard-data.sh`                     | `tests/fixtures/dashboard-data`              |
+| `tests/gitleaks-merge-diffs.test.sh`           | `scripts/gitleaks-merge-diffs.sh`                   | —                                            |
 | `tests/glob-scan-breadth.test.sh`              | `scripts/*.sh`                                      | —                                            |
 | `tests/harness-no-tracked-writes.test.sh`      | `scripts/lib/scratch-tree.sh`                       | —                                            |
 | `tests/inventory-action-pin-tags.test.sh`      | `scripts/inventory-action-pin-tags.sh`              | `tests/fixtures/inventory-action-pin-tags`   |

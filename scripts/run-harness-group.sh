@@ -109,6 +109,7 @@ readonly -a HARNESSES=(
   'docs-audit-pressure|docs-audit-pressure.test.sh|'
   'mark-docs-audit|mark-docs-audit.test.sh|'
   'inventory-action-pin-tags|inventory-action-pin-tags.test.sh|'
+  'gitleaks-merge-diffs|gitleaks-merge-diffs.test.sh|'
   'octoscan-scan|octoscan-scan.test.sh|'
   'run-doc-freshness|run-doc-freshness.test.sh|'
   'run-harness-group|run-harness-group.test.sh|'
