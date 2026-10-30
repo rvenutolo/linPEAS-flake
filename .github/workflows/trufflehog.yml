@@ -38,7 +38,13 @@ jobs:
           persist-credentials: false
       - uses: trufflesecurity/trufflehog@c85580b712841eda4c53bc28fc6ace6100e8c16c # v3.99.4
         with:
-          extra_args: --only-verified
+          # The action runs `docker run "${IMAGE}:${VERSION}"` and defaults
+          # VERSION to `latest`; tag+digest pins the image to the same
+          # release as the action (lint: trufflehog-image-pin).
+          version: 3.99.4@sha256:bf9238f5bdf26ac28230d4b0bae5162a752b151bf10bea612dad7a62da938731
+          # Egress is blocked, so only GitHub credentials can verify; any
+          # other provider's finding is `unknown`, and must still fail.
+          extra_args: --results=verified,unknown
 
   notify:
     name: notify
@@ -69,21 +75,21 @@ jobs:
           # request run's failure shows on the pull request itself.
           result: ${{ needs.trufflehog.result }}
           label: trufflehog-failure
-          title: "trufflehog: verified secret detected, or the scan could not run"
-          label-description: trufflehog found a verified secret outside a pull request, or the scan could not run
+          title: "trufflehog: secret detected, or the scan could not run"
+          label-description: trufflehog found a secret outside a pull request, or the trufflehog scan could not run
           body: |
             The `trufflehog` workflow did not pass on a
-            `${{ github.event_name }}` run: trufflehog reported a verified
-            secret (one it confirmed live against its provider) in the
-            repository history, a step (the trufflehog image pull and the
-            scan itself included) failed, or the job was cancelled. The run
-            page and job log say which.
+            `${{ github.event_name }}` run: trufflehog reported a secret
+            in the repository history that it either confirmed live or
+            could not verify, a step (the trufflehog image pull and the
+            scan itself included) failed, or the job was cancelled. The
+            run page and job log say which.
 
             Run:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-            A finding is a live credential and a security incident: rotate
-            it first, then purge it from history, as the TruffleHog section
+            A finding is a security incident whether or not it verified:
+            rotate the credential first, then purge it from history, as the TruffleHog section
             of docs/security/verification.md describes. This issue
             auto-closes on the next clean run.
           github-token: ${{ secrets.GITHUB_TOKEN }}

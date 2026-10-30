@@ -19,6 +19,7 @@
 lint-workflow-security:
   - uses-sha-pinned
   - uses-no-self-reference
+  - trufflehog-image-pin
   - harden-runner-first
   - harden-runner-block
   - min-permissions

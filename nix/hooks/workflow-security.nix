@@ -38,6 +38,21 @@
     pass_filenames = false;
     language = "system";
   };
+  trufflehog-image-pin = {
+    enable = true;
+    name = "trufflehog-image-pin";
+    description = "trufflesecurity/trufflehog steps pin their image to the action pin's release by tag and digest.";
+    entry = "${pkgs-unstable.writeShellScript "trufflehog-image-pin-hook" ''
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+      if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      export PATH="${pkgs-unstable.yq-go}/bin:${pkgs-unstable.jq}/bin:$PATH"
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-trufflehog-image-pin.sh
+    ''}";
+    files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-trufflehog-image-pin\\.sh)$";
+    pass_filenames = false;
+    language = "system";
+  };
   patch-tag-pins = {
     enable = true;
     name = "patch-tag-pins";

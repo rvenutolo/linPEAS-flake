@@ -685,6 +685,14 @@ The slug is `GITHUB_REPOSITORY`, defaulting to this repository's, and it matches
 
 Enforced by `scripts/check-uses-no-self-reference.sh`. Wired as the `lint-workflow-security` CI job (member check `uses-no-self-reference`) and as a pre-commit hook.
 
+## trufflehog-image-pin
+
+Every `trufflesecurity/trufflehog` step in `.github/workflows/*.yml` (or `.yaml`) passes a `version:` input of `X.Y.Z@sha256:<64 hex>`, where `X.Y.Z` is the version in the step's `# vX.Y.Z` pin comment. The action is a composite that runs `docker run "${IMAGE}:${VERSION}"` with `version` defaulting to `latest`, so the SHA pin on `uses:` fixes only the wrapper script: without the input every run executes whatever image `latest` names. The tag+digest value makes the image reference immutable, and tying its tag to the pin comment keeps image and wrapper on one release. Renovate moves both in its `github-actions` group; when one half arrives first, this lint keeps that PR red until the other half lands.
+
+The owner and repository match with each ASCII letter in either case, as GitHub resolves them. A `version:` written as a YAML alias is read as its anchored text. A step with no `# vX.Y.Z` comment is a finding, since there is no release to compare against.
+
+Enforced by `scripts/check-trufflehog-image-pin.sh`. Wired as the `lint-workflow-security` CI job (member check `trufflehog-image-pin`) and as a pre-commit hook.
+
 ## fork-guard-release
 
 Every workflow job that holds a guard-required write scope includes a fork-guard `if:` clause containing `github.repository == 'rvenutolo/linPEAS-flake'`.

@@ -2050,6 +2050,13 @@ Exits 0 when every invocation is guarded, 1 when one is not. Exits 2
 when the check cannot run: `shfmt` or `jq` absent from PATH, a script
 `shfmt` cannot parse, or a scan set matching no script.
 
+### scripts/check-trufflehog-image-pin.sh
+
+Lint: every `trufflesecurity/trufflehog` step in
+`.github/workflows/*.yml` (or `.yaml`) passes a `version:` input of
+`X.Y.Z@sha256:<64 hex>`, where `X.Y.Z` is the version in the step's
+`# vX.Y.Z` pin comment.
+
 ### scripts/check-upload-artifact-strict.sh
 
 Lint: every step whose `uses:` starts with
