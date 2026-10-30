@@ -351,9 +351,9 @@ request run's failure shows on the PR.
 
 `trufflehog.yml` runs on push to main, every PR, a weekly Friday cron,
 and manual dispatch. It scans the commits between a push's before and
-after SHAs or a PR's base and head, merge commits and the branches they
-bring in included, and the full history (`fetch-depth: 0`) on the cron
-and a dispatch. Required check named `trufflehog` in the `protect-main`
+after SHAs or a PR's base and head, the branches merge commits bring in
+included, and the full history (`fetch-depth: 0`) on the cron and a
+dispatch. Required check named `trufflehog` in the `protect-main`
 ruleset. It runs with `extra_args: --only-verified`, so a finding is a
 credential TruffleHog reached the issuing provider to confirm is live —
 not a pattern match.
