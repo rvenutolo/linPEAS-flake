@@ -81,7 +81,11 @@ steps below in the meantime.
 The same workflow also refreshes the runner labels that
 `docs/architecture/ci.md` and `docs/install/nix.md` name, on any Renovate
 PR that touches a workflow; [Runner-label bumps](#runner-label-bumps)
-covers that path and the steps it leaves to a person.
+covers that path and the steps it leaves to a person. And it rewrites
+`.github/trufflehog-image`, the TruffleHog container image ref, on any
+Renovate PR that changes `.github/workflows/trufflehog.yml`;
+[TruffleHog image refresh](#trufflehog-image-refresh) covers that path
+and its manual fallback.
 
 ## Why a runbook
 
@@ -646,9 +650,19 @@ Which refreshes run, past those gates:
     `WORKFLOW_DERIVED_GENERATORS` (`scripts/refresh-runner-labels.sh`).
     Every weekly grouped github-actions PR takes this path, and most
     change no runner label, so the usual outcome is no diff and no push.
+- **TruffleHog image refresh**, when the PR changes
+    `.github/workflows/trufflehog.yml`, which is also a workflow touch,
+    so the runner-label refresh runs beside it. `compute-refresh` runs
+    the generators in `PIN_DERIVED_GENERATORS`
+    (`scripts/refresh-trufflehog-image.sh`), which reaches `ghcr.io`
+    anonymously; that host and its blob host
+    `pkg-containers.githubusercontent.com` are on the job's egress
+    allowlist for it. Most such PRs leave the action pin where it was,
+    so the usual outcome is again no diff.
 
-A PR that needs both gets both in the one `compute-refresh` job, and
-`push-refresh` commits every changed path in one loop.
+A PR that needs more than one gets them all in the one
+`compute-refresh` job, and `push-refresh` commits every changed path in
+one loop.
 
 Adding a new auto-refreshable input requires three coordinated
 edits in the same PR: (1) extend the `case` arms in
@@ -672,7 +686,10 @@ Credential split mirrors `update-flake-lock.yml`:
     default branch (this workflow's own ref,
     `persist-credentials: false`), never the Renovate head, and it runs
     no code from the PR branch: the one script it runs, the runner-doc
-    content floor, comes from that checkout. The artifact is downloaded
+    content floor, comes from that checkout, and the image file's floor
+    is a shape check written in the workflow itself. Every committable
+    path sits outside `.github/workflows/`, so the App token needs only
+    `contents: write`, never `workflows`. The artifact is downloaded
     into the runner's temp directory, outside the checkout, so a path
     missing from it aborts the job instead of being read from the default
     branch's copy. download-artifact's own path-traversal protection is the primary
@@ -711,8 +728,8 @@ Credential split mirrors `update-flake-lock.yml`:
     cover those.
 
 Loop-breaker: `compute-refresh`'s diff step sets `changed=false` when
-no path in `COMMITTABLE_PATHS` differs from the checkout after both
-refreshes, which skips `push-refresh` outright. Inside `push-refresh` a
+no path in `COMMITTABLE_PATHS` differs from the checkout after every
+refresh that ran, which skips `push-refresh` outright. Inside `push-refresh` a
 second, per-path guard compares each committable path's git blob SHA,
 computed with `sha1sum` rather than git, against its blob SHA on the
 branch and skips the ones already current; zero commits is a clean
@@ -729,13 +746,13 @@ outputs, so its failure and its ordinary early exit look identical from
 the gate. That matters most here, because this workflow reacts to
 someone else's PR — a red run in the Actions tab has no watcher at the
 moment it goes red, and the PR it was meant to repair sits with a
-failing `flake-check` (lock refresh) or `doc-freshness` (runner-label
-refresh) instead. A combination the job graph cannot
+failing `flake-check` (lock refresh), `doc-freshness` (runner-label
+refresh) or `lint-workflow-security` (TruffleHog image refresh) instead. A combination the job graph cannot
 produce classifies as `failure` too: an issue naming a drifted workflow
 beats the silence. `tests/classify-refresh-notify-result.test.sh` holds
 the matrix, including these cases: a failed `identify` reports, a `ci` completion that is not a
-Renovate PR needing a refresh stays silent, and a runner-label refresh
-that finds no diff closes rather than files.
+Renovate PR needing a refresh stays silent, and a runner-label or
+TruffleHog image refresh that finds no diff closes rather than files.
 
 Not in required-checks. Lockfile refresh on a PR cannot block the
 PR's own merge gate (chicken-and-egg).
@@ -780,8 +797,9 @@ refusal pushes nothing, not even the lock. Before that, the
 artifact sanity check requires each runner doc to hold its table's
 header row (the lock docs keep their BEGIN/END marker check), and the
 commit pass refuses a changed path whose refresh did not run: a runner
-doc on a PR that touches no workflow, or the lock or a lock doc when no
-input was refreshed. A runner-doc commit reads
+doc on a PR that touches no workflow, the lock or a lock doc when no
+input was refreshed, or `.github/trufflehog-image` on a PR that does not
+change `trufflehog.yml`. A runner-doc commit reads
 `chore(ci): refresh runner labels in <doc>`.
 
 ### Runner-label bumps
@@ -815,6 +833,35 @@ Never use GitHub's "Update with rebase" button or
 `gh pr update-branch --rebase`: GitHub rewrites the commits unsigned,
 and `required_signatures` then blocks the merge.
 
+### TruffleHog image refresh
+
+The `trufflesecurity/trufflehog` action runs a container image, which
+`trufflehog.yml` pins by tag and digest through `.github/trufflehog-image`
+(see [trufflehog-image-pin](../security/workflow-hardening.md#trufflehog-image-pin)).
+Renovate moves the action pin in its `github-actions` group but not the
+image: ghcr.io publishes no release timestamps, so Renovate's release-age
+gate never clears an image update. The PR that moves the pin therefore
+arrives with the file naming the old release, and the
+`trufflehog-image-pin` lint keeps `lint-workflow-security` red on it.
+
+`compute-refresh` runs `scripts/refresh-trufflehog-image.sh`. It reads
+the `# vX.Y.Z` comment of the action pin, asks ghcr.io anonymously for
+the `X.Y.Z` tag's manifest (a multi-arch index first) and writes
+`X.Y.Z@sha256:<digest>` from the `Docker-Content-Digest` it answers.
+`push-refresh` commits the file only when it is exactly that one line,
+under `chore(ci): refresh the TruffleHog image ref for its action pin`,
+and the lint then passes on the next `ci` run.
+
+Manual fallback, when the auto-refresh does not land (an issue under
+`renovate-flake-lock-refresh-failure` says so):
+
+1. Check out the PR branch.
+1. Run `nix develop --command bash scripts/refresh-trufflehog-image.sh`;
+    `--check` instead reports whether the file is stale without writing
+    it (exit 1), and exit 2 means the workflow pin or ghcr.io could not
+    be read.
+1. Commit `.github/trufflehog-image` as a signed commit and push.
+
 ## Lock-derived docs travel with the lock
 
 Several docs in this repo are generated from evaluated flake state, so a
@@ -832,16 +879,19 @@ lists: `LOCK_DERIVED_GENERATORS` names the generators it runs, and
 commit — the compute job holds no write credential, so that list, not the
 artifact it uploads, is the trust boundary. A workflow that also
 regenerates docs derived from `.github/workflows/ci.yml` names those
-generators in a third list, `WORKFLOW_DERIVED_GENERATORS`;
-`renovate-flake-lock-refresh.yml` is the one that does.
+generators in a third list, `WORKFLOW_DERIVED_GENERATORS`, and one that
+regenerates files derived from an action pin by a registry lookup names
+those in a fourth, `PIN_DERIVED_GENERATORS`;
+`renovate-flake-lock-refresh.yml` is the one that does both.
 
 `COMMITTABLE_PATHS` is not written by hand against the generator lists. Every
 generator already declares what it writes in its own comment header —
 `@generates <path>` for a file it owns outright and
 `@generates-block <path>` for a region it splices into a hand-authored
 file — and the committable set is exactly `flake.lock` plus the outputs
-declared by the generators in `LOCK_DERIVED_GENERATORS` and
-`WORKFLOW_DERIVED_GENERATORS`. Both annotation kinds count: the split between whole
+declared by the generators in `LOCK_DERIVED_GENERATORS`,
+`WORKFLOW_DERIVED_GENERATORS` and `PIN_DERIVED_GENERATORS`. Both
+annotation kinds count: the split between whole
 file and spliced block is a judgment about who owns the surrounding
 prose, not about who writes the bytes. `flake.lock` is on the list
 because the workflow writes it directly rather than through a
@@ -906,12 +956,21 @@ A lock-writing workflow may also declare an optional third list,
 an executable generator run by a freshness hook whose trigger admits
 `.github/workflows/ci.yml`, and its declared outputs join the same
 committable bound: `COMMITTABLE_PATHS` is exactly `flake.lock` plus the
-outputs both generator lists declare, in both directions, so it stays the
+outputs every generator list declares, in both directions, so it stays the
 one allowlist the credentialed job reads. The rule runs one way only.
 Many hooks name `ci.yml`, and a workflow is bound only to the ones it
 lists. A generator in both lists fails: it claims two triggers for the
 same docs, and one of the claims is false. An absent list is an empty
 one.
+
+`PIN_DERIVED_GENERATORS` is optional too, for generators whose output
+derives from an action pin in a workflow by a registry lookup, such as
+`scripts/refresh-trufflehog-image.sh`. No freshness hook can run one,
+because a hook has no network, so no hook binding applies: the lint that
+reads the output (`trufflehog-image-pin` here) is what keeps a stale one
+red at PR time. Each entry must be an executable generator that declares
+its outputs and sits in neither other list, and its declared outputs join
+the same committable bound.
 
 The compute job hands its files to the credentialed job through one
 `actions/upload-artifact` step, and that step's `path:` list cannot read

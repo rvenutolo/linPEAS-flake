@@ -104,6 +104,7 @@ readonly -a ROWS=(
   'refresh-scripts-reference.sh|--check'
   'refresh-test-harnesses.sh|--check'
   'refresh-treefmt-config.sh|--check'
+  'refresh-trufflehog-image.sh|--check'
 )
 
 if ((${#ROWS[@]} == 0)); then

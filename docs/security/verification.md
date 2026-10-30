@@ -367,9 +367,22 @@ included, and the full history (`fetch-depth: 0`) on the cron and a
 dispatch. A change made only in a merge commit is not scanned: TruffleHog
 sees no content in a merge's own diff. Gitleaks' merge-diff step is the
 scan that covers it. Required check named `trufflehog` in the `protect-main`
-ruleset. It runs with `extra_args: --only-verified`, so a finding is a
-credential TruffleHog reached the issuing provider to confirm is live —
-not a pattern match.
+ruleset. It runs with `extra_args: --results=verified,unknown`. TruffleHog
+verifies a candidate by calling its issuing provider, and the job's
+harden-runner egress block lets it reach only GitHub, so a GitHub
+credential can verify and any other provider's comes back `unknown`.
+Both fail the scan. An `unverified` result passes: either the provider
+rejected the credential, or its detector has no verifier and never
+checked it. Gitleaks' pattern rules are the scan that flags those
+shapes. The action runs a container image, and its `version:` input
+pins that image by tag and digest to the action pin's release: a step
+reads the ref from `.github/trufflehog-image` and passes it on, and the
+`trufflehog-image-pin` lint fails when the file names another release.
+Renovate moves only the action pin. On its PR,
+`renovate-flake-lock-refresh.yml` resolves the new release's digest on
+ghcr.io and commits the file, as
+[the flake-input bump runbook](../architecture/flake-input-bumps.md#trufflehog-image-refresh)
+describes.
 Like gitleaks, a failed or cancelled run outside a pull request files a
 deduped `trufflehog-failure` issue through its `notify` job.
 
@@ -380,13 +393,13 @@ runs. Neither substitutes for the other, and dropping either needs a
 
 - Uses only `secrets.GITHUB_TOKEN`, in its `notify` job — PR-triggered
     workflow secret allowlist invariant holds.
-- A verified finding is a live credential and therefore a security
-    incident. Triage is the same as for gitleaks:
+- A finding is a security incident whether it verified or came back
+    `unknown`. Triage is the same as for gitleaks:
     rotate → purge with `git filter-repo` → force-push behind a
     temporarily disabled `protect-main` ruleset, with the same
     re-signing requirement.
-    Rotate first — the secret is confirmed valid, so history rewriting
-    is the slower half of the response.
+    Rotate first, without waiting to learn whether an `unknown` finding
+    is live: history rewriting is the slower half of the response.
 - The `trufflesecurity/trufflehog@*` pattern is in the `allowed_actions`
     allowlist; do not remove it without replacing the workflow.
 

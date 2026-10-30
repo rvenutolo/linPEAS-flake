@@ -90,6 +90,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/check-size-label-ignores.test.sh`              | `scripts/check-size-label-ignores.sh`              | `tests/fixtures/size-label-ignores`                                                                                                                                          |
 | `tests/check-test-reachable.test.sh`                  | `scripts/check-test-reachable.sh`                  | —                                                                                                                                                                            |
 | `tests/check-tool-guarded.test.sh`                    | `scripts/check-tool-guarded.sh`                    | —                                                                                                                                                                            |
+| `tests/check-trufflehog-image-pin.test.sh`            | `scripts/check-trufflehog-image-pin.sh`            | —                                                                                                                                                                            |
 | `tests/check-upload-artifact-strict.test.sh`          | `scripts/check-upload-artifact-strict.sh`          | `tests/fixtures/upload-artifact-strict`                                                                                                                                      |
 | `tests/check-uses-no-self-reference.test.sh`          | `scripts/check-uses-no-self-reference.sh`          | —                                                                                                                                                                            |
 | `tests/check-uses-sha-pinned.test.sh`                 | `scripts/check-uses-sha-pinned.sh`                 | `tests/fixtures/uses-sha-pinned`                                                                                                                                             |
@@ -134,6 +135,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/refresh-scripts-reference.test.sh`  | `scripts/refresh-scripts-reference.sh`  | —                                           |
 | `tests/refresh-test-harnesses.test.sh`     | `scripts/refresh-test-harnesses.sh`     | `tests/fixtures/test-harnesses`             |
 | `tests/refresh-treefmt-config.test.sh`     | `scripts/refresh-treefmt-config.sh`     | —                                           |
+| `tests/refresh-trufflehog-image.test.sh`   | `scripts/refresh-trufflehog-image.sh`   | —                                           |
 
 ## Other harnesses
 

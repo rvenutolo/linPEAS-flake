@@ -102,6 +102,22 @@ classify "runner-only refresh pushed" success \
 classify "runner-only push-refresh failure reports" failure \
   success success failure true ''
 
+# --- a TruffleHog image refresh -----------------------------------
+# A Renovate PR that changes trufflehog.yml also resolves the TruffleHog
+# image ref; it carries no flake input either. Most such PRs leave the
+# action pin where it was, so the file comes out unchanged and
+# push-refresh is skipped, which closes. A moved pin pushes the file, and
+# a push-refresh that fails (the content floor refusing the file
+# included) reports.
+classify "trufflehog-image no-diff" success \
+  success success skipped true ''
+classify "trufflehog-image refresh pushed" success \
+  success success success true ''
+classify "trufflehog-image compute-refresh failure reports" failure \
+  success failure skipped true ''
+classify "trufflehog-image content floor refusal reports" failure \
+  success success failure true ''
+
 # --- a title that maps to no input ---------------------------------
 # Reachable only after the author and `flake.nix` gates both pass, so a
 # Renovate PR edits `flake.nix` and no input name can be derived for it.

@@ -216,6 +216,7 @@ Hooks (alphabetical):
 | `test-harnesses-fresh`              | The harness census in docs/reference/test-harnesses.md matches the harnesses in tests/.                                                                  |
 | `treefmt`                           | Multi-language formatter aggregator (shfmt, prettier, etc).                                                                                              |
 | `treefmt-config-fresh`              | treefmt-config block in docs/reference/treefmt-config.md matches the evaluated treefmt config.                                                           |
+| `trufflehog-image-pin`              | trufflesecurity/trufflehog steps read their image from .github/trufflehog-image, which pins the action pin's release by tag and digest.                  |
 | `typos`                             | Spell-check across the repo.                                                                                                                             |
 | `upload-artifact-strict`            | Every actions/upload-artifact sets with.if-no-files-found: error.                                                                                        |
 | `uses-no-self-reference`            | No uses: reference names this repository by slug; its own actions use the ./ path.                                                                       |

@@ -1037,10 +1037,11 @@ Keep EXPECTED in sync with the lintTools list in nix/devshell-lint.nix.
 Lint: every workflow that writes a flake.lock runs a
 generator for each freshness hook that declares `flake.lock` a
 trigger, runs each generator it lists as workflow-derived from a
-freshness hook that declares `.github/workflows/ci.yml` a trigger, and
-may commit exactly the lock plus the outputs both generator lists
-declare with `@generates` / `@generates-block`, and uploads exactly
-that committable set from the job that writes the lock. A hook's
+freshness hook that declares `.github/workflows/ci.yml` a trigger,
+lists each pin-derived generator in no other list, and may commit
+exactly the lock plus the outputs all three generator lists declare
+with `@generates` / `@generates-block`, and uploads exactly that
+committable set from the job that writes the lock. A hook's
 trigger is its `files` and `excludes` patterns evaluated as pre-commit
 evaluates them, with Python `re.search`; a pattern that does not
 compile is a could-not-run. `ephemeral-refs-gap-fresh` is exempt from
@@ -2050,6 +2051,14 @@ Exits 0 when every invocation is guarded, 1 when one is not. Exits 2
 when the check cannot run: `shfmt` or `jq` absent from PATH, a script
 `shfmt` cannot parse, or a scan set matching no script.
 
+### scripts/check-trufflehog-image-pin.sh
+
+Lint: every `trufflesecurity/trufflehog` step in
+`.github/workflows/*.yml` (or `.yaml`) passes
+`version: ${{ steps.trufflehog-image.outputs.version }}`, and
+`.github/trufflehog-image` holds one line `X.Y.Z@sha256:<64 hex>` whose
+`X.Y.Z` is the version in each such step's `# vX.Y.Z` pin comment.
+
 ### scripts/check-upload-artifact-strict.sh
 
 Lint: every step whose `uses:` starts with
@@ -2276,6 +2285,17 @@ exposed by `nix/treefmt-config.nix` as `devTooling.<system>.treefmtConfig`.
 **Options:**
 
 - `--check` — exit 1 if the doc would change; exit 2 if the check cannot run (doc missing, or nix eval fails); do not mutate the working tree
+
+### scripts/refresh-trufflehog-image.sh
+
+Write .github/trufflehog-image, the TruffleHog container
+image ref `trufflehog.yml` hands the trufflesecurity/trufflehog action,
+from the release in that action's `# vX.Y.Z` pin comment and the digest
+ghcr.io serves for that release's tag.
+
+**Options:**
+
+- `--check` — exit 1 if the file is missing or would change; exit 2 if the workflow is missing or unparsable, if it does not pin the action at exactly one release, or if ghcr.io cannot be reached or answers without one well-formed digest
 
 ## Other
 

@@ -128,6 +128,7 @@ readonly -a ROWS=(
   "size-label-ignores|check-size-label-ignores.sh|shell scripts under ${EMPTY}|SCRIPTS_DIR_OVERRIDE=${EMPTY}"
   "test-reachable|check-test-reachable.sh|doc-freshness harnesses|TESTS_DIR_OVERRIDE=${EMPTY}"
   "tool-guarded|check-tool-guarded.sh|scripts|SCRIPTS_DIR_OVERRIDE=${EMPTY}"
+  "trufflehog-image-pin|check-trufflehog-image-pin.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
   "upload-artifact-strict|check-upload-artifact-strict.sh|workflow YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
   "uses-no-self-reference|check-uses-no-self-reference.sh|workflow and composite-action YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
   "uses-sha-pinned|check-uses-sha-pinned.sh|workflow and composite-action YAML|WORKFLOWS_DIR_OVERRIDE=${EMPTY}"
