@@ -334,8 +334,8 @@ commit, such as a hand-resolved conflict: the action drops merges, and
 `scripts/gitleaks-merge-diffs.sh`, closes that gap on every trigger. It
 runs the gitleaks binary the action installed over the merge commits in
 the PR's base..head range, the pushed before..after range (the full
-history when the before SHA is all zeros or absent), or the full
-history on the cron and a dispatch, diffing each merge against its
+history when the before SHA is all zeros, empty or absent), or the full
+history of the checked-out commit on the cron and a dispatch, diffing each merge against its
 first parent. That diff repeats what the merged side carried, which the
 other scans already cover; the redundancy keeps the scan to the normal
 patch format gitleaks parses.

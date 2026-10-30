@@ -90,6 +90,7 @@ readonly -a ROWS=(
   'check-verify-reason-ladder.sh|'
   'docs-audit-pressure.sh|'
   'gen-dashboard-data.sh|'
+  'gitleaks-merge-diffs.sh|'
   'octoscan-scan.sh|'
   'refresh-ci-dag.sh|--check'
   'refresh-ci-summary.sh|--check'

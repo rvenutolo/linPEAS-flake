@@ -192,6 +192,13 @@ function main() {
     EVENT_NAME=push "BASE_SHA=${zero}" "HEAD_SHA=${tok_feature}" -- --source "${tok}"
   run_scenario 'push with unresolvable before scans full history' 1 'scanning full history: before SHA not in this clone' \
     EVENT_NAME=push "BASE_SHA=1111111111111111111111111111111111111111" "HEAD_SHA=${tok_feature}" -- --source "${tok}"
+  run_scenario 'push with empty before scans full history' 1 'scanning full history: before SHA is empty' \
+    EVENT_NAME=push "HEAD_SHA=${tok_feature}" -- --source "${tok}"
+  run_scenario 'head SHA absent from the clone is a setup failure' 2 'head SHA not in this clone' \
+    EVENT_NAME=pull_request "BASE_SHA=${tok_main}" "HEAD_SHA=2222222222222222222222222222222222222222" -- --source "${tok}"
+  run_scenario 'gitleaks failing without a finding is a setup failure' 2 'without a finding' \
+    EVENT_NAME=push "BASE_SHA=${tok_base}" "HEAD_SHA=${tok_feature}" GITLEAKS_CONFIG=/nonexistent \
+    -- --source "${tok}"
   run_scenario 'schedule scans full history' 1 'event=schedule range=HEAD' \
     EVENT_NAME=schedule -- --source "${tok}"
   run_scenario 'workflow_dispatch scans full history' 1 'event=workflow_dispatch range=HEAD' \

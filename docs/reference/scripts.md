@@ -2601,10 +2601,11 @@ Range by event (`EVENT_NAME`, with `BASE_SHA` and `HEAD_SHA`):
 ```text
   pull_request — BASE_SHA..HEAD_SHA; a base absent from the clone is a
                   setup failure.
-  push         — BASE_SHA..HEAD_SHA; an all-zero or absent base scans
-                  the full history of HEAD_SHA, so a push is never
-                  scanned as empty.
-  schedule, workflow_dispatch — the full history of HEAD.
+  push         — BASE_SHA..HEAD_SHA; an all-zero, empty or absent base
+                  scans the full history of HEAD_SHA, so a push is
+                  never scanned as empty.
+  schedule, workflow_dispatch — the full history of HEAD, the
+                  checked-out commit (not every fetched ref).
 ```
 
 Usage: scripts/gitleaks-merge-diffs.sh \[--source <dir>\]
