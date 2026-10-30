@@ -73,7 +73,13 @@ function new_case() {
   mkdir -- "${dir}"
   printf 'on: push\njobs:\n  a:\n    steps:\n      - uses: trufflesecurity/trufflehog@%s # v%s\n' \
     "${SHA}" "$2" >"${dir}/trufflehog.yml"
-  if [[ $3 != '<absent>' ]]; then printf '%s' "$3" >"${dir}/image"; fi
+  if [[ $3 == '<nul-padded>' ]]; then
+    # A shell variable cannot hold NUL; write the current line, then a
+    # NUL and trailing bytes.
+    printf '%s\0trailing' "3.99.5@${NEW_DIGEST}"$'\n' >"${dir}/image"
+  elif [[ $3 != '<absent>' ]]; then
+    printf '%s' "$3" >"${dir}/image"
+  fi
   printf '{"token":"stub-token"}' >"${dir}/token.body"
   manifest_headers "${NEW_DIGEST}" >"${dir}/manifest.out"
   printf '%s' "${dir}"
@@ -154,6 +160,22 @@ check "${dir}" check-current 0 "${dir}/image is current: 3.99.5@${NEW_DIGEST}" "
 dir="$(new_case check-repointed 3.99.5 "3.99.5@${OLD_DIGEST}"$'\n')"
 run_gen "${dir}" check-repointed "it holds 3.99.5@${OLD_DIGEST}; it should hold 3.99.5@${NEW_DIGEST}" --check
 check "${dir}" check-repointed 1 "it holds 3.99.5@${OLD_DIGEST}; it should hold 3.99.5@${NEW_DIGEST}" "3.99.5@${OLD_DIGEST}"$'\n'
+
+# A current line followed by a NUL and more bytes is not current: a
+# reader that stops at the NUL would see only the valid part. The write
+# mode replaces the whole file.
+dir="$(new_case check-nul-padded 3.99.5 '<nul-padded>')"
+run_gen "${dir}" check-nul-padded "${dir}/image holds a NUL byte; it should hold 3.99.5@${NEW_DIGEST}" --check
+check "${dir}" check-nul-padded 1 "${dir}/image holds a NUL byte; it should hold 3.99.5@${NEW_DIGEST}" "${NEW_IMAGE}"
+if [[ "$(wc --bytes <"${dir}/image")" -eq ${#NEW_IMAGE} ]]; then
+  fail 'check-nul-padded: --check rewrote the file'
+fi
+dir="$(new_case write-nul-padded 3.99.5 '<nul-padded>')"
+run_gen "${dir}" write-nul-padded "wrote 3.99.5@${NEW_DIGEST} to ${dir}/image"
+check "${dir}" write-nul-padded 0 "wrote 3.99.5@${NEW_DIGEST} to ${dir}/image" "${NEW_IMAGE}"
+if [[ "$(wc --bytes <"${dir}/image")" -ne ${#NEW_IMAGE} ]]; then
+  fail 'write-nul-padded: the rewritten file still carries the trailing bytes'
+fi
 
 # An absent file is stale under --check and created by the write mode.
 dir="$(new_case check-absent 3.99.5 '<absent>')"

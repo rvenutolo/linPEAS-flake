@@ -186,14 +186,16 @@ function main() {
   ref="${release}@${digest}"
   readonly release digest ref
 
-  local current='' present='false'
+  local current='' present='false' has_nul='false'
   if [[ -f ${image_file} ]]; then
     present='true'
     # `read -d ''` keeps every byte up to EOF and reports EOF as status 1.
-    IFS= read -r -d '' current <"${image_file}" || true
+    # Status 0 means it stopped at a NUL, so the bytes it read are not the
+    # whole file.
+    if IFS= read -r -d '' current <"${image_file}"; then has_nul='true'; fi
   fi
 
-  if [[ ${current} == "${ref}"$'\n' ]]; then
+  if [[ ${has_nul} == 'false' && ${current} == "${ref}"$'\n' ]]; then
     log_info "${image_file} is current: ${ref}"
     return 0
   fi
@@ -201,6 +203,8 @@ function main() {
   if [[ ${check_only} == 'true' ]]; then
     if [[ ${present} == 'false' ]]; then
       log_err "${image_file} is missing; it should hold ${ref}. Run scripts/refresh-trufflehog-image.sh and commit."
+    elif [[ ${has_nul} == 'true' ]]; then
+      log_err "${image_file} holds a NUL byte; it should hold ${ref}. Run scripts/refresh-trufflehog-image.sh and commit."
     else
       log_err "${image_file} is stale: it holds $(printf '%q' "${current%$'\n'}"); it should hold ${ref}. Run scripts/refresh-trufflehog-image.sh and commit."
     fi

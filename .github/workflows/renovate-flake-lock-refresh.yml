@@ -759,7 +759,9 @@ jobs:
           # bracket ranges are ASCII only in the C locale.
           function image_ref_ok() {
             local LC_ALL=C content=''
-            IFS= read -r -d '' content < "${artifact}/$1" || true
+            # Status 0 means `read` stopped at a NUL: more bytes follow,
+            # which a one-line file cannot hold.
+            if IFS= read -r -d '' content < "${artifact}/$1"; then return 1; fi
             [[ "${content}" =~ ^[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'\n'$ ]]
           }
 

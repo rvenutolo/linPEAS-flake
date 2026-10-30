@@ -25,13 +25,19 @@ readonly ABSENT='<absent>'
 # @arg $2 workflow body  @arg $3 image file content, or ABSENT
 # @arg $4 expected exit status
 # @arg $5 expected stderr, with DIR standing for the temp dir
+readonly NUL_PADDED='<nul-padded>'
+
 function expect_body() {
   local -r name="$1" body="$2" image="$3" want_exit="$4"
   local dir got_exit=0 got_stderr want
   dir="$(mktemp --directory)"
   mkdir -- "${dir}/wf"
   printf '%s' "${body}" >"${dir}/wf/${name}"
-  if [[ ${image} != "${ABSENT}" ]]; then
+  if [[ ${image} == "${NUL_PADDED}" ]]; then
+    # A shell variable cannot hold NUL; write the valid line, then a NUL
+    # and trailing bytes.
+    printf '%s\0trailing' "${GOOD_IMAGE}" >"${dir}/image"
+  elif [[ ${image} != "${ABSENT}" ]]; then
     printf '%s' "${image}" >"${dir}/image"
   fi
   want="${5//DIR/${dir}}"
@@ -111,6 +117,11 @@ expect_body short-digest.yml "$(one_step "${PIN}" "${GOOD_WITH}")" "3.99.4@${DIG
   "$(bad_shape "3.99.4@${DIGEST:0:20}"$'\n')"
 expect_body latest.yml "$(one_step "${PIN}" "${GOOD_WITH}")" $'latest\n' 1 \
   "$(bad_shape $'latest\n')"
+
+# A valid line followed by a NUL and more bytes is not one line: a reader
+# that stops at the NUL would see only the valid part.
+expect_body nul-padded.yml "$(one_step "${PIN}" "${GOOD_WITH}")" "${NUL_PADDED}" 1 \
+  "$(one_finding 'DIR/image: holds a NUL byte; want one line X.Y.Z@sha256:<64 hex>')"
 expect_body no-final-newline.yml "$(one_step "${PIN}" "${GOOD_WITH}")" "3.99.4@${DIGEST}" 1 \
   "$(bad_shape "3.99.4@${DIGEST}")"
 expect_body second-line.yml "$(one_step "${PIN}" "${GOOD_WITH}")" "${GOOD_IMAGE}${GOOD_IMAGE}" 1 \

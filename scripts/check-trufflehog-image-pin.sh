@@ -100,8 +100,14 @@ function read_image_file() {
     return 0
   fi
   # `read -d ''` keeps every byte up to EOF, trailing newlines included,
-  # and reports EOF as status 1.
-  IFS= read -r -d '' content <"${IMAGE_FILE}" || true
+  # and reports EOF as status 1. Status 0 means it stopped at a NUL, so
+  # the bytes it read are not the whole file.
+  if IFS= read -r -d '' content <"${IMAGE_FILE}"; then
+    printf '%s: holds a NUL byte; want one line X.Y.Z@sha256:<64 hex>\n' \
+      "${IMAGE_FILE}" >&2
+    failed=$((failed + 1))
+    return 0
+  fi
   if ! ascii_match "${content}" "${IMAGE_RE}"; then
     printf '%s: holds %q; want one line X.Y.Z@sha256:<64 hex>\n' \
       "${IMAGE_FILE}" "${content}" >&2
