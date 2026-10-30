@@ -171,7 +171,8 @@ and each list has a check that fails once it stops:
     `classification=stale-suppression`, so an image-digest bump that
     learns a label turns the bump PR's `octoscan` run red. That run is
     not a required check, so it does not block the merge; the next run
-    on a push to `main`, the cron or a dispatch files the issue.
+    on a push to `main`, the cron or a dispatch files a deduped
+    `octoscan-infra` issue.
 
 When either check fires, delete the named label from that tool's list.
 Once `.github/actionlint.yaml` lists no label, delete the file together

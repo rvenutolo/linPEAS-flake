@@ -219,7 +219,7 @@ Exception for a non-`GITHUB_TOKEN` secret requires documenting here BEFORE relax
 
 ## harden-runner
 
-`step-security/harden-runner` is the **first step** in every job in every workflow, with `egress-policy: block` and a per-job `allowed-endpoints:` allowlist (a shared baseline plus job-specific hosts; rotating families wildcarded). Block mode drops egress to any host outside the allowlist, which narrows where a compromised step can send data; the hosts the allowlist carries, the shared GitHub baseline and the wildcarded families among them, stay reachable.
+`step-security/harden-runner` is the **first step** in every job in every workflow, with `egress-policy: block` and a per-job `allowed-endpoints:` allowlist (a shared baseline plus job-specific hosts; rotating families wildcarded). Block mode drops egress to any host outside the allowlist, which narrows where a compromised step can send data; the hosts the allowlist carries, the shared GitHub baseline and any wildcarded family it carries among them, stay reachable.
 
 - Do not remove from any job.
 - Keep as first step, before `actions/checkout`, `cachix/install-nix-action`, or any network step. eBPF monitor must install before any I/O.

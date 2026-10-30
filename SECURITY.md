@@ -280,8 +280,8 @@ Rotating host families — Actions cache/artifact storage
 (`*.githubapp.com`), and the Actions runtime
 (`*.actions.githubusercontent.com`) — are matched by wildcard. Block
 mode does not close every path: the hosts a job's allowlist carries
-stay reachable, the GitHub hosts and those wildcarded families among
-them.
+stay reachable, the GitHub hosts and any of those wildcarded families
+it carries among them.
 
 When a job legitimately needs a new endpoint, add it to that job's
 `allowed-endpoints:`; never relax a job back to audit.
