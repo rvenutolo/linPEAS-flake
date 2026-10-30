@@ -36,12 +36,29 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # The action runs `docker run "${IMAGE}:${VERSION}"` and defaults
+      # VERSION to `latest`. .github/trufflehog-image pins the image by
+      # tag+digest to the action pin's release (lint: trufflehog-image-pin);
+      # renovate-flake-lock-refresh.yml rewrites it when Renovate moves the
+      # pin. The shape is checked again here because the value reaches a
+      # `docker run` argument.
+      - name: read the pinned TruffleHog image
+        id: trufflehog-image
+        env:
+          LC_ALL: C
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          ref=''
+          IFS= read -r -d '' ref < .github/trufflehog-image || true
+          if [[ ! "${ref}" =~ ^[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'\n'$ ]]; then
+            printf '.github/trufflehog-image is not one X.Y.Z@sha256:<64 hex> line\n' >&2
+            exit 1
+          fi
+          printf 'version=%s\n' "${ref%$'\n'}" >> "${GITHUB_OUTPUT}"
       - uses: trufflesecurity/trufflehog@c85580b712841eda4c53bc28fc6ace6100e8c16c # v3.99.4
         with:
-          # The action runs `docker run "${IMAGE}:${VERSION}"` and defaults
-          # VERSION to `latest`; tag+digest pins the image to the same
-          # release as the action (lint: trufflehog-image-pin).
-          version: 3.99.4@sha256:bf9238f5bdf26ac28230d4b0bae5162a752b151bf10bea612dad7a62da938731
+          version: ${{ steps.trufflehog-image.outputs.version }}
           # Egress is blocked, so only GitHub credentials can verify; any
           # other provider's finding is `unknown`, and must still fail.
           extra_args: --results=verified,unknown

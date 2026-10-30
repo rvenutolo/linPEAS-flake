@@ -113,9 +113,11 @@ EOF
 }
 
 # The three generators a fixture hook can run, all present and
-# executable. A scenario that needs a listed-but-absent generator names a
-# path nothing writes. delta is the workflow-derived one: it splices
-# blocks into two docs, the shape the runner-label generator has.
+# executable, and zeta, which no hook runs. A scenario that needs a
+# listed-but-absent generator names a path nothing writes. delta is the
+# workflow-derived one: it splices blocks into two docs, the shape the
+# runner-label generator has. zeta is the pin-derived one: it owns one
+# file outright, the shape the TruffleHog image generator has.
 #
 # Each carries the output declaration the real generators carry, in the
 # header position the annotation parser reads, so a fixture generator
@@ -154,8 +156,15 @@ EOF
 set -Eeuo pipefail
 printf 'delta\n'
 EOF
+  cat >"${root}/scripts/refresh-zeta.sh" <<'EOF'
+#!/usr/bin/env bash
+# scripts/refresh-zeta.sh
+# @generates .github/zeta-image
+set -Eeuo pipefail
+printf 'zeta\n'
+EOF
   chmod +x -- "${root}/scripts/refresh-alpha.sh" "${root}/scripts/refresh-beta.sh" \
-    "${root}/scripts/refresh-delta.sh"
+    "${root}/scripts/refresh-delta.sh" "${root}/scripts/refresh-zeta.sh"
 }
 
 # A freshness module carrying four hook blocks in the shape the real one
@@ -249,11 +258,13 @@ EOF
 # ${4}=LOCK_DERIVED_GENERATORS body   ${5}=COMMITTABLE_PATHS body
 # ${6}=WORKFLOW_DERIVED_GENERATORS body (default: omit)
 # ${7}=upload path list body, or mirror|none|twice (default: mirror)
+# ${8}=PIN_DERIVED_GENERATORS body (default: omit)
 function write_workflow() {
   local -r root="$1" wf_name="$2" lock_writing="$3"
   local -r generators="$4" committable="$5"
   local -r workflow_generators="${6:-omit}"
   local -r upload="${7:-mirror}"
+  local -r pin_generators="${8:-omit}"
   mkdir --parents -- "${root}/.github/workflows"
 
   local env_block=''
@@ -262,6 +273,9 @@ function write_workflow() {
   fi
   if [[ ${workflow_generators} != 'omit' ]]; then
     env_block+="  WORKFLOW_DERIVED_GENERATORS: |"$'\n'"${workflow_generators}"$'\n'
+  fi
+  if [[ ${pin_generators} != 'omit' ]]; then
+    env_block+="  PIN_DERIVED_GENERATORS: |"$'\n'"${pin_generators}"$'\n'
   fi
   if [[ ${committable} != 'omit' ]]; then
     env_block+="  COMMITTABLE_PATHS: |"$'\n'"${committable}"$'\n'
@@ -786,6 +800,96 @@ EOF
   expect 'bad: a workflow-derived list on a workflow writing no lock fails' \
     "${work}/workflow-list-dead" 1 \
     '.github/workflows/idle-refresh.yml declares a lock-derived env list but runs no flake-lock update'
+
+  # (p) Pin-derived generators. A workflow may also list, in
+  # PIN_DERIVED_GENERATORS, generators whose output derives from an action
+  # pin by a registry lookup, which no freshness hook can run. Each must
+  # be an executable generator declaring its outputs, in no other list,
+  # and its outputs join the committable bound.
+  local -r lock_and_zeta=$'    flake.lock\n    docs/reference/alpha.md\n    .github/zeta-image'
+
+  # (p1) GOOD: zeta is listed and its file is committable, with no hook
+  # running it.
+  write_tree "${work}/pin-list-agrees" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${lock_and_zeta}"
+  write_workflow "${work}/pin-list-agrees" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${lock_and_zeta}" 'omit' 'mirror' \
+    '    scripts/refresh-zeta.sh'
+  expect 'agree: a pin-derived generator whose output is committable' \
+    "${work}/pin-list-agrees" 0 '0 workflow-derived, 1 pin-derived'
+
+  # (p2) BAD: zeta's file is not committable, so the credentialed job
+  # would drop it.
+  write_tree "${work}/pin-gen-output-missing" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md'
+  write_workflow "${work}/pin-gen-output-missing" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md' 'omit' 'mirror' \
+    '    scripts/refresh-zeta.sh'
+  expect 'bad: a pin-derived output missing from the committable list fails' \
+    "${work}/pin-gen-output-missing" 1 \
+    'scripts/refresh-zeta.sh declares .github/zeta-image, which is absent from COMMITTABLE_PATHS'
+
+  # (p3) BAD: the committable list carries zeta's file while no list
+  # names zeta.
+  write_tree "${work}/committable-without-pin-list" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${lock_and_zeta}"
+  expect 'bad: a committable pin-derived file with no pin list fails' \
+    "${work}/committable-without-pin-list" 1 \
+    '.github/zeta-image is in COMMITTABLE_PATHS in .github/workflows/update-flake-lock.yml, but no listed generator declares it'
+
+  # (p4) BAD: one generator in the lock-derived and the pin-derived
+  # lists states two sources for the same output.
+  write_tree "${work}/generator-in-lock-and-pin-lists" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md'
+  write_workflow "${work}/generator-in-lock-and-pin-lists" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md' 'omit' 'mirror' \
+    '    scripts/refresh-alpha.sh'
+  expect 'bad: a generator in the lock-derived and pin-derived lists fails' \
+    "${work}/generator-in-lock-and-pin-lists" 1 \
+    'scripts/refresh-alpha.sh is in both LOCK_DERIVED_GENERATORS and PIN_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml'
+
+  # (p5) BAD: the same for the workflow-derived and pin-derived lists.
+  write_tree "${work}/generator-in-workflow-and-pin-lists" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' "${lock_and_delta}"
+  write_workflow "${work}/generator-in-workflow-and-pin-lists" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' "${lock_and_delta}" '    scripts/refresh-delta.sh' 'mirror' \
+    '    scripts/refresh-delta.sh'
+  expect 'bad: a generator in the workflow-derived and pin-derived lists fails' \
+    "${work}/generator-in-workflow-and-pin-lists" 1 \
+    'scripts/refresh-delta.sh is in both WORKFLOW_DERIVED_GENERATORS and PIN_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml'
+
+  # (p6) BAD: a listed pin-derived generator not on disk.
+  write_tree "${work}/pin-gen-absent" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md'
+  write_workflow "${work}/pin-gen-absent" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md' 'omit' 'mirror' \
+    '    scripts/refresh-missing.sh'
+  expect 'bad: a listed pin-derived generator missing from disk fails' \
+    "${work}/pin-gen-absent" 1 \
+    'scripts/refresh-missing.sh is listed in PIN_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml but is not an executable generator'
+
+  # (p7) BAD: a listed pin-derived generator declaring no output, named
+  # in the message by the list it came from.
+  write_tree "${work}/pin-gen-declares-nothing" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md'
+  sed --in-place --expression='/@generates/d' \
+    -- "${work}/pin-gen-declares-nothing/scripts/refresh-zeta.sh"
+  write_workflow "${work}/pin-gen-declares-nothing" 'update-flake-lock.yml' 'true' \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md' 'omit' 'mirror' \
+    '    scripts/refresh-zeta.sh'
+  expect 'bad: a listed pin-derived generator declaring no output fails' \
+    "${work}/pin-gen-declares-nothing" 1 \
+    'scripts/refresh-zeta.sh is listed in PIN_DERIVED_GENERATORS in .github/workflows/update-flake-lock.yml but declares no @generates or @generates-block path'
+
+  # (p8) BAD: the pin-derived list on a workflow that writes no lock is
+  # unread config.
+  write_tree "${work}/pin-list-dead" "${LOCK_ALPHA}" "${NOLOCK_BETA}" \
+    '    scripts/refresh-alpha.sh' $'    flake.lock\n    docs/reference/alpha.md'
+  write_workflow "${work}/pin-list-dead" 'idle-pin-refresh.yml' 'false' \
+    'omit' 'omit' 'omit' 'mirror' '    scripts/refresh-zeta.sh'
+  expect 'bad: a pin-derived list on a workflow writing no lock fails' \
+    "${work}/pin-list-dead" 1 \
+    '.github/workflows/idle-pin-refresh.yml declares a lock-derived env list but runs no flake-lock update'
 
   # (x) The compute job's upload-artifact `path:` list, as a set, equals
   # COMMITTABLE_PATHS. The upload cannot read the env list (octoscan

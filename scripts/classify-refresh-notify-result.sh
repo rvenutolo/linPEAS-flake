@@ -115,11 +115,13 @@ if [[ ${SHOULD_REFRESH} != 'true' ]]; then
   exit 0
 fi
 
-# A refresh was attempted: a lock refresh, a runner-label refresh, or
-# both. `push-refresh` is skipped when `compute-refresh` produced no
-# diff, which is the loop-breaker's steady state and a success. It is
-# also the common case of a runner-label refresh, which runs on every
-# Renovate PR touching a workflow and finds a runner change on few.
+# A refresh was attempted: any of a lock refresh, a runner-label
+# refresh and a TruffleHog image refresh. The verdict does not depend on
+# which: each lands through the same two jobs. `push-refresh` is skipped
+# when `compute-refresh` produced no diff, which is the loop-breaker's
+# steady state and a success. It is also the common case of a
+# runner-label or image refresh, which run on every Renovate PR touching
+# a workflow (or trufflehog.yml) and find a change on few.
 if [[ ${COMPUTE} == 'success' ]] &&
   { [[ ${PUSH} == 'success' ]] || [[ ${PUSH} == 'skipped' ]]; }; then
   printf 'success\n'

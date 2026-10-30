@@ -41,7 +41,7 @@
   trufflehog-image-pin = {
     enable = true;
     name = "trufflehog-image-pin";
-    description = "trufflesecurity/trufflehog steps pin their image to the action pin's release by tag and digest.";
+    description = "trufflesecurity/trufflehog steps read their image from .github/trufflehog-image, which pins the action pin's release by tag and digest.";
     entry = "${pkgs-unstable.writeShellScript "trufflehog-image-pin-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
@@ -49,7 +49,7 @@
       export PATH="${pkgs-unstable.yq-go}/bin:${pkgs-unstable.jq}/bin:$PATH"
       exec ${pkgs-unstable.bash}/bin/bash scripts/check-trufflehog-image-pin.sh
     ''}";
-    files = "^(\\.github/workflows/.*\\.ya?ml|scripts/check-trufflehog-image-pin\\.sh)$";
+    files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/trufflehog-image|scripts/check-trufflehog-image-pin\\.sh)$";
     pass_filenames = false;
     language = "system";
   };

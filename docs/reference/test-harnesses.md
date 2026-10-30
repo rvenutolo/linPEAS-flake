@@ -135,6 +135,7 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/refresh-scripts-reference.test.sh`  | `scripts/refresh-scripts-reference.sh`  | —                                           |
 | `tests/refresh-test-harnesses.test.sh`     | `scripts/refresh-test-harnesses.sh`     | `tests/fixtures/test-harnesses`             |
 | `tests/refresh-treefmt-config.test.sh`     | `scripts/refresh-treefmt-config.sh`     | —                                           |
+| `tests/refresh-trufflehog-image.test.sh`   | `scripts/refresh-trufflehog-image.sh`   | —                                           |
 
 ## Other harnesses
 

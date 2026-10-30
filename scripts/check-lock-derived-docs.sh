@@ -4,10 +4,11 @@
 # @description Lint: every workflow that writes a flake.lock runs a
 # generator for each freshness hook that declares `flake.lock` a
 # trigger, runs each generator it lists as workflow-derived from a
-# freshness hook that declares `.github/workflows/ci.yml` a trigger, and
-# may commit exactly the lock plus the outputs both generator lists
-# declare with `@generates` / `@generates-block`, and uploads exactly
-# that committable set from the job that writes the lock. A hook's
+# freshness hook that declares `.github/workflows/ci.yml` a trigger,
+# lists each pin-derived generator in no other list, and may commit
+# exactly the lock plus the outputs all three generator lists declare
+# with `@generates` / `@generates-block`, and uploads exactly that
+# committable set from the job that writes the lock. A hook's
 # trigger is its `files` and `excludes` patterns evaluated as pre-commit
 # evaluates them, with Python `re.search`; a pattern that does not
 # compile is a could-not-run. `ephemeral-refs-gap-fresh` is exempt from
@@ -30,6 +31,14 @@
 # COMMITTABLE_PATHS stays the one allowlist the credentialed job reads.
 # A generator in both lists states two triggers for the same docs and is
 # drift.
+#
+# A workflow may also list, in PIN_DERIVED_GENERATORS, generators whose
+# output derives from an action pin by a registry lookup. No freshness
+# hook can run one, since a hook has no network, so no hook binding
+# applies; the lint that reads the output is the PR-time gate. Each must
+# be an executable generator declaring its outputs, in neither other
+# list, and its declared outputs join the committable bound like the
+# other lists' outputs.
 #
 # Subjects are discovered rather than named — every workflow carrying a
 # lock update in a run block — so a new lock-writing workflow is governed
@@ -286,7 +295,7 @@ glob_into workflow_files '.github/workflows YAML' \
 # The workflow-level `env:` node.
 readonly ENV_NODE="${ROOT_KEY_NODE//@KEY@/env}"
 
-# Four facts from one parse. Reading the whole directory costs a fifth
+# Five facts from one parse. Reading the whole directory costs a fifth
 # of a second, so no textual pre-filter stands between this lint and the
 # syntax tree: a pre-filter would also be unsound against a folded run
 # scalar whose source splits the phrase across lines and whose evaluated
@@ -306,7 +315,8 @@ function workflow_facts() {
       ([$jobs | .[]?.steps[]? | (.run | explode(.)) // ""] | map(select(test("nix flake update"))) | length > 0),
       ((($env.LOCK_DERIVED_GENERATORS | explode(.)) // "") != ""),
       ((($env.COMMITTABLE_PATHS | explode(.)) // "") != ""),
-      ((($env.WORKFLOW_DERIVED_GENERATORS | explode(.)) // "") != "")
+      ((($env.WORKFLOW_DERIVED_GENERATORS | explode(.)) // "") != ""),
+      ((($env.PIN_DERIVED_GENERATORS | explode(.)) // "") != "")
     ] | map(tostring) | join(",")' -- "$1"
 }
 
@@ -365,6 +375,7 @@ committable_total=0
 declarations_total=0
 generators_declaring=0
 workflow_derived_total=0
+pin_derived_total=0
 upload_total=0
 for wf in "${workflow_files[@]}"; do
   workflows_scanned=$((workflows_scanned + 1))
@@ -374,14 +385,14 @@ for wf in "${workflow_files[@]}"; do
     exit 2
   fi
   IFS=',' read -r writes_lock has_generators has_committable \
-    has_workflow_generators <<<"${facts}"
+    has_workflow_generators has_pin_generators <<<"${facts}"
 
   if [[ ${writes_lock} != 'true' ]]; then
     # The reverse direction: lists that outlived the step they bounded.
     # Nothing downstream reads them, so left unreported they are config
     # that looks like a guarantee and is not one.
     if [[ ${has_generators} == 'true' || ${has_committable} == 'true' ||
-      ${has_workflow_generators} == 'true' ]]; then
+      ${has_workflow_generators} == 'true' || ${has_pin_generators} == 'true' ]]; then
       printf 'lock-derived-docs: %s declares a lock-derived env list but runs no flake-lock update\n' \
         "${rel}" >&2
       failed=$((failed + 1))
@@ -420,6 +431,10 @@ for wf in "${workflow_files[@]}"; do
   # the maps around it.
   unset source_list
   declare -A source_list=()
+  # The workflow-derived generators, so a pin-derived entry naming one is
+  # found. Reset for the same reason as the maps around it.
+  unset workflow_derived_names
+  declare -A workflow_derived_names=()
   while IFS= read -r g; do
     [[ -n ${g} ]] || continue
     workflow_generators["${g}"]=1
@@ -459,6 +474,7 @@ for wf in "${workflow_files[@]}"; do
     fi
     while IFS= read -r g; do
       [[ -n ${g} ]] || continue
+      workflow_derived_names["${g}"]=1
       # Reported once and not scored further: whichever list is wrong, the
       # findings each list's own rules would add describe the same entry.
       if [[ -n ${workflow_generators["${g}"]:-} ]]; then
@@ -482,6 +498,42 @@ for wf in "${workflow_files[@]}"; do
       generator_sources+=("${ROOT}/${g}")
       source_list["${ROOT}/${g}"]='WORKFLOW_DERIVED_GENERATORS'
     done <<<"${workflow_generators_raw}"
+  fi
+
+  # The optional third list, read the same way. A pin-derived generator
+  # has no hook to be bound to, so the rules it is held to are the ones
+  # every listed generator shares: it exists, it declares its outputs,
+  # and those outputs are committable.
+  if [[ ${has_pin_generators} == 'true' ]]; then
+    refuse_unresolved_list "${wf}" PIN_DERIVED_GENERATORS "${rel}"
+    if ! pin_generators_raw="$(workflow_list "${wf}" PIN_DERIVED_GENERATORS)"; then
+      printf 'lock-derived-docs: could not parse %s\n' "${rel}" >&2
+      exit 2
+    fi
+    while IFS= read -r g; do
+      [[ -n ${g} ]] || continue
+      other_list=''
+      if [[ -n ${workflow_generators["${g}"]:-} ]]; then
+        other_list='LOCK_DERIVED_GENERATORS'
+      elif [[ -n ${workflow_derived_names["${g}"]:-} ]]; then
+        other_list='WORKFLOW_DERIVED_GENERATORS'
+      fi
+      if [[ -n ${other_list} ]]; then
+        printf 'lock-derived-docs: %s is in both %s and PIN_DERIVED_GENERATORS in %s\n' \
+          "${g}" "${other_list}" "${rel}" >&2
+        failed=$((failed + 1))
+        continue
+      fi
+      pin_derived_total=$((pin_derived_total + 1))
+      if [[ ! -x ${ROOT}/${g} ]]; then
+        printf 'lock-derived-docs: %s is listed in PIN_DERIVED_GENERATORS in %s but is not an executable generator\n' \
+          "${g}" "${rel}" >&2
+        failed=$((failed + 1))
+        continue
+      fi
+      generator_sources+=("${ROOT}/${g}")
+      source_list["${ROOT}/${g}"]='PIN_DERIVED_GENERATORS'
+    done <<<"${pin_generators_raw}"
   fi
 
   if [[ ${has_committable} != 'true' ]]; then
@@ -567,7 +619,7 @@ for wf in "${workflow_files[@]}"; do
   fi
 
   # The committable set is exactly `flake.lock` plus what the generators
-  # of both lists declare they write, checked in both directions. A generator
+  # of all three lists declare they write, checked in both directions. A generator
   # regenerates a doc the credentialed job may not commit and the doc
   # reaches the PR as stale as if the generator had never run; a list
   # entry nothing declares widens what that job may commit past anything
@@ -589,7 +641,7 @@ for wf in "${workflow_files[@]}"; do
   # read would otherwise arrive as a shorter record stream, scored as a
   # generator that declares nothing.
   if ! declaration_records="$(generator_declarations "${generator_sources[@]}")"; then
-    printf 'lock-derived-docs: could not read every generator listed in LOCK_DERIVED_GENERATORS or WORKFLOW_DERIVED_GENERATORS in %s to collect its declared outputs\n' \
+    printf 'lock-derived-docs: could not read every generator listed in LOCK_DERIVED_GENERATORS, WORKFLOW_DERIVED_GENERATORS or PIN_DERIVED_GENERATORS in %s to collect its declared outputs\n' \
       "${rel}" >&2
     exit 2
   fi
@@ -656,9 +708,9 @@ fi
 # A clean run is otherwise silent about how much it checked, which reads
 # identically whether it compared real sets or two empty ones. State the
 # breadth covered, on both halves of the comparison.
-printf 'lock-derived-docs: ok — %d hook block(s) scanned, %d lock-triggered (%d exempt), %d ci.yml-triggered generator(s), %d workflow(s) scanned, %d lock-writing, %d committable path(s), %d generator declaration(s) resolved across %d listed generator(s), %d workflow-derived, %d upload path(s)\n' \
+printf 'lock-derived-docs: ok — %d hook block(s) scanned, %d lock-triggered (%d exempt), %d ci.yml-triggered generator(s), %d workflow(s) scanned, %d lock-writing, %d committable path(s), %d generator declaration(s) resolved across %d listed generator(s), %d workflow-derived, %d pin-derived, %d upload path(s)\n' \
   "${total_blocks}" "${lock_triggered}" "${lock_exempt}" "${#ci_hook_generators[@]}" \
   "${workflows_scanned}" "${#lock_writing[@]}" "${committable_total}" \
   "${declarations_total}" "${generators_declaring}" "${workflow_derived_total}" \
-  "${upload_total}"
+  "${pin_derived_total}" "${upload_total}"
 exit 0

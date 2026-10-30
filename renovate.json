@@ -41,13 +41,6 @@
       "automerge": true
     },
     {
-      "description": "TruffleHog image: the version input in .github/workflows/trufflehog.yml must name the same release as the trufflesecurity/trufflehog action pin (scripts/check-trufflehog-image-pin.sh fails otherwise). groupName joins it to the github-actions group, so the action update and the image update land in one PR; when one half clears the global 7-day minimumReleaseAge before the other, that PR stays red on the lint until Renovate adds the other half. Scoped automerge, matching the github-actions rule.",
-      "matchManagers": ["custom.regex"],
-      "matchDepNames": ["ghcr.io/trufflesecurity/trufflehog"],
-      "groupName": "github-actions",
-      "automerge": true
-    },
-    {
       "description": "octoscan: scoped automerge for the same reason as github-actions — digest-pinned, 7-day quarantine catches obvious breakage. matchDepNames narrows this rule to the octoscan image so each custom-regex dependency keeps its own explicit automerge scope.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["ghcr.io/synacktiv/octoscan"],
@@ -108,17 +101,6 @@
       "datasourceTemplate": "docker",
       "depNameTemplate": "ghcr.io/synacktiv/octoscan",
       "packageNameTemplate": "ghcr.io/synacktiv/octoscan"
-    },
-    {
-      "description": "TruffleHog container image the trufflesecurity/trufflehog action runs, pinned by tag+digest in the action's version input. The docker datasource reports ghcr tags without a leading v (3.99.4, not v3.99.4). The `sha256:` prefix stays inside the currentDigest capture group, for the reason the octoscan manager's description gives.",
-      "customType": "regex",
-      "managerFilePatterns": ["/^\\.github/workflows/trufflehog\\.ya?ml$/"],
-      "matchStrings": [
-        "version:\\s*(?<currentValue>\\d+\\.\\d+\\.\\d+)@(?<currentDigest>sha256:[a-f0-9]{64})"
-      ],
-      "datasourceTemplate": "docker",
-      "depNameTemplate": "ghcr.io/trufflesecurity/trufflehog",
-      "packageNameTemplate": "ghcr.io/trufflesecurity/trufflehog"
     }
   ]
 }

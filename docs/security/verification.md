@@ -371,12 +371,18 @@ ruleset. It runs with `extra_args: --results=verified,unknown`. TruffleHog
 verifies a candidate by calling its issuing provider, and the job's
 harden-runner egress block lets it reach only GitHub, so a GitHub
 credential can verify and any other provider's comes back `unknown`.
-Both fail the scan. An `unverified` result, a credential the provider
-confirmed dead, passes: it is no live risk, and gitleaks' pattern rules
-still flag its shape. The action runs a container image; its `version:`
-input pins that image by tag and digest to the action pin's release
-(`trufflehog-image-pin` lint), and Renovate's `github-actions` group
-moves the action pin and the image together.
+Both fail the scan. An `unverified` result passes: either the provider
+rejected the credential, or its detector has no verifier and never
+checked it. Gitleaks' pattern rules are the scan that flags those
+shapes. The action runs a container image, and its `version:` input
+pins that image by tag and digest to the action pin's release: a step
+reads the ref from `.github/trufflehog-image` and passes it on, and the
+`trufflehog-image-pin` lint fails when the file names another release.
+Renovate moves only the action pin. On its PR,
+`renovate-flake-lock-refresh.yml` resolves the new release's digest on
+ghcr.io and commits the file, as
+[the flake-input bump runbook](../architecture/flake-input-bumps.md#trufflehog-image-refresh)
+describes.
 Like gitleaks, a failed or cancelled run outside a pull request files a
 deduped `trufflehog-failure` issue through its `notify` job.
 
