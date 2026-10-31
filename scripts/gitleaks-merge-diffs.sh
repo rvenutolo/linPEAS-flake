@@ -143,7 +143,7 @@ function main() {
   rm --force -- "${report}"
 
   if ((findings > 0)); then
-    log_err "gitleaks found ${findings} secret(s) in merge commit diffs"
+    log_err "gitleaks found ${findings} secret(s) in merge commit diffs (event=${EVENT_NAME} range=${range})"
     exit 1
   fi
   if ((rc != 0)); then

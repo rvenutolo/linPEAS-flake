@@ -181,6 +181,9 @@ function main() {
   run_scenario 'pull_request range: merge-only token detected' 1 \
     "event=pull_request range=${tok_main}..${tok_feature} merges=1" \
     EVENT_NAME=pull_request "BASE_SHA=${tok_main}" "HEAD_SHA=${tok_feature}" -- --source "${tok}"
+  run_scenario 'a finding is reported with its count' 1 \
+    "gitleaks found 1 secret(s) in merge commit diffs (event=push range=${tok_main}..${tok_feature})" \
+    EVENT_NAME=push "BASE_SHA=${tok_main}" "HEAD_SHA=${tok_feature}" -- --source "${tok}"
   run_scenario 'pull_request range: clean merge passes' 0 'no leaks in merge diffs' \
     EVENT_NAME=pull_request "BASE_SHA=${clean_main}" "HEAD_SHA=${clean_feature}" -- --source "${clean}"
   run_scenario 'pull_request range with no merges passes' 0 \
