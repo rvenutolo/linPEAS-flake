@@ -136,7 +136,10 @@ invocation. Docker is required — if docker is missing the hook fails
 with exit 2 (could not run) and hints at `SKIP=octoscan` for one
 commit. The pinned image digest and the version label tracked by
 Renovate both live in `scripts/octoscan-scan.sh` (single source of
-truth).
+truth). GHCR publishes no release timestamp, so Renovate raises an
+octoscan update with no 7-day quarantine (`minimumReleaseAgeBehaviour: timestamp-optional` on its packageRule); without it the update would
+never clear the quarantine. `check-pin-digest-provenance.sh` and the
+octoscan run on the PR gate it instead.
 
 ## Runner-label allowlist
 

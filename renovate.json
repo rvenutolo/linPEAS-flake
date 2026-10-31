@@ -41,9 +41,10 @@
       "automerge": true
     },
     {
-      "description": "octoscan: scoped automerge for the same reason as github-actions — digest-pinned, 7-day quarantine catches obvious breakage. matchDepNames narrows this rule to the octoscan image so each custom-regex dependency keeps its own explicit automerge scope.",
+      "description": "octoscan: scoped automerge for the same reason as github-actions, digest-pinned. matchDepNames narrows this rule to the octoscan image so each custom-regex dependency keeps its own explicit automerge scope. GHCR exposes no release timestamp, and under the default minimumReleaseAgeBehaviour (timestamp-required) an update with no timestamp never clears minimumReleaseAge, so no PR would ever be raised. timestamp-optional raises it with no age check; check-pin-digest-provenance.sh and the octoscan CI run on the PR remain its gates.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["ghcr.io/synacktiv/octoscan"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional",
       "automerge": true
     }
   ],
