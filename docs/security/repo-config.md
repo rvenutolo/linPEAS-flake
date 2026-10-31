@@ -129,7 +129,8 @@ Wired into the `renovate-invariants` CI job.
 
 `scripts/check-pin-digest-provenance.sh` (in the `lint-doc-invariants`
 CI group) diffs every action pin (`uses: <path>@<sha> # <version>`)
-and the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair against
+the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair, and the
+TruffleHog image ref in `.github/trufflehog-image` against
 `origin/main`:
 
 1. A SHA/digest that moves while its version label stays the same is

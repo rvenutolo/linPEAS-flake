@@ -1,0 +1,3 @@
+runs:
+  steps:
+    - uses: cachix/install-nix-action@cccccccccccccccccccccccccccccccccccccccc # v31 # patch-tag-exception: floating major, no immutable patch tag

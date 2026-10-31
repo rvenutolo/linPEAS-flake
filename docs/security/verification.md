@@ -378,6 +378,11 @@ shapes. The action runs a container image, and its `version:` input
 pins that image by tag and digest to the action pin's release: a step
 reads the ref from `.github/trufflehog-image` and passes it on, and the
 `trufflehog-image-pin` lint fails when the file names another release.
+Before the scan, `scripts/refresh-trufflehog-image.sh --check` asks
+ghcr.io for the pin tag's digest and fails the job when the file holds
+another: a hand-edited digest, or a tag re-pushed upstream, stops the
+scan until the file is refreshed. `check-pin-digest-provenance.sh`
+also fails a PR that moves the digest under an unchanged tag.
 Renovate moves only the action pin. On its PR,
 `renovate-flake-lock-refresh.yml` resolves the new release's digest on
 ghcr.io and commits the file, as

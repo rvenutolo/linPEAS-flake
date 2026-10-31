@@ -393,7 +393,7 @@ function main() {
   # file inventories, so a scenario silently driving the wrong tree fails
   # on the numbers rather than matching a sibling's banner.
   run_scenario 'unchanged tree passes' 'base' deny 0 \
-    'pin digest provenance OK: 16 pin(s) across 4 file(s)'
+    'pin digest provenance OK: 17 pin(s) across 5 file(s)'
   run_scenario 'semver digest repoint fails' 'head-semver-repoint' deref-none 1 \
     'digest repointed under unchanged version: actions/checkout (v4.3.1): bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -> dddddddddddddddddddddddddddddddddddddddd'
   # The same head tree as the scenario above, separated only by what the
@@ -421,6 +421,14 @@ function main() {
     'pin digest provenance OK: 9 pin(s) across 3 file(s)'
   run_scenario 'octoscan shape drift errors' 'head-octoscan-shape' deny 2 \
     'pin-digest-provenance: octoscan digest/version pair not found in scripts/octoscan-scan.sh (extraction shape drift?)'
+  # The TruffleHog image file is the same kind of pair: a digest that
+  # moves under an unchanged tag is a repointed release.
+  run_scenario 'trufflehog image digest-only repoint fails' 'head-trufflehog-digest-only' deny 1 \
+    'digest repointed under unchanged version: ghcr.io/trufflesecurity/trufflehog (3.99.4): sha256:3333333333333333333333333333333333333333333333333333333333333333 -> sha256:4444444444444444444444444444444444444444444444444444444444444444'
+  run_scenario 'trufflehog image lockstep bump passes' 'head-trufflehog-lockstep' deny 0 \
+    'pin digest provenance OK: 16 pin(s) across 4 file(s)'
+  run_scenario 'trufflehog image shape drift errors' 'head-trufflehog-shape' deny 2 \
+    'pin-digest-provenance: trufflehog image ref not found in .github/trufflehog-image (extraction shape drift?)'
   run_scenario 'floating repoint reachable passes' 'head-floating-repoint' reachable 0 \
     'verified reachable from master (behind) via direct commit pin'
   run_scenario 'floating repoint tag-object deref passes' 'head-floating-repoint' tagobject-reachable 0 \
