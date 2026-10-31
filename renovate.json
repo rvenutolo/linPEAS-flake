@@ -29,15 +29,17 @@
       "automerge": true
     },
     {
-      "description": "cachix/git-hooks.nix master HEAD: automerge once every required check passes. renovate-flake-lock-refresh.yml supplies the lockfile this manager cannot write; while flake.nix is ahead of flake.lock the flake-check job is red, so the PR cannot merge before the refresh lands.",
+      "description": "cachix/git-hooks.nix master HEAD: automerge once every required check passes. renovate-flake-lock-refresh.yml supplies the lockfile this manager cannot write; while flake.nix is ahead of flake.lock the flake-check job is red, so the PR cannot merge before the refresh lands. git-refs carries no release timestamp, so under the default minimumReleaseAgeBehaviour (timestamp-required) an update never clears minimumReleaseAge and no PR is raised; timestamp-optional raises it with no age check, and the required checks named here remain its gate.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["cachix/git-hooks.nix"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional",
       "automerge": true
     },
     {
-      "description": "SchemaStore/schemastore master HEAD: automerge once every required check passes. The pin feeds scripts/check-jsonschema.sh, which validates this repo's JSON and YAML against the bumped SHA in CI, so a schema set that rejects a tracked file keeps the PR red.",
+      "description": "SchemaStore/schemastore master HEAD: automerge once every required check passes. The pin feeds scripts/check-jsonschema.sh, which validates this repo's JSON and YAML against the bumped SHA in CI, so a schema set that rejects a tracked file keeps the PR red. git-refs carries no release timestamp, so under the default minimumReleaseAgeBehaviour (timestamp-required) an update never clears minimumReleaseAge and no PR is raised; timestamp-optional raises it with no age check, and the required checks named here remain its gate.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["SchemaStore/schemastore"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional",
       "automerge": true
     },
     {
@@ -60,7 +62,7 @@
       ]
     },
     {
-      "description": "cachix/git-hooks.nix master HEAD tracker. Uses git-refs datasource because that repo publishes 0 GitHub releases and 0 tags — master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; runs through the global 7-day minimumReleaseAge quarantine. This manager only substitutes the SHA in flake.nix; renovate-flake-lock-refresh.yml runs `nix flake update pre-commit-hooks` on the PR branch and commits the refreshed flake.lock. Until that commit lands the PR is red and cannot merge. When the auto-refresh does not fire, an issue is filed under the renovate-flake-lock-refresh-failure label and the manual fallback is in docs/architecture/flake-input-bumps.md.",
+      "description": "cachix/git-hooks.nix master HEAD tracker. Uses git-refs datasource because that repo publishes 0 GitHub releases and 0 tags — master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; raises it with no age check (see the packageRule for why). This manager only substitutes the SHA in flake.nix; renovate-flake-lock-refresh.yml runs `nix flake update pre-commit-hooks` on the PR branch and commits the refreshed flake.lock. Until that commit lands the PR is red and cannot merge. When the auto-refresh does not fire, an issue is filed under the renovate-flake-lock-refresh-failure label and the manual fallback is in docs/architecture/flake-input-bumps.md.",
       "customType": "regex",
       "managerFilePatterns": ["/^flake\\.nix$/"],
       "matchStrings": [
@@ -83,7 +85,7 @@
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)$"
     },
     {
-      "description": "SchemaStore master HEAD tracker for the JSON Schema URLs consumed by scripts/check-jsonschema.sh. Same shape as the cachix/git-hooks.nix manager — SchemaStore publishes 0 releases and 0 tags, master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; the global 7-day minimumReleaseAge applies. The bumped SHA is what check-jsonschema.sh validates against in CI, so a schema set that rejects a tracked file keeps the PR red.",
+      "description": "SchemaStore master HEAD tracker for the JSON Schema URLs consumed by scripts/check-jsonschema.sh. Same shape as the cachix/git-hooks.nix manager — SchemaStore publishes 0 releases and 0 tags, master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; it is raised with no age check (see the packageRule for why). The bumped SHA is what check-jsonschema.sh validates against in CI, so a schema set that rejects a tracked file keeps the PR red.",
       "customType": "regex",
       "managerFilePatterns": ["/^scripts/check-jsonschema\\.sh$/"],
       "matchStrings": ["SCHEMASTORE_SHA='(?<currentDigest>[0-9a-f]{40})'"],
