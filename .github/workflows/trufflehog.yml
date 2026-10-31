@@ -42,6 +42,10 @@ jobs:
       # renovate-flake-lock-refresh.yml rewrites it when Renovate moves the
       # pin. The shape is checked again here because the value reaches a
       # `docker run` argument.
+      # The digest must be the one ghcr.io serves for the pin's tag: a
+      # hand-edited file, or a tag re-pushed upstream, fails here.
+      - name: check the image ref against ghcr.io
+        run: bash scripts/refresh-trufflehog-image.sh --check
       - name: read the pinned TruffleHog image
         id: trufflehog-image
         env:
