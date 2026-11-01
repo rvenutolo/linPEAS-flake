@@ -6,6 +6,25 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261101-db78fb84] - 2026-11-01
+
+### CI
+- Let Renovate raise git-hooks.nix and SchemaStore bumps ([#1475](https://github.com/rvenutolo/linPEAS-flake/pull/1475))
+- Check the TruffleHog image digest against its tag ([#1474](https://github.com/rvenutolo/linPEAS-flake/pull/1474))
+- Let Renovate raise octoscan image updates ([#1473](https://github.com/rvenutolo/linPEAS-flake/pull/1473))
+- Pin the TruffleHog image and fail on unverifiable findings ([#1471](https://github.com/rvenutolo/linPEAS-flake/pull/1471))
+- Scan merge commit diffs in the gitleaks workflow ([#1470](https://github.com/rvenutolo/linPEAS-flake/pull/1470))
+
+### Chores
+- Bump linpeas to 20261101-db78fb84 ([#1476](https://github.com/rvenutolo/linPEAS-flake/pull/1476))
+- Update flake.lock ([#1468](https://github.com/rvenutolo/linPEAS-flake/pull/1468))
+- Update github-actions ([#1462](https://github.com/rvenutolo/linPEAS-flake/pull/1462))
+- Update dependency nix to v2.35.4 ([#1463](https://github.com/rvenutolo/linPEAS-flake/pull/1463))
+
+### Documentation
+- Make notify close and pickup wording trigger-neutral ([#1469](https://github.com/rvenutolo/linPEAS-flake/pull/1469))
+- Fix the drift the cycle-closing docs audit found ([#1464](https://github.com/rvenutolo/linPEAS-flake/pull/1464))
+
 ## [20261029-a596a9f3] - 2026-10-29
 
 ### CI
