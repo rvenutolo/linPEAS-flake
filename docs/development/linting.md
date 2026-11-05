@@ -128,18 +128,21 @@ security-review entry.
 
 ## Octoscan
 
-Workflow-vulnerability scanner; runs synacktiv/octoscan via a pinned
-ghcr.io container image against `.github/workflows/`. The pre-commit
-hook fires when any `.github/workflows/*.yml` or `*.yaml` file is
-staged; it always scans the full directory to match the CI workflow's
-invocation. Docker is required — if docker is missing the hook fails
-with exit 2 (could not run) and hints at `SKIP=octoscan` for one
-commit. The pinned image digest and the version label tracked by
-Renovate both live in `scripts/octoscan-scan.sh` (single source of
-truth). GHCR publishes no release timestamp, so Renovate raises an
-octoscan update with no 7-day quarantine (`minimumReleaseAgeBehaviour: timestamp-optional` on its packageRule); without it the update would
-never clear the quarantine. `check-pin-digest-provenance.sh` and the
-octoscan run on the PR gate it instead.
+Workflow-vulnerability scanner; runs synacktiv/octoscan against
+`.github/workflows/` through `scripts/octoscan-scan.sh`. The binary is
+the nixpkgs build from the flake's locked `nixpkgs-unstable`, exposed as
+the `.#octoscan` package: the pre-commit hook puts it on `PATH`, the
+`octoscan.yml` job runs the script under `nix shell .#octoscan`, and
+the dev shell carries it too. Upstream publishes no signed release
+artifacts, so the `flake.lock`-pinned source build is the trust root,
+and a `flake.lock` bump is how the scanner updates. The workflow's PR
+trigger includes `flake.lock` and `nix/packages.nix`, so a bump that
+changes octoscan scans with the new version on its own PR. The
+pre-commit hook fires when any `.github/workflows/*.yml` or `*.yaml`
+file is staged; it always scans the full directory to match the CI
+workflow's invocation. Run by hand outside the dev shell with no
+`octoscan` on `PATH`, the script exits 2 (could not run) and hints at
+`SKIP=octoscan` for one commit.
 
 ## Runner-label allowlist
 
@@ -171,8 +174,8 @@ and each list has a check that fails once it stops:
 - `scripts/octoscan-scan.sh` probes each suppressed label alone after
     the scan, with only `runner-label` enabled and no `--ignore`. A label
     octoscan no longer flags fails the run with
-    `classification=stale-suppression`, so an image-digest bump that
-    learns a label turns the bump PR's `octoscan` run red. That run is
+    `classification=stale-suppression`, so a `flake.lock` bump whose
+    octoscan learns a label turns the bump PR's `octoscan` run red. That run is
     not a required check, so it does not block the merge; the next run
     on a push to `main`, the cron or a dispatch files a deduped
     `octoscan-infra` issue.

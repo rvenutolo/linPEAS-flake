@@ -86,9 +86,10 @@ tree.)
 - **Triggers:** a pre-commit hook on every commit that touches a workflow
     YAML under `.github/workflows/`, scanning the full directory rather
     than the staged files to match the CI invocation (it self-skips
-    inside the Nix build sandbox, where docker is unavailable); PR to
-    `main` filtered to
-    `.github/workflows/**` and the octoscan scan script; push to `main`; weekly
+    inside the Nix build sandbox, so `nix flake check` does not run the
+    scan); PR to `main` filtered to `.github/workflows/**`, the octoscan
+    scan script, `flake.lock` and `nix/packages.nix` (the last two can
+    change the octoscan binary); push to `main`; weekly
     Friday cron (the whole workflow directory, unfiltered); manual dispatch.
 - **Status:** advisory by design. It is the cheapest scanner, but it fails
     on *any* finding (no severity threshold), so as a required check a

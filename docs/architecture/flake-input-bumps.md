@@ -441,7 +441,9 @@ are covered by `just verify` and the `doc-freshness` / lint-group CI
 jobs instead, though not all: `patch-tag-pins` is pre-commit only,
 `check-cron-table`'s live coverage is the `cron-table-drift-check`
 workflow, `octoscan`'s live coverage is the `octoscan.yml`
-workflow (its harness runs test-only in `harness-group`), and the two
+workflow, which runs on the bump PR itself because a `flake.lock`
+change can swap the octoscan binary (its harness runs test-only in
+`harness-group`), and the two
 actionlint canaries (`actionlint-shellcheck-active`,
 `actionlint-pyflakes-active`) run as pre-commit hooks, with
 `harness-group` running their harnesses — the hook's own default
