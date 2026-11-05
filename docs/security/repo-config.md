@@ -128,9 +128,8 @@ Wired into the `renovate-invariants` CI job.
 ## Pin digest provenance
 
 `scripts/check-pin-digest-provenance.sh` (in the `lint-doc-invariants`
-CI group) diffs every action pin (`uses: <path>@<sha> # <version>`),
-and the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair against
-`origin/main`:
+CI group) diffs every action pin (`uses: <path>@<sha> # <version>`)
+against `origin/main`:
 
 1. A SHA/digest that moves while its version label stays the same is
     a repointed released tag — the digest-repoint supply-chain class
@@ -149,9 +148,7 @@ and the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair against
     repoint, and compare equal. This does not soften rule 1: a tag
     object's hash covers the commit it tags, so retagging a released
     version moves the tag object too and the resolved commits still
-    differ. Container digests name no git object, resolve to
-    themselves, and so never reach an API call — the octoscan pair is
-    judged purely on rule 1.
+    differ.
 1. A floating-major pin (`# vN`, no immutable patch tag upstream)
     legitimately retargets across patches, so its digest moves are
     instead verified reachable from the upstream default branch via
@@ -159,7 +156,6 @@ and the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair against
     API errors fail the job loudly (exit 2), never silently.
 1. Version-label bumps (SHA and comment move together) pass here;
     they are quarantined by `minimumReleaseAge` where the source has
-    release timestamps (the octoscan image has none, so Renovate raises
-    it with no age check) and, for pins inside
+    release timestamps and, for pins inside
     the audit's scope, re-checked daily by `ratchet-pin-audit` (scope in
     its [runbook](../runbooks/ratchet-pin-audit.md)).

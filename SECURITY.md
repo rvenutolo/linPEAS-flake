@@ -101,8 +101,8 @@ Four independent automations merge to `main` without human review:
 - `update-linpeas.yml` (daily) — upstream `linpeas.sh` content.
 - `update-flake-lock.yml` (weekly) — `nixpkgs` and other flake input revs.
 - Renovate (weekly) — every dependency it tracks: GitHub Action SHAs,
-    the pinned Nix installer version, the octoscan image digest, the
-    tracked flake inputs, and the SchemaStore pin.
+    the pinned Nix installer version, the TruffleHog release version,
+    the tracked flake inputs, and the SchemaStore pin.
 - `release-on-bump.yml` (per release) — the regenerated `CHANGELOG.md`,
     committed via an auto-merging PR under the same App identity.
 
@@ -119,9 +119,7 @@ Renovate-tracked dependency merges in the first weekly slot after its 7-day
 `minimumReleaseAge` quarantine. For the `cachix/git-hooks.nix` and
 SchemaStore master-HEAD trackers that quarantine is measured from the
 commit date, which the committer sets, so a backdated commit clears it at
-once. The octoscan image is the exception: GHCR carries no release
-timestamp, so Renovate raises it with no age check and it merges in the
-next weekly slot. Either ships with the next release. This is the
+once. Either ships with the next release. This is the
 documented and accepted trust model for a thin wrapper repo — it matches
 the trust model
 of `curl ... | bash`, with the addition of reproducible, hash-pinned

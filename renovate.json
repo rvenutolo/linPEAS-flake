@@ -7,7 +7,7 @@
   "minimumReleaseAge": "7 days",
   "logLevelRemap": [
     {
-      "description": "Renovate logs this warning whenever a timestamp-optional packageRule raises an update that has no release timestamp. The octoscan image always does (GHCR exposes none), so at warn level it sits permanently under the dependency dashboard's Repository problems. The rules that set timestamp-optional say why each accepts that; the message stays in the job log at info.",
+      "description": "Renovate logs this warning whenever a timestamp-optional packageRule raises an update that has no release timestamp. The cachix/git-hooks.nix and SchemaStore rules set timestamp-optional as a fallback for a github-digest lookup that comes back without a commit date; at warn level each such update would sit under the dependency dashboard's Repository problems. The rules that set timestamp-optional say why each accepts that; the message stays in the job log at info.",
       "matchMessage": "/^Some release\\(s\\) did not have a releaseTimestamp/",
       "newLogLevel": "info"
     }
@@ -46,13 +46,6 @@
       "description": "SchemaStore/schemastore master HEAD: automerge once every required check passes. The pin feeds scripts/check-jsonschema.sh, which validates this repo's JSON and YAML against the bumped SHA in CI, so a schema set that rejects a tracked file keeps the PR red. github-digest ages a master-HEAD digest against its commit date, so minimumReleaseAge applies when Renovate reads one; a commit date is set by the committer, so it is a weaker age signal than a registry push time. timestamp-optional is the fallback: should a release come back without a timestamp, it is raised with no age check rather than held forever, and the required checks named here remain its gate.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["SchemaStore/schemastore"],
-      "minimumReleaseAgeBehaviour": "timestamp-optional",
-      "automerge": true
-    },
-    {
-      "description": "octoscan: scoped automerge for the same reason as github-actions, digest-pinned. matchDepNames narrows this rule to the octoscan image so each custom-regex dependency keeps its own explicit automerge scope. GHCR exposes no release timestamp, and under the default minimumReleaseAgeBehaviour (timestamp-required) an update with no timestamp never clears minimumReleaseAge, so no PR would ever be raised. timestamp-optional raises it with no age check; check-pin-digest-provenance.sh and the octoscan CI run on the PR remain its gates.",
-      "matchManagers": ["custom.regex"],
-      "matchDepNames": ["ghcr.io/synacktiv/octoscan"],
       "minimumReleaseAgeBehaviour": "timestamp-optional",
       "automerge": true
     },
@@ -106,17 +99,6 @@
       "datasourceTemplate": "github-digest",
       "depNameTemplate": "SchemaStore/schemastore",
       "packageNameTemplate": "SchemaStore/schemastore"
-    },
-    {
-      "description": "octoscan container image pinned by digest in scripts/octoscan-scan.sh (single source of truth for the CI workflow and the pre-commit hook). The matchString spans both the OCTOSCAN_DIGEST and OCTOSCAN_VERSION shell vars so Renovate updates both atomically — no drift between digest and version label. Uses docker datasource; Renovate resolves the newest tag for ghcr.io/synacktiv/octoscan and substitutes both currentDigest + currentValue in one PR. Automerge is enabled via a scoped packageRule (matchDepNames narrow), matching the github-actions pattern (digest-pinned); unlike github-actions it is raised with no release-age wait, since GHCR carries no release timestamp (see its packageRule). The `sha256:` prefix MUST stay inside the currentDigest capture group: the docker datasource reports digests prefixed, so capturing bare hex makes every run compare `<hex>` against `sha256:<hex>`, report an update for a digest that never moved, and open a PR that check-pin-digest-provenance.sh then hard-fails as a repointed released tag — a standing false supply-chain alarm.",
-      "customType": "regex",
-      "managerFilePatterns": ["/^scripts/octoscan-scan\\.sh$/"],
-      "matchStrings": [
-        "OCTOSCAN_DIGEST=\"(?<currentDigest>sha256:[a-f0-9]{64})\"[\\s\\S]*?OCTOSCAN_VERSION=\"(?<currentValue>v\\d+\\.\\d+\\.\\d+)\""
-      ],
-      "datasourceTemplate": "docker",
-      "depNameTemplate": "ghcr.io/synacktiv/octoscan",
-      "packageNameTemplate": "ghcr.io/synacktiv/octoscan"
     },
     {
       "description": "TruffleHog release version in .github/trufflehog-version, read by scripts/trufflehog-release.sh. The trufflehog workflow verifies the release's checksums file against upstream's keyless cosign signature for that exact tag before any binary runs, so a version bump needs no digest pinned in this repo: the signature is the trust anchor, and a release asset re-uploaded under an unchanged tag cannot leave a stale digest that blocks main. Upstream tags are v-prefixed and the file holds the bare X.Y.Z, so extractVersion strips the prefix.",

@@ -2,10 +2,9 @@
 # scripts/octoscan-scan.sh
 #
 # @description Run synacktiv/octoscan against `.github/workflows`
-# via the pinned ghcr container image. Single source of truth for
-# the image digest, the version label tracked by Renovate, the
-# noise-suppression flags, and the exit-code mapping shared by the
-# CI workflow and the pre-commit hook.
+# with the `octoscan` binary on PATH. Single source of truth for the
+# noise-suppression flags and the exit-code mapping shared by the CI
+# workflow and the pre-commit hook.
 #
 # Usage:
 #   scripts/octoscan-scan.sh                 # text output to stdout
@@ -13,14 +12,14 @@
 #
 # Exit codes:
 #   0 — scan clean
-#   1 — findings present, the scanner ran and errored (image pull
-#       failure, scanner internal error), a suppressed runner label is
+#   1 — findings present, the scanner ran and errored (a
+#       scanner internal error), a suppressed runner label is
 #       no longer flagged (`stale-suppression`), or the command line is
 #       unusable. A finding is told from a scanner error by the
 #       `has-finding` line printed to stdout (`has-finding=true|false`)
 #       — the same contract the CI workflow exposes via
 #       `$GITHUB_OUTPUT` — and by the `classification=` field beside it.
-#   2 — the scan could not proceed: `docker` is absent, `--sarif` was
+#   2 — the scan could not proceed: `octoscan` is absent, `--sarif` was
 #       given while `jq` is absent, or a per-file SARIF temp file or the
 #       runner-label probe directory could not be created. The two tool guards report before any workflow
 #       file is read and print the `infra-failure` classification
@@ -65,8 +64,10 @@
 #       `stale-suppression` classification. See
 #       docs/development/linting.md#runner-label-allowlist.
 #
-# Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
-# (renovate.json customManager scoped to this file).
+# Scanner source: the `octoscan` on PATH. The pre-commit hook and the CI
+# workflow both supply the flake.lock-pinned nixpkgs build (`.#octoscan`),
+# so the scanner updates when flake.lock does; upstream publishes no signed
+# release artifacts to verify instead.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -76,11 +77,6 @@ if [[ ${_lib_dir} == "${BASH_SOURCE[0]}" ]]; then _lib_dir=.; fi
 source "${_lib_dir}/lib/temp.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
-
-OCTOSCAN_DIGEST="sha256:3368f42651f9ca0d7a7cd08de3b734476046d17ffa0b2b0c6c55acef556300db"
-OCTOSCAN_VERSION="v0.1.7"
-# shellcheck disable=SC2034 # Renovate reads OCTOSCAN_VERSION to track the version label in lockstep with OCTOSCAN_DIGEST.
-readonly OCTOSCAN_DIGEST OCTOSCAN_VERSION
 
 readonly DISABLE_RULES="local-action,dangerous-write"
 readonly IGNORE_PATTERN='(needs|steps)\.\*\*\.outputs\.\*\*|actions/checkout. with a custom ref'
@@ -117,7 +113,7 @@ done
 # @description Print the diagnostic line that names why the run ended as it
 # did, and how much of the workflow directory was actually analyzed.
 # `has-finding=false` plus a non-zero exit is printed by every failure mode
-# — docker absent, jq absent, a scanner error with no finding, a scanner
+# — octoscan absent, jq absent, a scanner error with no finding, a scanner
 # error alongside findings — so `has-finding=` alone tells an operator only
 # that the run is not a finding, never which branch produced it. The
 # classification names that branch; the scope states how many workflow files
@@ -129,12 +125,12 @@ function print_summary() {
   printf 'octoscan-scan: %s; classification=%s\n' "$1" "$2"
 }
 
-if ! command -v docker >/dev/null 2>&1; then
-  printf 'octoscan pre-commit hook requires docker.\n' >&2
-  printf 'Install docker, or skip the hook for one commit with:\n' >&2
+if ! command -v octoscan >/dev/null 2>&1; then
+  printf 'octoscan-scan.sh requires octoscan on PATH.\n' >&2
+  printf 'Run it inside the nix dev shell, or skip the hook for one commit with:\n' >&2
   printf '  SKIP=octoscan git commit ...\n' >&2
   printf 'has-finding=false\n'
-  print_summary 'no workflow file scanned' 'infra-failure (docker unavailable)'
+  print_summary 'no workflow file scanned' 'infra-failure (octoscan unavailable)'
   exit 2
 fi
 
@@ -185,21 +181,15 @@ for wf in "${workflows[@]}"; do
   if [[ -n ${sarif_out} ]]; then
     tmp_sarif="$(make_temp)"
     per_file_sarifs+=("${tmp_sarif}")
-    docker run --rm \
-      -v "${repo_root}:/src:ro" \
-      "ghcr.io/synacktiv/octoscan@${OCTOSCAN_DIGEST}" \
-      scan "/src/${rel}" \
+    (cd -- "${repo_root}" && octoscan scan "${rel}" \
       --disable-rules "${DISABLE_RULES}" \
       --ignore "${SCAN_IGNORE}" \
-      --format sarif \
+      --format sarif) \
       >"${tmp_sarif}" 2>/dev/null || file_rc=$?
   else
-    docker run --rm \
-      -v "${repo_root}:/src:ro" \
-      "ghcr.io/synacktiv/octoscan@${OCTOSCAN_DIGEST}" \
-      scan "/src/${rel}" \
+    (cd -- "${repo_root}" && octoscan scan "${rel}" \
       --disable-rules "${DISABLE_RULES}" \
-      --ignore "${SCAN_IGNORE}" || file_rc=$?
+      --ignore "${SCAN_IGNORE}") || file_rc=$?
   fi
   # octoscan per-file exit codes: 0 clean, 2 finding, anything else (1, …) a
   # scanner error — the file was never analyzed. Tally each outcome
@@ -223,19 +213,12 @@ done
 stale_labels=()
 probe_failed=0
 probe_dir="$(make_temp --directory)"
-# The container's user is not the runner's, and mktemp creates the directory
-# owner-only.
-chmod 0755 -- "${probe_dir}"
 for label in "${RUNNER_LABEL_SUPPRESSIONS[@]}"; do
   printf 'on: push\npermissions: {}\njobs:\n  probe:\n    runs-on: %s\n    steps:\n      - run: "true"\n' \
     "${label}" >"${probe_dir}/probe.yml"
-  chmod 0644 -- "${probe_dir}/probe.yml"
   probe_rc=0
-  docker run --rm \
-    -v "${probe_dir}:/src:ro" \
-    "ghcr.io/synacktiv/octoscan@${OCTOSCAN_DIGEST}" \
-    scan /src/probe.yml \
-    --enable-rules runner-label >/dev/null 2>&1 || probe_rc=$?
+  (cd -- "${probe_dir}" && octoscan scan probe.yml \
+    --enable-rules runner-label) >/dev/null 2>&1 || probe_rc=$?
   case "${probe_rc}" in
   0)
     stale_labels+=("${label}")
@@ -254,7 +237,7 @@ if [[ -n ${sarif_out} && ${n_error} -eq 0 ]]; then
   # Aggregate only when no file errored, so a file that never analyzed cannot
   # be silently absent from the merged SARIF and reported clean. The first
   # SARIF carries the driver + rules manifest (identical across invocations of
-  # the same image); concatenate `runs[0].results` from every per-file SARIF.
+  # the same binary); concatenate `runs[0].results` from every per-file SARIF.
   #
   # A merge that fails routes to the same infra-failure path an unanalyzed
   # file takes. Left bare it ends the run under jq's own status — 5 for a

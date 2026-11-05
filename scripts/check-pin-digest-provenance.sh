@@ -3,8 +3,7 @@
 #
 # @description Lint: a pin digest may not move under an unchanged
 # version label. Diffs action pins (`uses: <path>@<sha> # <version>`)
-# in workflows/composite actions and the octoscan container digest pair
-# against the base ref; a changed SHA/digest whose version
+# in workflows/composite actions against the base ref; a changed SHA/digest whose version
 # comment did not change is a repointed released tag (the
 # digest-repoint supply-chain class) and fails. Floating-major pins
 # (`# vN`) legitimately retarget across patch releases, so instead of
@@ -16,8 +15,7 @@
 # naming that tag's commit compare equal instead of reading as a
 # repoint. This does not soften the gate: a tag object's hash covers
 # the commit it tags, so retagging a released version moves the tag
-# object too and the resolved commits still differ. Container digests
-# name no git object and resolve to themselves.
+# object too and the resolved commits still differ.
 
 # Gates the Renovate auto-merge path: a digest-only bump PR is by
 # construction a repointed released tag. minimumReleaseAge does not
@@ -54,8 +52,6 @@ source "${_lib_dir}/lib/ascii-match.sh"
 readonly BASE_REF="${BASE_REF:-origin/main}"
 readonly BASE_DIR="${BASE_DIR_OVERRIDE:-}"
 readonly HEAD_DIR="${HEAD_DIR_OVERRIDE:-.}"
-readonly OCTOSCAN_FILE="scripts/octoscan-scan.sh"
-readonly OCTOSCAN_IMAGE="ghcr.io/synacktiv/octoscan"
 readonly GH_API_VERSION_HEADER="X-GitHub-Api-Version: 2022-11-28"
 
 function die_op() {
@@ -103,9 +99,6 @@ function scanned_files_under() {
     is_scanned_pin_file "${rel}" && printf '%s\n' "${rel}"
   done
   shopt -u nullglob globstar
-  if [[ -f "${root}/${OCTOSCAN_FILE}" ]]; then
-    printf '%s\n' "${OCTOSCAN_FILE}"
-  fi
 }
 
 # Emit the head-side scanned file list (paths relative to HEAD_DIR).
@@ -122,8 +115,8 @@ declare -i BASE_FILE_SET_LOADED=0
 
 # Resolve the base-side scanned file list once via a single
 # `git ls-tree`, filtered through is_scanned_pin_file (the same
-# predicate scanned_files_under() applies to the head-side glob) plus
-# the octoscan file. An ls-tree failure (an unfetched origin/main, a
+# predicate scanned_files_under() applies to the head-side glob). An
+# ls-tree failure (an unfetched origin/main, a
 # blob-filtered checkout whose lazy fetch is blocked, ...) dies loud
 # instead of yielding an empty list — an empty base list would make
 # every base pin read as "absent", which turns a real repoint into a
@@ -134,7 +127,7 @@ function load_base_file_list() {
   local -a tree_paths=()
   enumerate_into tree_paths "git ls-tree ${BASE_REF}" git ls-tree -r --name-only -z "${BASE_REF}"
   for path in "${tree_paths[@]}"; do
-    if is_scanned_pin_file "${path}" || [[ ${path} == "${OCTOSCAN_FILE}" ]]; then
+    if is_scanned_pin_file "${path}"; then
       BASE_FILE_SET["${path}"]=1
     fi
   done
@@ -214,20 +207,6 @@ function base_content() {
 function extract_pins() {
   local -r file="$1"
   local line
-  if [[ ${file} == "${OCTOSCAN_FILE}" ]]; then
-    local digest="" ver=""
-    while IFS= read -r line; do
-      if [[ ${line} =~ ^OCTOSCAN_DIGEST=\"(sha256:[0123456789abcdef]{64})\" ]]; then
-        digest="${BASH_REMATCH[1]}"
-      elif ascii_match "${line}" '^OCTOSCAN_VERSION="(v[0-9][A-Za-z0-9.]*)"'; then
-        ver="${BASH_REMATCH[1]}"
-      fi
-    done
-    if [[ -n ${digest} && -n ${ver} ]]; then
-      printf '%s|%s|%s|%s\n' "${file}" "${OCTOSCAN_IMAGE}" "${ver}" "${digest}"
-    fi
-    return 0
-  fi
   local path sha version line_num=0 value
   while IFS= read -r line; do
     line_num=$((line_num + 1))
@@ -293,11 +272,9 @@ function deref_tag_object() {
 }
 
 # Resolve a pin to the commit it names. Only a 40-hex git SHA can be a
-# tag object; a container digest (`sha256:…`) names no git object and
-# resolves to itself without an API call, which is what keeps the
-# octoscan pair off this path entirely.
-# @arg $1 uses path (owner/repo[/subpath]) or container image
-# @arg $2 pin sha or container digest
+# tag object; any other value resolves to itself without an API call.
+# @arg $1 uses path (owner/repo[/subpath])
+# @arg $2 pin sha
 # @sets DEREF_RESULT
 function resolve_pin_commit() {
   local -r path="$1" sha="$2"
@@ -426,14 +403,6 @@ while IFS= read -r file; do
   base_tuples+="$(extract_pins "${file}" <<<"${base_file_content}")"$'\n'
 done <<<"${base_file_list}"
 
-# The octoscan pair is a load-bearing extraction target: if the file
-# exists in head but the pair is not found, the var block was reshaped
-# and this gate would silently stop covering it. Fail loud instead.
-if [[ -f "${HEAD_DIR}/${OCTOSCAN_FILE}" ]] &&
-  ! grep --quiet "^${OCTOSCAN_FILE}|" <<<"${head_tuples}"; then
-  die_op "octoscan digest/version pair not found in ${OCTOSCAN_FILE} (extraction shape drift?)"
-fi
-
 # Grouping key is (path, version) — deliberately NOT including the
 # source file. A pin's identity is what it points at, not which file
 # names it; dropping the file lets a rename-plus-repoint (base pin in
@@ -473,9 +442,7 @@ while IFS= read -r key; do
     # Resolving both sides before comparing separates that from a
     # repoint without softening the gate: a tag object's hash covers the
     # commit it tags, so retagging a released version moves the tag
-    # object too and the resolved commits still differ. Container
-    # digests resolve to themselves, so the octoscan pair never reaches
-    # an API call here.
+    # object too and the resolved commits still differ.
     resolved_base=""
     while IFS= read -r sha; do
       [[ -n ${sha} ]] || continue

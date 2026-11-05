@@ -36,11 +36,19 @@
         # handler set reads. The attribute keeps the upstream name so the
         # generated docs/reference/flake-outputs.md says which variant is
         # published; the binary it provides is `diffoscope`.
+        #
+        # `octoscan` is exposed so octoscan.yml can run the scanner via
+        # `nix shell .#octoscan --command ...`, resolving it through
+        # flake.lock exactly as the pre-commit hook does. The upstream
+        # project publishes no signed release artifacts, so the nixpkgs
+        # source build pinned by flake.lock is the scanner's trust root,
+        # and a flake.lock bump is how it updates.
         inherit (pkgs-unstable)
           cosign
           diffoscopeMinimal
           git-cliff
           nix
+          octoscan
           ;
       };
 

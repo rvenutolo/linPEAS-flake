@@ -61,6 +61,7 @@ the markers by hand.
     │   ├───linpeas: package 'linpeas-20261102-ebea5d0c'
     │   ├───linpeas-image: package 'linpeas.tar.gz'
     │   ├───nix: package 'nix-2.34.9'
+    │   ├───octoscan: package 'octoscan-0.1.7'
     │   └───site: package 'linpeas-flake-site-20261102-ebea5d0c'
     └───x86_64-linux
         ├───cosign: package 'cosign-3.1.3'
@@ -70,6 +71,7 @@ the markers by hand.
         ├───linpeas: package 'linpeas-20261102-ebea5d0c'
         ├───linpeas-image: package 'linpeas.tar.gz'
         ├───nix: package 'nix-2.34.9'
+        ├───octoscan: package 'octoscan-0.1.7'
         └───site: package 'linpeas-flake-site-20261102-ebea5d0c'
 ```
 
