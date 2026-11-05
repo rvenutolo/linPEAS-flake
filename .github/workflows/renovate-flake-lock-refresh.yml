@@ -37,7 +37,9 @@ name: renovate-flake-lock-refresh
 #      token (`linpeas-flake-bumper` GitHub App), checks each runner doc
 #      against its branch copy with `scripts/check-runner-doc-diff.sh`
 #      from the default branch, and then commits each changed
-#      committable path to the PR branch via REST `PUT /contents`.
+#      committable path to the PR branch via REST `PUT /contents`. None
+#      of those paths is under `.github/workflows/`, so the App needs no
+#      `workflows` permission.
 #      GitHub web-flow-signs the commits because the request is
 #      authenticated by an App installation token, so
 #      `required_signatures` on `protect-main` is satisfied if the PR

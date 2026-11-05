@@ -6,7 +6,9 @@
 # no workflow or composite action `uses:` the
 # `trufflesecurity/trufflehog` action, and
 # `.github/workflows/trufflehog.yml` runs `scripts/trufflehog-release.sh`
-# in both its `verify` and its `scan` form.
+# in both its `verify` and its `scan` form. A `uses:` naming the action
+# through a subpath, or a `docker://` reference to upstream's image on any
+# registry, counts as naming it.
 
 # The upstream action is a composite that runs `docker run` on an image
 # whose `version` input defaults to `latest`, and that image carries no
@@ -18,7 +20,10 @@
 # version file's shape is the one `trufflehog-release.sh` accepts.
 #
 # The action's owner and repository match with each ASCII letter in either
-# case, because GitHub resolves them however they are cased. A `uses:`
+# case, because GitHub resolves them however they are cased, when followed
+# by `/`, `@` or the end of the value. A `docker://` reference matches the
+# image `trufflesecurity/trufflehog` with or without one registry host in
+# front, followed by a tag, a digest or nothing. A `uses:`
 # value or key written as a YAML alias is read as its anchored text. A
 # `run:` line whose first non-blank character is `#` is a shell comment
 # and runs nothing, so it does not count as an invocation.
@@ -28,10 +33,14 @@
 # and is where `trufflehog.yml` is looked for, and
 # TRUFFLEHOG_VERSION_FILE_OVERRIDE for the version file's path.
 # LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set.
+# A scanned file yq cannot parse is a finding and the scan goes on: its
+# references cannot be verified, and a malformed workflow is a fact about
+# the repository, not about the lint.
 # Exits 0 when every rule holds, 1 on any violation (one line per
-# violation), 2 when the lint could not run: yq or jq is absent, the
-# version file or trufflehog.yml is missing, a scanned YAML file cannot be
-# parsed, or the globs match no file.
+# violation, an unparsable scanned file included), 2 when the lint could
+# not run: yq or jq is absent, the version file or trufflehog.yml is
+# missing, a file that parsed cannot then be read, or the globs match no
+# file.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -56,8 +65,10 @@ readonly VERSION_FILE="${TRUFFLEHOG_VERSION_FILE_OVERRIDE:-.github/trufflehog-ve
 readonly WORKFLOW="${OVERRIDE:-.github/workflows}/trufflehog.yml"
 readonly RELEASE_SCRIPT='scripts/trufflehog-release.sh'
 
-ACTION_RE="^$(ascii_fold_regex 'trufflesecurity/trufflehog')(@|$)"
+ACTION_RE="^$(ascii_fold_regex 'trufflesecurity/trufflehog')(/|@|$)"
 readonly ACTION_RE
+IMAGE_RE="^$(ascii_fold_regex 'docker')://([^/]+/)?$(ascii_fold_regex 'trufflesecurity/trufflehog')([:@]|$)"
+readonly IMAGE_RE
 # The whole file, final newline included: one line and nothing after it.
 readonly VERSION_RE=$'^[0-9]+\\.[0-9]+\\.[0-9]+\n$'
 
@@ -68,6 +79,7 @@ readonly USES_QUERY='[.. | select(kind == "map") | to_entries[] | select((.key |
 readonly RUNS_QUERY='[.. | select(kind == "map") | to_entries[] | select((.key | explode(.)) == "run") | .value | explode(.) | select(tag == "!!str")]'
 
 failed=0
+workflow_unparsable=0
 
 if [[ -n ${OVERRIDE} ]]; then
   scan_dirs=("${OVERRIDE}")
@@ -106,7 +118,9 @@ for f in "${scan_files[@]}"; do
   refs=''
   if ! refs="$(yq "${YQ_MERGE_SPEC[@]}" -o=json -I=0 "${USES_QUERY}" "${f}" 2>/dev/null)"; then
     printf '%s: yq parse failed; the TruffleHog version pin cannot be verified\n' "${f}" >&2
-    exit 2
+    failed=$((failed + 1))
+    if [[ ${f} == "${WORKFLOW}" ]]; then workflow_unparsable=1; fi
+    continue
   fi
   ref_lines=''
   if ! ref_lines="$(jq --raw-output '.[]' <<<"${refs}")"; then
@@ -115,7 +129,7 @@ for f in "${scan_files[@]}"; do
   fi
   while IFS= read -r ref; do
     [[ -n ${ref} ]] || continue
-    ascii_match "${ref}" "${ACTION_RE}" || continue
+    ascii_match "${ref}" "${ACTION_RE}" || ascii_match "${ref}" "${IMAGE_RE}" || continue
     printf '%s: uses %q; run the signed release binary through %s instead\n' \
       "${f}" "${ref}" "${RELEASE_SCRIPT}" >&2
     failed=$((failed + 1))
@@ -127,34 +141,39 @@ if [[ ! -f ${WORKFLOW} ]]; then
   printf '%s: missing; it runs the TruffleHog scan\n' "${WORKFLOW}" >&2
   exit 2
 fi
-runs=''
-if ! runs="$(yq "${YQ_MERGE_SPEC[@]}" -o=json -I=0 "${RUNS_QUERY}" "${WORKFLOW}" 2>/dev/null)"; then
-  printf '%s: yq parse failed; the TruffleHog version pin cannot be verified\n' "${WORKFLOW}" >&2
-  exit 2
-fi
-run_lines=''
-if ! run_lines="$(jq --raw-output '.[]' <<<"${runs}")"; then
-  printf '%s: could not read its run: scripts\n' "${WORKFLOW}" >&2
-  exit 2
-fi
-has_verify=0
-has_scan=0
-invocation_re='(^|[[:space:]])(\./)?scripts/trufflehog-release\.sh[[:space:]]+(verify|scan)([[:space:]]|$)'
-while IFS= read -r line; do
-  [[ ${line} =~ ^[[:space:]]*# ]] && continue
-  [[ ${line} =~ ${invocation_re} ]] || continue
-  case "${BASH_REMATCH[3]}" in
-  verify) has_verify=1 ;;
-  scan) has_scan=1 ;;
-  esac
-done <<<"${run_lines}"
-if ((has_verify == 0)); then
-  printf '%s: no step runs %s verify\n' "${WORKFLOW}" "${RELEASE_SCRIPT}" >&2
-  failed=$((failed + 1))
-fi
-if ((has_scan == 0)); then
-  printf '%s: no step runs %s scan\n' "${WORKFLOW}" "${RELEASE_SCRIPT}" >&2
-  failed=$((failed + 1))
+# An unparsable trufflehog.yml was already counted by the scan above, so
+# its invocations are not checked. Otherwise it parsed there, and a read
+# failing behind that gate is a fault in this lint, not in the file.
+if ((workflow_unparsable == 0)); then
+  runs=''
+  if ! runs="$(yq "${YQ_MERGE_SPEC[@]}" -o=json -I=0 "${RUNS_QUERY}" "${WORKFLOW}" 2>/dev/null)"; then
+    printf '%s: could not read its run: scripts\n' "${WORKFLOW}" >&2
+    exit 2
+  fi
+  run_lines=''
+  if ! run_lines="$(jq --raw-output '.[]' <<<"${runs}")"; then
+    printf '%s: could not read its run: scripts\n' "${WORKFLOW}" >&2
+    exit 2
+  fi
+  has_verify=0
+  has_scan=0
+  invocation_re='(^|[[:space:]])(\./)?scripts/trufflehog-release\.sh[[:space:]]+(verify|scan)([[:space:]]|$)'
+  while IFS= read -r line; do
+    [[ ${line} =~ ^[[:space:]]*# ]] && continue
+    [[ ${line} =~ ${invocation_re} ]] || continue
+    case "${BASH_REMATCH[3]}" in
+    verify) has_verify=1 ;;
+    scan) has_scan=1 ;;
+    esac
+  done <<<"${run_lines}"
+  if ((has_verify == 0)); then
+    printf '%s: no step runs %s verify\n' "${WORKFLOW}" "${RELEASE_SCRIPT}" >&2
+    failed=$((failed + 1))
+  fi
+  if ((has_scan == 0)); then
+    printf '%s: no step runs %s scan\n' "${WORKFLOW}" "${RELEASE_SCRIPT}" >&2
+    failed=$((failed + 1))
+  fi
 fi
 
 if ((failed > 0)); then

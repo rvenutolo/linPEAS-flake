@@ -125,6 +125,37 @@ expect action-aliased "${GOOD_WORKFLOW}" "${GOOD_VERSION}" 1 \
   "other.yml=x-ref: &th trufflesecurity/trufflehog@${SHA}
 ${OTHER_WORKFLOW}      - uses: *th
 "
+expect action-subpath "${GOOD_WORKFLOW}" "${GOOD_VERSION}" 1 \
+  "$(findings "$(action_use other.yml "trufflesecurity/trufflehog/sub@${SHA}")")" \
+  "other.yml=${OTHER_WORKFLOW}      - uses: trufflesecurity/trufflehog/sub@${SHA}
+"
+expect action-flow-style "${GOOD_WORKFLOW}" "${GOOD_VERSION}" 1 \
+  "$(findings "$(action_use other.yml "trufflesecurity/trufflehog@${SHA}")")" \
+  "other.yml=on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps: [{ uses: trufflesecurity/trufflehog@${SHA} }]
+"
+# A `docker://` reference runs upstream's unsigned image directly, from
+# ghcr.io or from Docker Hub, by tag or by digest.
+expect docker-ghcr "${GOOD_WORKFLOW}" "${GOOD_VERSION}" 1 \
+  "$(findings "$(action_use other.yml 'docker://ghcr.io/trufflesecurity/trufflehog:latest')")" \
+  "other.yml=${OTHER_WORKFLOW}      - uses: docker://ghcr.io/trufflesecurity/trufflehog:latest
+"
+expect docker-hub "${GOOD_WORKFLOW}" "${GOOD_VERSION}" 1 \
+  "$(findings "$(action_use other.yml 'docker://trufflesecurity/trufflehog:3')")" \
+  "other.yml=${OTHER_WORKFLOW}      - uses: docker://trufflesecurity/trufflehog:3
+"
+expect docker-digest-recased "${GOOD_WORKFLOW}" "${GOOD_VERSION}" 1 \
+  "$(findings "$(action_use other.yml "docker://GHCR.io/TruffleSecurity/TruffleHog@sha256:${SHA}${SHA:0:24}")")" \
+  "other.yml=${OTHER_WORKFLOW}      - uses: docker://GHCR.io/TruffleSecurity/TruffleHog@sha256:${SHA}${SHA:0:24}
+"
+# Another image whose name only starts with the repository name is not
+# this one.
+expect docker-other-image "${GOOD_WORKFLOW}" "${GOOD_VERSION}" 0 '' \
+  "other.yml=${OTHER_WORKFLOW}      - uses: docker://ghcr.io/trufflesecurity/trufflehog-extra:1
+"
 # A reference whose path only starts with the repository name is another
 # action, not this one.
 expect other-action-prefix "${GOOD_WORKFLOW}" "${GOOD_VERSION}" 0 '' \
@@ -156,14 +187,21 @@ expect all-findings "$(workflow 'true' "${SCAN_RUN}" "${ACTION_STEP}")" $'v3.99.
   "$(findings "$(bad_shape $'v3.99.4\n')" \
     "$(action_use trufflehog.yml "trufflesecurity/trufflehog@${SHA}")" "${NO_VERIFY}")"
 
-# A missing input or a workflow yq cannot parse is a could-not-run.
+# A missing input is a could-not-run.
 expect version-missing "${GOOD_WORKFLOW}" "${ABSENT}" 2 \
   'DIR/version: missing or unreadable; scripts/trufflehog-release.sh reads the pinned version from it'
 expect workflow-missing "${ABSENT}" "${GOOD_VERSION}" 2 \
   'DIR/wf/trufflehog.yml: missing; it runs the TruffleHog scan' "other.yml=${OTHER_WORKFLOW}"
-expect unparsable-workflow "${GOOD_WORKFLOW}" "${GOOD_VERSION}" 2 \
-  'DIR/wf/broken.yml: yq parse failed; the TruffleHog version pin cannot be verified' \
-  $'broken.yml=on: push\njobs:\n  a: [\n'
+# A scanned file yq cannot parse is a finding, and the scan goes on to
+# report the other files' findings.
+expect unparsable-workflow "${GOOD_WORKFLOW}" "${GOOD_VERSION}" 1 \
+  "$(findings 'DIR/wf/broken.yml: yq parse failed; the TruffleHog version pin cannot be verified' \
+    "$(action_use other.yml "trufflesecurity/trufflehog@${SHA}")")" \
+  $'broken.yml=on: push\njobs:\n  a: [\n' "other.yml=${OTHER_WORKFLOW}${ACTION_STEP}"
+# An unparsable trufflehog.yml is reported once, not again as missing both
+# invocations.
+expect unparsable-trufflehog-yml $'on: push\njobs:\n  a: [\n' "${GOOD_VERSION}" 1 \
+  "$(findings 'DIR/wf/trufflehog.yml: yq parse failed; the TruffleHog version pin cannot be verified')"
 
 # The live tree passes.
 live_exit=0

@@ -2058,7 +2058,9 @@ pinned in `.github/trufflehog-version`. The file holds one `X.Y.Z` line,
 no workflow or composite action `uses:` the
 `trufflesecurity/trufflehog` action, and
 `.github/workflows/trufflehog.yml` runs `scripts/trufflehog-release.sh`
-in both its `verify` and its `scan` form.
+in both its `verify` and its `scan` form. A `uses:` naming the action
+through a subpath, or a `docker://` reference to upstream's image on any
+registry, counts as naming it.
 
 ### scripts/check-upload-artifact-strict.sh
 

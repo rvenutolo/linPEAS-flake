@@ -687,11 +687,11 @@ Enforced by `scripts/check-uses-no-self-reference.sh`. Wired as the `lint-workfl
 
 ## trufflehog-version-pin
 
-TruffleHog runs only as the signed release binary. `.github/trufflehog-version` holds exactly one `X.Y.Z` line with its final newline and no NUL byte, no `uses:` in `.github/workflows/**/*.yml` or `.github/actions/**/*.yml` (or `.yaml`) names the `trufflesecurity/trufflehog` action, and `.github/workflows/trufflehog.yml` runs `scripts/trufflehog-release.sh` in both its `verify` and its `scan` form.
+TruffleHog runs only as the signed release binary. `.github/trufflehog-version` holds exactly one `X.Y.Z` line with its final newline and no NUL byte, no `uses:` in `.github/workflows/**/*.yml` or `.github/actions/**/*.yml` (or `.yaml`) names the `trufflesecurity/trufflehog` action (a subpath of it included) or, as a `docker://` reference, upstream's `trufflesecurity/trufflehog` image on any registry, and `.github/workflows/trufflehog.yml` runs `scripts/trufflehog-release.sh` in both its `verify` and its `scan` form.
 
 The upstream action is a composite that runs `docker run` on an image whose `version` input defaults to `latest`, and that image carries no signature, attestation or provenance, so no check can tell a re-pushed tag from a tampered one. The release's checksums file is keyless-signed by upstream's release workflow: the `trufflehog-verify` job checks that signature with cosign and hands the scan job only the version and the tarball digest, and the `trufflehog` job runs only a tarball matching that digest. Renovate bumps the version file through its `github-releases` manager.
 
-The owner and repository match with each ASCII letter in either case, as GitHub resolves them, and a `uses:` value or key written as a YAML alias is read as its anchored text. A `run:` line whose first non-blank character is `#` runs nothing and does not count as an invocation. A missing version file or `trufflehog.yml`, or a scanned file yq cannot parse, is a could-not-run (exit 2).
+The owner and repository match with each ASCII letter in either case, as GitHub resolves them, and a `uses:` value or key written as a YAML alias is read as its anchored text. A `run:` line whose first non-blank character is `#` runs nothing and does not count as an invocation. A scanned file yq cannot parse is a finding, and the scan goes on to the other files. A missing version file or `trufflehog.yml` is a could-not-run (exit 2).
 
 Enforced by `scripts/check-trufflehog-version-pin.sh`. Wired as the `lint-workflow-security` CI job (member check `trufflehog-version-pin`) and as a pre-commit hook.
 
