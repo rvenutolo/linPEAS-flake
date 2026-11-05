@@ -1479,8 +1479,7 @@ self-enforcing.
 
 Lint: a pin digest may not move under an unchanged
 version label. Diffs action pins (`uses: <path>@<sha> # <version>`)
-in workflows/composite actions and the octoscan container digest pair
-against the base ref; a changed SHA/digest whose version
+in workflows/composite actions against the base ref; a changed SHA/digest whose version
 comment did not change is a repointed released tag (the
 digest-repoint supply-chain class) and fails. Floating-major pins
 (`# vN`) legitimately retarget across patch releases, so instead of
@@ -1492,8 +1491,7 @@ annotated-tag-object API, so a pin naming a tag object and a pin
 naming that tag's commit compare equal instead of reading as a
 repoint. This does not soften the gate: a tag object's hash covers
 the commit it tags, so retagging a released version moves the tag
-object too and the resolved commits still differ. Container digests
-name no git object and resolve to themselves.
+object too and the resolved commits still differ.
 
 ### scripts/check-pr-workflows-no-secrets.sh
 

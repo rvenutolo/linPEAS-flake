@@ -128,8 +128,8 @@ function file_pattern_matches() {
 
 # @description True if any matchString of customManager #idx matches at least
 # one line of the given file. Per-line match (grep default) — markers in this
-# repo are consumed by single-line matchStrings; multi-line matchStrings
-# (e.g. octoscan) belong to files that carry no `# renovate:` marker.
+# repo are consumed by single-line matchStrings; a multi-line matchString
+# belongs to a file that carries no `# renovate:` marker.
 # @arg $1 customManager index
 # @arg $2 absolute file path
 function match_string_hits_file() {

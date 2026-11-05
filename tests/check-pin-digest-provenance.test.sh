@@ -97,17 +97,13 @@ function run_scenario() {
 }
 
 # @description Run one scenario under en_US.UTF-8 against base and head
-# trees built at run time, each holding one workflow pin and the octoscan
-# pair, and compare the whole of the output. In that locale a bash range
-# such as `[0-9]` or `[a-f]` also matches non-ASCII characters, so each
-# case puts one where collation would admit it. OCTOSCAN_EXTRA_BASE and
-# OCTOSCAN_EXTRA_HEAD, when set by the caller, are lines appended to that
-# side's octoscan file.
+# trees built at run time, each holding one workflow pin, and compare the
+# whole of the output. In that locale a bash range such as `[0-9]` or
+# `[a-f]` also matches non-ASCII characters, so each case puts one where
+# collation would admit it.
 # @arg $1 scenario name  @arg $2 GH_STUB_MODE value  @arg $3 expected exit
 # @arg $4 the whole expected output
-# @arg $5-$10 base pin sha, base label, base octoscan digest and version,
-#   head pin sha, head label; the head octoscan digest and version follow
-#   as $11 and $12
+# @arg $5-$8 base pin sha, base label, head pin sha, head label
 function run_en_us_scenario() {
   local -r name="$1" stub_mode="$2" expected_exit="$3" expected="$4"
   shift 4
@@ -116,17 +112,10 @@ function run_en_us_scenario() {
   out_file="$(mktemp)"
   outcome_file="$(mktemp)"
   for side in base head; do
-    mkdir --parents "${trees}/${side}/.github/workflows" "${trees}/${side}/scripts"
+    mkdir --parents "${trees}/${side}/.github/workflows"
     printf 'jobs:\n  a:\n    steps:\n      - uses: actions/checkout@%s # %s\n' \
       "$1" "$2" >"${trees}/${side}/.github/workflows/wf.yml"
-    printf '#!/usr/bin/env bash\nOCTOSCAN_DIGEST="sha256:%s"\nOCTOSCAN_VERSION="%s"\n' \
-      "$3" "$4" >"${trees}/${side}/scripts/octoscan-scan.sh"
-    if [[ ${side} == base ]]; then
-      printf '%s' "${OCTOSCAN_EXTRA_BASE:-}" >>"${trees}/${side}/scripts/octoscan-scan.sh"
-    else
-      printf '%s' "${OCTOSCAN_EXTRA_HEAD:-}" >>"${trees}/${side}/scripts/octoscan-scan.sh"
-    fi
-    shift 4
+    shift 2
   done
   local actual_exit=0
   LC_ALL=en_US.UTF-8 PATH="${FIXTURES}/bin:${PATH}" \
@@ -393,7 +382,7 @@ function main() {
   # file inventories, so a scenario silently driving the wrong tree fails
   # on the numbers rather than matching a sibling's banner.
   run_scenario 'unchanged tree passes' 'base' deny 0 \
-    'pin digest provenance OK: 16 pin(s) across 4 file(s)'
+    'pin digest provenance OK: 15 pin(s) across 3 file(s)'
   run_scenario 'semver digest repoint fails' 'head-semver-repoint' deref-none 1 \
     'digest repointed under unchanged version: actions/checkout (v4.3.1): bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -> dddddddddddddddddddddddddddddddddddddddd'
   # The same head tree as the scenario above, separated only by what the
@@ -405,22 +394,17 @@ function main() {
     'head-semver-repoint' deref-alike 0 \
     'names one commit on both sides, one tag-object dereference apart: dddddddddddddddddddddddddddddddddddddddd'
   run_scenario 'version bump passes' 'head-version-bump' deny 0 \
-    'pin digest provenance OK: 6 pin(s) across 3 file(s)'
+    'pin digest provenance OK: 5 pin(s) across 2 file(s)'
   run_scenario 'multi-instance uniform bump passes' 'head-multi-instance-bump' deny 0 \
-    'pin digest provenance OK: 7 pin(s) across 3 file(s)'
+    'pin digest provenance OK: 6 pin(s) across 2 file(s)'
   run_scenario 'pin add/remove passes' 'head-added-removed' deny 0 \
-    'pin digest provenance OK: 8 pin(s) across 3 file(s)'
-  # The deny stub is load-bearing here, not incidental: a container
-  # digest names no git object, so this scenario reaching its verdict
-  # proves the tag-object dereference never fires on the octoscan pair.
-  # Relaxing this to a permissive stub would retire that guarantee
-  # silently.
-  run_scenario 'octoscan digest-only repoint fails' 'head-octoscan-digest-only' deny 1 \
-    'digest repointed under unchanged version: ghcr.io/synacktiv/octoscan (v0.1.7): sha256:1111111111111111111111111111111111111111111111111111111111111111 -> sha256:2222222222222222222222222222222222222222222222222222222222222222'
-  run_scenario 'octoscan lockstep bump passes' 'head-octoscan-lockstep' deny 0 \
-    'pin digest provenance OK: 9 pin(s) across 3 file(s)'
-  run_scenario 'octoscan shape drift errors' 'head-octoscan-shape' deny 2 \
-    'pin-digest-provenance: octoscan digest/version pair not found in scripts/octoscan-scan.sh (extraction shape drift?)'
+    'pin digest provenance OK: 7 pin(s) across 2 file(s)'
+  # A script under scripts/ that names no pinned digest is not a pin file:
+  # the check neither reads nor counts it, and its presence in head is
+  # not an extraction failure. The fixture also drops one inert pin, so
+  # the count shows the script added no file and no pin of its own.
+  run_scenario 'a scanner script with no pinned digest is not a pin file' \
+    'head-unpinned-scanner-script' deny 0 'pin digest provenance OK: 14 pin(s) across 3 file(s)'
   run_scenario 'floating repoint reachable passes' 'head-floating-repoint' reachable 0 \
     'verified reachable from master (behind) via direct commit pin'
   run_scenario 'floating repoint tag-object deref passes' 'head-floating-repoint' tagobject-reachable 0 \
@@ -454,7 +438,7 @@ function main() {
   run_scenario 'nested action dir repoint fails' 'head-nested-action-repoint' deref-none 1 \
     'digest repointed under unchanged version: actions/setup-node (v4.0.0): 3333333333333333333333333333333333333333 -> 4444444444444444444444444444444444444444'
   run_scenario 'uppercase-SHA case-only change passes' 'head-uppercase-sha-same-pin' deny 0 \
-    'pin digest provenance OK: 6 pin(s) across 4 file(s)'
+    'pin digest provenance OK: 5 pin(s) across 3 file(s)'
   run_scenario 'file rename plus repoint fails' 'head-file-rename-repoint' deref-none 1 \
     'digest repointed under unchanged version: actions/checkout (v4.3.1): bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -> 5555555555555555555555555555555555555555'
   run_scenario 'floating repoint compare-API 404 fails as violation, not exit 2' \
@@ -470,37 +454,19 @@ function main() {
   require_locale_gap en_US.UTF-8 || exit 1
   local -r sha_b='bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
   local -r sha_c='cccccccccccccccccccccccccccccccccccccccc'
-  local -r dig_1='1111111111111111111111111111111111111111111111111111111111111111'
-  local -r dig_2='2222222222222222222222222222222222222222222222222222222222222222'
   local -r repoint_tail='pin digest provenance check FAILED — a digest moved under an unchanged version label.
 A repointed released tag is the digest-repoint supply-chain class. Review upstream before unblocking.'
   run_en_us_scenario 'non-ASCII digit label is not a floating major under en_US.UTF-8' \
     reachable 1 "FAIL: digest repointed under unchanged version: actions/checkout (v٤): ${sha_b} -> ${sha_c}
 ${repoint_tail}" \
-    "${sha_b}" 'v٤' "${dig_1}" v0.1.7 "${sha_c}" 'v٤' "${dig_1}" v0.1.7
+    "${sha_b}" 'v٤' "${sha_c}" 'v٤'
   run_en_us_scenario 'text before a floating-major label is not a floating major under en_US.UTF-8' \
     reachable 1 "FAIL: digest repointed under unchanged version: actions/checkout (xv4): ${sha_b} -> ${sha_c}
 ${repoint_tail}" \
-    "${sha_b}" 'xv4' "${dig_1}" v0.1.7 "${sha_c}" 'xv4' "${dig_1}" v0.1.7
+    "${sha_b}" 'xv4' "${sha_c}" 'xv4'
   run_en_us_scenario 'non-ASCII letter in a pin sha is an unrecognized shape under en_US.UTF-8' \
     deny 2 "pin-digest-provenance: unrecognized uses: pin shape at .github/workflows/wf.yml:4:       - uses: actions/checkout@${sha_b:1}é # v4.3.1" \
-    "${sha_b}" v4.3.1 "${dig_1}" v0.1.7 "${sha_b:1}é" v4.3.1 "${dig_1}" v0.1.7
-  # The octoscan file keeps the last line each read matches. A second line
-  # holding a non-ASCII character is not one, so the pair read is the
-  # first: a moved digest under v0.1.7 in the one, and no move at all in
-  # the other.
-  local -r dig_3='3333333333333333333333333333333333333333333333333333333333333333'
-  local -r dig_4='4444444444444444444444444444444444444444444444444444444444444444'
-  OCTOSCAN_EXTRA_BASE=$'OCTOSCAN_VERSION="v0.1.٧"\n# OCTOSCAN_VERSION="v0.1.8"\n' \
-    OCTOSCAN_EXTRA_HEAD=$'OCTOSCAN_VERSION="v0.1.٧"\n# OCTOSCAN_VERSION="v0.1.8"\n' \
-    run_en_us_scenario 'a non-ASCII or commented octoscan version line is not read under en_US.UTF-8' \
-    deny 1 "FAIL: digest repointed under unchanged version: ghcr.io/synacktiv/octoscan (v0.1.7): sha256:${dig_3} -> sha256:${dig_4}
-${repoint_tail}" \
-    "${sha_b}" v4.3.1 "${dig_3}" v0.1.7 "${sha_b}" v4.3.1 "${dig_4}" v0.1.7
-  OCTOSCAN_EXTRA_HEAD="OCTOSCAN_DIGEST=\"sha256:${dig_2:1}é\""$'\n'"# OCTOSCAN_DIGEST=\"sha256:${dig_2}\""$'\n' \
-    run_en_us_scenario 'a non-ASCII or commented octoscan digest line is not read under en_US.UTF-8' \
-    deny 0 'pin digest provenance OK: 2 pin(s) across 2 file(s)' \
-    "${sha_b}" v4.3.1 "${dig_1}" v0.1.7 "${sha_b}" v4.3.1 "${dig_1}" v0.1.7
+    "${sha_b}" v4.3.1 "${sha_b:1}é" v4.3.1
   run_git_mode_scenario 'git BASE_REF mode: zero-level composite action repoint fails' 1 \
     'digest repointed under unchanged version: actions/setup-node (v4.0.0): 1111111111111111111111111111111111111111 -> 3333333333333333333333333333333333333333'
   run_git_ls_tree_failure_scenario
