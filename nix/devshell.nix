@@ -52,6 +52,9 @@
           ratchet
           scorecard
           zizmor
+          # Same flake.lock-pinned scanner the octoscan hook runs, so
+          # scripts/octoscan-scan.sh also runs by hand in the dev shell.
+          octoscan
           # Test tooling for tests/gitleaks-merge-diffs.test.sh only: the
           # gitleaks workflow runs the binary gitleaks-action installs.
           gitleaks

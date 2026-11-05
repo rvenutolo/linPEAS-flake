@@ -28,7 +28,8 @@ exposed; they alias the same derivation.
 
 The snippets follow only `nixpkgs`: the flake's separate
 `nixpkgs-unstable` input backs the dev shells, the `site` output, the
-tooling packages (`cosign`, `diffoscopeMinimal`, `git-cliff`, `nix`),
+tooling packages (`cosign`, `diffoscopeMinimal`, `git-cliff`, `nix`,
+`octoscan`),
 the `formatter`, and the lint tooling, so it stays in your lock file
 but never enters the linpeas package closure.
 
