@@ -4,10 +4,12 @@ This page is the triage runbook for the Renovate PRs that touch
 flake-input pins in `flake.nix`:
 
 - **`cachix/git-hooks.nix`** — master HEAD tracker. Fires on the
-    Friday Renovate run after upstream master moves. git-refs carry no
-    release timestamp, so its packageRule sets
-    `minimumReleaseAgeBehaviour: timestamp-optional` and Renovate raises
-    it with no `minimumReleaseAge` check.
+    Friday Renovate run after a new master HEAD's commit date is past the
+    global 7-day `minimumReleaseAge` quarantine: the `github-digest`
+    datasource reports that date as the release timestamp. Its
+    packageRule also sets `minimumReleaseAgeBehaviour: timestamp-optional`,
+    so a head that came back without a timestamp would be raised with no
+    age check.
 - **`NixOS/nixpkgs`** — stable-branch tracker. Fires when the next
     NixOS GA tag (`YY.MM`) lands plus the global 7-day
     `minimumReleaseAge` quarantine. **Blast: the linpeas runtime
@@ -102,8 +104,9 @@ bump that already landed breaks something.
 
 Bump cadence, which sets how often either case comes up:
 
-- `cachix/git-hooks.nix`: whenever upstream master advances, at most
-    once per Friday Renovate run, with no release-age wait.
+- `cachix/git-hooks.nix`: whenever upstream master advances and the new
+    head's commit date is past the 7-day quarantine, at most once per
+    Friday Renovate run.
 - `NixOS/nixpkgs`: twice per year (May `YY.05`, November `YY.11`).
 - `nixpkgs-unstable`: weekly via the `update-flake-lock.yml` cron, not
     Renovate. Carries the tooling layer.

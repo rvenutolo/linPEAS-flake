@@ -42,7 +42,7 @@ source "${_lib_dir}/lib/enumerate.sh"
 # shellcheck source=scripts/lib/repo.sh
 source "${_lib_dir}/lib/repo.sh"
 
-# renovate: datasource=git-refs depName=SchemaStore/schemastore packageName=https://github.com/SchemaStore/schemastore currentValue=master
+# renovate: datasource=github-digest depName=SchemaStore/schemastore packageName=SchemaStore/schemastore currentValue=master
 readonly SCHEMASTORE_SHA='ecae713b273dfed09cb9e29398f21b7da0bf9cd9'
 
 readonly MARKDOWNLINT_SCHEMA_URL="https://raw.githubusercontent.com/SchemaStore/schemastore/${SCHEMASTORE_SHA}/src/schemas/json/markdownlint.json"
