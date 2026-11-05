@@ -394,8 +394,30 @@ detector sets, and a secret shape one misses is the reason the other
 runs. Neither substitutes for the other, and dropping either needs a
 [security-review entry](https://github.com/rvenutolo/linPEAS-flake/blob/main/CONTRIBUTING.md#security-review-entries).
 
-- Uses only `secrets.GITHUB_TOKEN`, in its `notify` job — PR-triggered
-    workflow secret allowlist invariant holds.
+- Uses only `secrets.GITHUB_TOKEN`, in `trufflehog-verify` (for Nix's
+    GitHub fetches) and in `notify` — PR-triggered workflow secret
+    allowlist invariant holds. No token reaches the `trufflehog` job's
+    scan step.
+- The trust root is the release's `trufflehog_<version>_checksums.txt`,
+    keyless-signed through GitHub OIDC. `cosign verify-blob` accepts it
+    only with issuer `https://token.actions.githubusercontent.com` and
+    identity
+    `https://github.com/trufflesecurity/trufflehog/.github/workflows/release.yml@refs/tags/v<version>`,
+    with cosign's Rekor transparency-log check left on, and any failure
+    to verify fails the job. A compromise of that release workflow could
+    sign a malicious binary; that is the same trust any new TruffleHog
+    release asks for, and no check here can tell it apart.
+- A malicious binary can forge a clean scan and nothing else: the
+    `trufflehog` job reaches only GitHub hosts, cannot use sudo or start
+    a container, holds a `contents: read` job token, and passes no token
+    to the scan step. The required `gitleaks` scan is the second
+    detector that a forged clean scan does not silence.
+- Upstream re-pushing a container image under an existing tag does not
+    affect this scan, which reads no image. A release whose signature or
+    checksums fail verification keeps the required `trufflehog` check
+    red on every PR and on `main` until Renovate moves
+    `.github/trufflehog-version` to a release that verifies, or upstream
+    repairs that release's assets.
 - A finding is a security incident whether it verified or came back
     `unknown`. Triage is the same as for gitleaks:
     rotate → purge with `git filter-repo` → force-push behind a
@@ -403,8 +425,9 @@ runs. Neither substitutes for the other, and dropping either needs a
     re-signing requirement.
     Rotate first, without waiting to learn whether an `unknown` finding
     is live: history rewriting is the slower half of the response.
-- The `trufflesecurity/trufflehog@*` pattern is in the `allowed_actions`
-    allowlist; do not remove it without replacing the workflow.
+- No workflow uses the `trufflesecurity/trufflehog` action, which the
+    `trufflehog-version-pin` lint rejects, so this scan needs no
+    `trufflesecurity` pattern in the `allowed_actions` allowlist.
 
 ## Dependency review<a name="dependency-review"></a>
 

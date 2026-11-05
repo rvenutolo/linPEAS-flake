@@ -96,7 +96,7 @@ it.
 ```mermaid
 flowchart LR
   flakelock["update-flake-lock.yml<br/>compute-lock (read-only)<br/>+ push-and-merge (App token, REST PUT /contents)"]
-  renovate["Renovate Friday batch<br/>(action SHAs, Nix pin, octoscan digest,<br/>SchemaStore pin + tracked flake inputs)<br/>minimumReleaseAge: 7 days<br/>where the source has release timestamps"]
+  renovate["Renovate Friday batch<br/>(action SHAs, Nix pin, octoscan digest,<br/>TruffleHog version, SchemaStore pin<br/>+ tracked flake inputs)<br/>minimumReleaseAge: 7 days<br/>where the source has release timestamps"]
   pr1["PR: update flake.lock"]
   pr2["PR: action SHA / input bumps"]
   ci["required CI checks"]

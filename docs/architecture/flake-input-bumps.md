@@ -349,7 +349,7 @@ nix develop --command just verify
 doc-freshness checks, and the standalone required-check enforcers its
 `justfile` recipe lists (the changelog checks among them). Those
 enforcers have fixture harnesses of their own, which the recipe does not
-run; they run in the enforcers' CI jobs. The action-driven checks are not
+run; they run in the enforcers' CI jobs. These CI-job checks are not
 part of `just verify`:
 `markdownlint`, `typos` and `editorconfig` run as CI jobs and, locally,
 through the pre-commit hook set (`just lint` / `just check`); `commitlint`
