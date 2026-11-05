@@ -120,6 +120,12 @@ outside the workspace and hashes with `sha1sum`; the layout, shared with
 `update-flake-lock.yml`'s `push-and-merge`, is described in
 [`flake-input-bumps.md`](flake-input-bumps.md#update-flake-lock-credential-split).
 
+The weekly `flake.lock` PR is also how octoscan updates: the scanner is
+the `nixpkgs-unstable` build the lock pins, and `octoscan.yml` runs on any
+PR that changes `flake.lock`, so the bump PR's octoscan run is where a new
+octoscan version is first exercised. That run is advisory and does not
+hold the merge.
+
 No third-party flake-lock action is used: such actions take the write credential as a `with: token:` input, which would put it inside an externally-controlled action boundary. The split-job design instead confines Nix evaluation to a `contents: read` job; the `push-and-merge` job authenticates to the GitHub API as the `linpeas-flake-bumper` App via a short-lived installation token (`actions/create-github-app-token`), then commits files via REST `PUT /contents`. No `git push`, no PAT in `.git/config`. REST commits authenticated by an App installation token are auto-signed by GitHub's web-flow GPG key, so the bump branch satisfies `required_signatures` on `main`.
 
 ## Flake-input staleness watchdog

@@ -81,9 +81,10 @@ in
     entry = "${pkgs-unstable.writeShellScript "octoscan-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
-      # Skip inside the nix build sandbox, so `nix flake check` does
-      # not run the scan: the local pre-commit run and the octoscan
-      # workflow are where it runs.
+      # Skip inside the nix build sandbox: `nix flake check` runs in
+      # the required `flake-check` job, and scanning there would make
+      # an advisory scanner block merge. The local pre-commit run and
+      # the octoscan workflow are where it runs.
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
       PATH="${pkgs-unstable.octoscan}/bin:''${PATH}"
       export PATH

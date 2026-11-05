@@ -91,6 +91,16 @@ tree.)
     scan script, `flake.lock` and `nix/packages.nix` (the last two can
     change the octoscan binary); push to `main`; weekly
     Friday cron (the whole workflow directory, unfiltered); manual dispatch.
+- **Trust root:** the nixpkgs build of octoscan from the flake's locked
+    `nixpkgs-unstable` (`.#octoscan`), built from upstream's tagged source
+    with a pinned Go vendor hash. Upstream publishes no checksums,
+    signatures or attestations for its release binaries, so there is no
+    release artifact to verify instead. It updates through `flake.lock`
+    bumps. The scanner runs as a native process: in CI it can reach
+    sudo and the `scan` job's `GITHUB_TOKEN` (`contents: read`,
+    `actions: read`, `security-events: write`; setup-nix writes it into
+    `nix.conf`), the same exposure the Trivy and Grype jobs accept, under
+    harden-runner's `block` egress policy.
 - **Status:** advisory by design. It is the cheapest scanner, but it fails
     on *any* finding (no severity threshold), so as a required check a
     single false positive would block merge. On non-PR runs, a finding, and

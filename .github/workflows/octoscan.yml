@@ -90,7 +90,14 @@ jobs:
       - name: octoscan scan
         id: scan
         # The scanner is the flake.lock-pinned nixpkgs build exposed as
-        # `.#octoscan`, the same binary the pre-commit hook runs.
+        # `.#octoscan`, the same binary the pre-commit hook runs. It runs
+        # as a native process in this job, so it can reach what any step
+        # here can: the workspace, sudo, and this job's GITHUB_TOKEN
+        # (setup-nix writes it into nix.conf as a github.com access
+        # token), whose scopes include `security-events: write`. That is
+        # the same exposure the Trivy and Grype jobs in image-cve-scan.yml
+        # accept. The scanner's trust root is the nixpkgs source build
+        # pinned by flake.lock; see docs/security/workflow-scanners.md.
         run: |
           set -Eeuo pipefail
           rc=0
