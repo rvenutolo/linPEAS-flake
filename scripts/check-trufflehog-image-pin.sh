@@ -29,10 +29,10 @@
 # LINT_ALLOW_EMPTY_SCAN=1 accepts an empty scan set.
 # Exits 0 when every TruffleHog step reads its image from the file and the
 # file names its action pin's release by digest, 1 on any step that does
-# not, has no pin comment, or sits in a file yq cannot parse, and on an
-# image file that is missing or not that one line, 2 when the lint could
-# not run: yq or jq is absent, the globs match no file, or
-# WORKFLOW_FILE_FILTER selects none of them.
+# not or has no pin comment, on any selected workflow file yq cannot
+# parse, and on an image file that is missing or not that one line, 2
+# when the lint could not run: yq or jq is absent, the globs match no
+# file, or WORKFLOW_FILE_FILTER selects none of them.
 
 set -Eeuo pipefail
 IFS=$'\n\t'

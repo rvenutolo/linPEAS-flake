@@ -310,7 +310,7 @@ function deref_tag_object() {
 # Resolve a pin to the commit it names. Only a 40-hex git SHA can be a
 # tag object; a container digest (`sha256:…`) names no git object and
 # resolves to itself without an API call, which is what keeps the
-# octoscan pair off this path entirely.
+# octoscan pair and the TruffleHog image ref off this path entirely.
 # @arg $1 uses path (owner/repo[/subpath]) or container image
 # @arg $2 pin sha or container digest
 # @sets DEREF_RESULT
@@ -469,7 +469,8 @@ while IFS= read -r key; do
   head_shas="$(awk -F'|' -v k="${key}" \
     '($2 "|" $3) == k { print $4 }' <<<"${head_tuples}" | sort -u)"
   # Key only on one side = pin (or version) added/removed — not a
-  # repoint. New versions ride minimumReleaseAge + the daily audit.
+  # repoint. New versions ride minimumReleaseAge (where the source has
+  # release timestamps) + the daily audit.
   [[ -n ${base_shas} && -n ${head_shas} ]] || continue
   [[ ${base_shas} == "${head_shas}" ]] && continue
   path="${key%%|*}"
@@ -492,8 +493,8 @@ while IFS= read -r key; do
     # repoint without softening the gate: a tag object's hash covers the
     # commit it tags, so retagging a released version moves the tag
     # object too and the resolved commits still differ. Container
-    # digests resolve to themselves, so the octoscan pair never reaches
-    # an API call here.
+    # digests resolve to themselves, so the octoscan pair and the
+    # TruffleHog image ref never reach an API call here.
     resolved_base=""
     while IFS= read -r sha; do
       [[ -n ${sha} ]] || continue

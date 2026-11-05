@@ -334,7 +334,7 @@ commit, such as a hand-resolved conflict: the action drops merges, and
 `scripts/gitleaks-merge-diffs.sh`, closes that gap on every trigger. It
 runs the gitleaks binary the action installed over the merge commits in
 the PR's base..head range, the pushed before..after range (the full
-history when the before SHA is all zeros, empty or absent), or the full
+history when the before SHA is all zeros, empty, or not in this clone), or the full
 history of the checked-out commit on the cron and a dispatch, diffing each merge against its
 first parent. That diff repeats what the merged side carried, which the
 other scans already cover; the redundancy keeps the scan to the normal
@@ -373,8 +373,8 @@ harden-runner egress block lets it reach only GitHub, so a GitHub
 credential can verify and any other provider's comes back `unknown`.
 Both fail the scan. An `unverified` result passes: either the provider
 rejected the credential, or its detector has no verifier and never
-checked it. Gitleaks' pattern rules are the scan that flags those
-shapes. The action runs a container image, and its `version:` input
+checked it. The separate `gitleaks` scan still fails on such a credential
+when one of its rules matches it. The action runs a container image, and its `version:` input
 pins that image by tag and digest to the action pin's release: a step
 reads the ref from `.github/trufflehog-image` and passes it on, and the
 `trufflehog-image-pin` lint fails when the file names another release.

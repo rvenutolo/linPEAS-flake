@@ -102,8 +102,8 @@ code — it exempts a permissions gap exactly as it exempts a rate limit.
 Neither becomes valid on an immediate retry, and a rate limit is made
 worse by one.
 
-An error that survives that retry is confined to the item it happened
-on: a PR in the bot-PR loop, a run in the automated loop. The sweep
+An error against one PR or run that survives that retry is confined to
+it: a PR in the bot-PR loop, a run in the automated loop. The sweep
 processes every remaining item in both loops and then fails the job,
 naming the items that errored. The one exception is a rate limit:
 continuing to request against an exhausted budget can make it worse, so
@@ -128,7 +128,7 @@ re-run notice and in the escalation issue.
 The watchdog fetches each candidate run through `scripts/fetch-ci-run.sh`,
 which reads job annotations and so needs `checks: read` beside the
 `actions: write` the re-run holds. A fetch or classifier failure counts as an
-error against that PR or run, handled like any other per-item error below.
+error against that PR or run, handled like any other per-item error (see above).
 
 ## Why it exists
 

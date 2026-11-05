@@ -693,7 +693,7 @@ Every `trufflesecurity/trufflehog` step in `.github/workflows/*.yml` (or `.yaml`
 
 {% endraw %}
 
-Renovate moves only the action pin; it cannot move the image, because ghcr.io publishes no release timestamps and its release-age gate never clears one. On the Renovate PR this lint stays red until `renovate-flake-lock-refresh.yml` runs `scripts/refresh-trufflehog-image.sh`, which resolves the new tag's digest on ghcr.io, and commits the file; the [flake-input bump runbook](../architecture/flake-input-bumps.md#trufflehog-image-refresh) has the manual fallback. The file lives outside `.github/workflows/`, so the App that commits it needs no `workflows` permission.
+Renovate moves only the action pin: no Renovate manager reads the image file, whose tag follows the action pin. On the Renovate PR this lint stays red until `renovate-flake-lock-refresh.yml` runs `scripts/refresh-trufflehog-image.sh`, which resolves the new tag's digest on ghcr.io, and commits the file; the [flake-input bump runbook](../architecture/flake-input-bumps.md#trufflehog-image-refresh) has the manual fallback. The file lives outside `.github/workflows/`, so the App that commits it needs no `workflows` permission.
 
 The owner and repository match with each ASCII letter in either case, as GitHub resolves them. A `version:` written as a YAML alias is read as its anchored text. A step with no `# vX.Y.Z` comment is a finding, since there is no release to compare against. A missing image file, or one holding anything but that one line and its final newline, is a finding; the file is read only when some step names the action.
 
