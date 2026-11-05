@@ -2858,6 +2858,47 @@ Exit codes:
       the expected shape
 ```
 
+### scripts/trufflehog-release.sh
+
+Verify and run the TruffleHog release binary pinned in
+.github/trufflehog-version. `verify` downloads the release's checksums
+file with its keyless cosign signature and certificate, checks the
+signature against the TruffleHog release workflow's identity for that
+tag, and prints the linux/amd64 tarball's pinned digest. `scan` downloads
+that tarball, checks it against a digest `verify` printed, extracts the
+`trufflehog` binary and runs a secret scan over the checked-out
+repository, over the commit range the triggering event implies.
+
+Splitting the two lets the job that holds the signature tooling hand the
+job that runs the scan nothing but a version and a digest.
+
+Usage:
+
+```text
+  trufflehog-release.sh verify
+  trufflehog-release.sh scan --version <X.Y.Z> --sha256 <64 hex>
+```
+
+Environment (scan): GITHUB_EVENT_NAME and GITHUB_EVENT_PATH select the
+range exactly as the trufflesecurity/trufflehog action does.
+
+Test seams: TRUFFLEHOG_VERSION_FILE_OVERRIDE replaces the version file
+path; TRUFFLEHOG_RELEASE_BASE_URL_OVERRIDE replaces the release download
+prefix.
+
+Exits 0 when the signature verified (verify) or the scan found nothing
+(scan), 1 when verification failed (a cosign failure, a checksums file
+without exactly one tarball line or with a malformed digest, a digest
+mismatch, a tarball without a regular-file `trufflehog`), 2 when the
+script could not run (a missing tool, a missing or malformed version
+file, a malformed argument, an unsupported event, a download failure).
+A scan that finds a secret exits with the binary's own non-zero status.
+
+**Options:**
+
+- `verify` — print `version=<X.Y.Z>` and `sha256=<hex>` on stdout
+- `scan` — scan the repository at the current work tree's root
+
 ## Libraries
 
 ### scripts/lib/ascii-match.sh

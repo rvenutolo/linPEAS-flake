@@ -174,3 +174,4 @@ Regenerate with `scripts/refresh-test-harnesses.sh`.
 | `tests/run-lint-group.test.sh`                 | `scripts/run-lint-group.sh`                         | —                                            |
 | `tests/select-automated-runs.test.sh`          | `scripts/select-automated-runs.sh`                  | —                                            |
 | `tests/site-no-bytecode.test.sh`               | `mkdocs.yml`                                        | `tests/fixtures/site-no-bytecode`            |
+| `tests/trufflehog-release.test.sh`             | `scripts/trufflehog-release.sh`                     | —                                            |

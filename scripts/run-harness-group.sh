@@ -115,6 +115,7 @@ readonly -a HARNESSES=(
   'run-harness-group|run-harness-group.test.sh|'
   'run-lint-group|run-lint-group.test.sh|'
   'linpeas-pin-assert|linpeas-pin-assert.test.sh|'
+  'trufflehog-release|trufflehog-release.test.sh|'
   # Tracked harnesses outside tests/. Nearly all of `.claude/` is untracked,
   # but the docs-audit and docs-audit-fix skills and the
   # seeded-defect eval are committed, and their harnesses are reachable from
