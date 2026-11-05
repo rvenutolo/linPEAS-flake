@@ -14,7 +14,9 @@
 # search at it), and requires exit 2 with the diagnostic
 # `scripts/lib/repo.sh` prints, which leads with the script's own name.
 #
-# Rows run with read-only arguments only (`--check` for the generators).
+# Rows run with read-only arguments only (`--check` for the generators;
+# `scan` with a well-formed version and digest for
+# `trufflehog-release.sh`, which resolves the root before any download).
 # A tripwire `gh`, `curl`, `docker` and `nix` sits first on PATH, so a
 # script that got past its root lookup cannot reach the network or a
 # container; any call is logged and fails the run.
@@ -104,7 +106,7 @@ readonly -a ROWS=(
   'refresh-scripts-reference.sh|--check'
   'refresh-test-harnesses.sh|--check'
   'refresh-treefmt-config.sh|--check'
-  'refresh-trufflehog-image.sh|--check'
+  'trufflehog-release.sh|scan,--version,3.99.4,--sha256,0000000000000000000000000000000000000000000000000000000000000000'
 )
 
 if ((${#ROWS[@]} == 0)); then

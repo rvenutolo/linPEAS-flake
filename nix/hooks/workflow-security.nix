@@ -38,18 +38,18 @@
     pass_filenames = false;
     language = "system";
   };
-  trufflehog-image-pin = {
+  trufflehog-version-pin = {
     enable = true;
-    name = "trufflehog-image-pin";
-    description = "trufflesecurity/trufflehog steps read their image from .github/trufflehog-image, which pins the action pin's release by tag and digest.";
-    entry = "${pkgs-unstable.writeShellScript "trufflehog-image-pin-hook" ''
+    name = "trufflehog-version-pin";
+    description = "TruffleHog runs only as the signed release binary pinned in .github/trufflehog-version.";
+    entry = "${pkgs-unstable.writeShellScript "trufflehog-version-pin-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
       export PATH="${pkgs-unstable.yq-go}/bin:${pkgs-unstable.jq}/bin:$PATH"
-      exec ${pkgs-unstable.bash}/bin/bash scripts/check-trufflehog-image-pin.sh
+      exec ${pkgs-unstable.bash}/bin/bash scripts/check-trufflehog-version-pin.sh
     ''}";
-    files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/trufflehog-image|scripts/check-trufflehog-image-pin\\.sh)$";
+    files = "^(\\.github/workflows/.*\\.ya?ml|\\.github/actions/.*\\.ya?ml|\\.github/trufflehog-version|scripts/check-trufflehog-version-pin\\.sh)$";
     pass_filenames = false;
     language = "system";
   };

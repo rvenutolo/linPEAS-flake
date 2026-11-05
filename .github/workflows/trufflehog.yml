@@ -16,8 +16,65 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Verifies the release and never executes the TruffleHog binary, so the
+  # broad nix and Sigstore egress this job needs is never reachable from
+  # code TruffleHog ships. The scan job below enforces this job's result;
+  # it is not a required check itself.
+  trufflehog-verify:
+    name: trufflehog-verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.verify.outputs.version }}
+      sha256: ${{ steps.verify.outputs.sha256 }}
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            *.githubapp.com:443
+            api.github.com:443
+            cache.nixos.org:443
+            codeload.github.com:443
+            fulcio.sigstore.dev:443
+            github.com:443
+            objects.githubusercontent.com:443
+            rekor.sigstore.dev:443
+            release-assets.githubusercontent.com:443
+            releases.nixos.org:443
+            tarballs.nixos.org:443
+            tuf-repo-cdn.sigstore.dev:443
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Nix supplies the lock-pinned cosign the verify step runs.
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      # Checks the checksums file's keyless signature against the
+      # TruffleHog release workflow's identity for the pinned tag, then
+      # writes the version and the linux/amd64 tarball digest as outputs.
+      - name: verify the pinned TruffleHog release
+        id: verify
+        run: nix shell .#cosign --command bash scripts/trufflehog-release.sh verify >> "${GITHUB_OUTPUT}"
+
+  # The binary runs on the runner, not in a container, so no token reaches
+  # the scan step. The job token, which checkout and harden-runner read as
+  # an input, is `contents: read` only, the job reaches only GitHub hosts,
+  # it cannot use sudo or start a container and it uses no Actions cache:
+  # a malicious binary can forge a clean scan and at most obtain that
+  # token, which reads nothing a public clone does not.
   trufflehog:
     name: trufflehog
+    needs: trufflehog-verify
+    # A skipped required check counts as passing, so this job runs even
+    # when verification failed and fails at its gate step instead.
+    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -26,54 +83,40 @@ jobs:
       - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: block
+          disable-sudo-and-containers: true
           allowed-endpoints: >
             api.github.com:443
-            ghcr.io:443
             github.com:443
             objects.githubusercontent.com:443
-            pkg-containers.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+      - name: require a verified release
+        env:
+          VERIFY_RESULT: ${{ needs.trufflehog-verify.result }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          if [[ ${VERIFY_RESULT} != 'success' ]]; then
+            printf 'trufflehog-verify concluded %s; the release is unverified\n' "${VERIFY_RESULT}" >&2
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      # The action runs `docker run "${IMAGE}:${VERSION}"` and defaults
-      # VERSION to `latest`. .github/trufflehog-image pins the image by
-      # tag+digest to the action pin's release (lint: trufflehog-image-pin);
-      # renovate-flake-lock-refresh.yml rewrites it when Renovate moves the
-      # pin. The shape is checked again here because the value reaches a
-      # `docker run` argument.
-      # The digest must be the one ghcr.io serves for the pin's tag: a
-      # hand-edited file, or a tag re-pushed upstream, fails here.
-      - name: check the image ref against ghcr.io
-        run: bash scripts/refresh-trufflehog-image.sh --check
-      - name: read the pinned TruffleHog image
-        id: trufflehog-image
+      # The script rejects a version or digest of the wrong shape before
+      # downloading, checks the tarball against the verified digest and
+      # runs the binary with `--results=verified,unknown`: egress is
+      # blocked, so only GitHub credentials can verify, and any other
+      # provider's finding is `unknown` and must still fail.
+      - name: scan with the verified TruffleHog binary
         env:
-          LC_ALL: C
-        run: |
-          set -Eeuo pipefail
-          IFS=$'\n\t'
-          ref=''
-          # Status 0 means `read` stopped at a NUL: more bytes follow.
-          if IFS= read -r -d '' ref < .github/trufflehog-image; then
-            printf '.github/trufflehog-image holds a NUL byte\n' >&2
-            exit 1
-          fi
-          if [[ ! "${ref}" =~ ^[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$'\n'$ ]]; then
-            printf '.github/trufflehog-image is not one X.Y.Z@sha256:<64 hex> line\n' >&2
-            exit 1
-          fi
-          printf 'version=%s\n' "${ref%$'\n'}" >> "${GITHUB_OUTPUT}"
-      - uses: trufflesecurity/trufflehog@c85580b712841eda4c53bc28fc6ace6100e8c16c # v3.99.4
-        with:
-          version: ${{ steps.trufflehog-image.outputs.version }}
-          # Egress is blocked, so only GitHub credentials can verify; any
-          # other provider's finding is `unknown`, and must still fail.
-          extra_args: --results=verified,unknown
+          VERSION: ${{ needs.trufflehog-verify.outputs.version }}
+          SHA256: ${{ needs.trufflehog-verify.outputs.sha256 }}
+        run: bash scripts/trufflehog-release.sh scan --version "${VERSION}" --sha256 "${SHA256}"
 
   notify:
     name: notify
-    needs: trufflehog
+    needs: [trufflehog-verify, trufflehog]
     if: always() && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -92,13 +135,34 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Both jobs must succeed. The scan job runs even in a cancelled run
+      # and then fails at its gate, so after a cancelled verification its
+      # failure is that gate's and the run counts as `cancelled`, which
+      # the composite files as an infrastructure failure. After a
+      # successful verification the scan job's own result counts; any
+      # other result is `failure`.
+      - name: combine the job results
+        id: combined
+        env:
+          VERIFY_RESULT: ${{ needs.trufflehog-verify.result }}
+          SCAN_RESULT: ${{ needs.trufflehog.result }}
+        run: |
+          set -Eeuo pipefail
+          IFS=$'\n\t'
+          result='failure'
+          if [[ ${VERIFY_RESULT} == 'cancelled' ]]; then
+            result='cancelled'
+          elif [[ ${VERIFY_RESULT} == 'success' ]]; then
+            case "${SCAN_RESULT}" in
+            success | cancelled) result="${SCAN_RESULT}" ;;
+            esac
+          fi
+          printf 'result=%s\n' "${result}" >> "${GITHUB_OUTPUT}"
       # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
       - uses: ./.github/actions/notify-workflow-result # zizmor: ignore[self-repository]
         with:
-          # Raw job result: the composite files cancelled runs as
-          # infrastructure failures and is inert on skipped. A pull
-          # request run's failure shows on the pull request itself.
-          result: ${{ needs.trufflehog.result }}
+          # A pull request run's failure shows on the pull request itself.
+          result: ${{ steps.combined.outputs.result }}
           label: trufflehog-failure
           title: "trufflehog: secret detected, or the scan could not run"
           label-description: trufflehog found a secret outside a pull request, or the trufflehog scan could not run
@@ -106,9 +170,9 @@ jobs:
             The `trufflehog` workflow did not pass on a
             `${{ github.event_name }}` run: trufflehog reported a secret
             in the repository history that it either confirmed live or
-            could not verify, a step (the trufflehog image pull and the
-            scan itself included) failed, or the job was cancelled. The
-            run page and job log say which.
+            could not verify, a step (the release download or
+            verification and the scan itself included) failed, or a job
+            was cancelled. The run page and job logs say which.
 
             Run:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

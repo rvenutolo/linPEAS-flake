@@ -685,19 +685,15 @@ The slug is `GITHUB_REPOSITORY`, defaulting to this repository's, and it matches
 
 Enforced by `scripts/check-uses-no-self-reference.sh`. Wired as the `lint-workflow-security` CI job (member check `uses-no-self-reference`) and as a pre-commit hook.
 
-## trufflehog-image-pin
+## trufflehog-version-pin
 
-{% raw %}
+TruffleHog runs only as the signed release binary. `.github/trufflehog-version` holds exactly one `X.Y.Z` line with its final newline and no NUL byte, no `uses:` in `.github/workflows/**/*.yml` or `.github/actions/**/*.yml` (or `.yaml`) names the `trufflesecurity/trufflehog` action (a subpath of it included) or, as a `docker://` reference, upstream's `trufflesecurity/trufflehog` image on any registry, and `.github/workflows/trufflehog.yml` runs `scripts/trufflehog-release.sh` in both its `verify` and its `scan` form.
 
-Every `trufflesecurity/trufflehog` step in `.github/workflows/*.yml` (or `.yaml`) passes `version: ${{ steps.trufflehog-image.outputs.version }}`, and `.github/trufflehog-image` holds exactly one line `X.Y.Z@sha256:<64 hex>`, where `X.Y.Z` is the version in each such step's `# vX.Y.Z` pin comment. The action is a composite that runs `docker run "${IMAGE}:${VERSION}"` with `version` defaulting to `latest`, so the SHA pin on `uses:` fixes only the wrapper script: without the input every run executes whatever image `latest` names. The `trufflehog-image` step in `trufflehog.yml` reads the file, checks the same shape, and hands the ref to the action. The tag+digest value makes the image reference immutable, and tying its tag to the pin comment keeps image and wrapper on one release.
+The upstream action is a composite that runs `docker run` on an image whose `version` input defaults to `latest`, and that image carries no signature, attestation or provenance, so no check can tell a re-pushed tag from a tampered one. The release's checksums file is keyless-signed by upstream's release workflow: the `trufflehog-verify` job checks that signature with cosign and hands the scan job only the version and the tarball digest, and the `trufflehog` job runs only a tarball matching that digest. Renovate bumps the version file through its `github-releases` manager.
 
-{% endraw %}
+The owner and repository match with each ASCII letter in either case, as GitHub resolves them, and a `uses:` value or key written as a YAML alias is read as its anchored text. A `run:` line whose first non-blank character is `#` runs nothing and does not count as an invocation. A scanned file yq cannot parse is a finding, and the scan goes on to the other files. A missing version file or `trufflehog.yml` is a could-not-run (exit 2).
 
-Renovate moves only the action pin: no Renovate manager reads the image file, whose tag follows the action pin. On the Renovate PR this lint stays red until `renovate-flake-lock-refresh.yml` runs `scripts/refresh-trufflehog-image.sh`, which resolves the new tag's digest on ghcr.io, and commits the file; the [flake-input bump runbook](../architecture/flake-input-bumps.md#trufflehog-image-refresh) has the manual fallback. The file lives outside `.github/workflows/`, so the App that commits it needs no `workflows` permission.
-
-The owner and repository match with each ASCII letter in either case, as GitHub resolves them. A `version:` written as a YAML alias is read as its anchored text. A step with no `# vX.Y.Z` comment is a finding, since there is no release to compare against. A missing image file, or one holding anything but that one line and its final newline, is a finding; the file is read only when some step names the action.
-
-Enforced by `scripts/check-trufflehog-image-pin.sh`. Wired as the `lint-workflow-security` CI job (member check `trufflehog-image-pin`) and as a pre-commit hook.
+Enforced by `scripts/check-trufflehog-version-pin.sh`. Wired as the `lint-workflow-security` CI job (member check `trufflehog-version-pin`) and as a pre-commit hook.
 
 ## fork-guard-release
 

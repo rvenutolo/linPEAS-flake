@@ -367,27 +367,25 @@ included, and the full history (`fetch-depth: 0`) on the cron and a
 dispatch. A change made only in a merge commit is not scanned: TruffleHog
 sees no content in a merge's own diff. Gitleaks' merge-diff step is the
 scan that covers it. Required check named `trufflehog` in the `protect-main`
-ruleset. It runs with `extra_args: --results=verified,unknown`. TruffleHog
+ruleset. It runs with `--results=verified,unknown`. TruffleHog
 verifies a candidate by calling its issuing provider, and the job's
 harden-runner egress block lets it reach only GitHub, so a GitHub
 credential can verify and any other provider's comes back `unknown`.
 Both fail the scan. An `unverified` result passes: either the provider
 rejected the credential, or its detector has no verifier and never
 checked it. The separate `gitleaks` scan still fails on such a credential
-when one of its rules matches it. The action runs a container image, and its `version:` input
-pins that image by tag and digest to the action pin's release: a step
-reads the ref from `.github/trufflehog-image` and passes it on, and the
-`trufflehog-image-pin` lint fails when the file names another release.
-Before the scan, `scripts/refresh-trufflehog-image.sh --check` asks
-ghcr.io for the pin tag's digest and fails the job when the file holds
-another: a hand-edited digest, or a tag re-pushed upstream, stops the
-scan until the file is refreshed. `check-pin-digest-provenance.sh`
-also fails a PR that moves the digest under an unchanged tag.
-Renovate moves only the action pin. On its PR,
-`renovate-flake-lock-refresh.yml` resolves the new release's digest on
-ghcr.io and commits the file, as
-[the flake-input bump runbook](../architecture/flake-input-bumps.md#trufflehog-image-refresh)
-describes.
+when one of its rules matches it. TruffleHog runs as the release binary
+named by `.github/trufflehog-version`, not as upstream's action, whose
+container image is unsigned. The `trufflehog-verify` job checks the
+release's checksums file against its keyless cosign signature from
+upstream's release workflow and hands the `trufflehog` job only the
+version and the tarball digest; the `trufflehog` job downloads the
+tarball, checks that digest, and runs the binary with GitHub-only egress
+and sudo and containers disabled, through `scripts/trufflehog-release.sh`.
+A skipped required check counts as passing, so the `trufflehog` job runs
+even when verification failed and fails at its gate step. The
+`trufflehog-version-pin` lint keeps the action out and both invocations
+wired. Renovate bumps the version file.
 Like gitleaks, a failed or cancelled run outside a pull request files a
 deduped `trufflehog-failure` issue through its `notify` job.
 
@@ -396,8 +394,35 @@ detector sets, and a secret shape one misses is the reason the other
 runs. Neither substitutes for the other, and dropping either needs a
 [security-review entry](https://github.com/rvenutolo/linPEAS-flake/blob/main/CONTRIBUTING.md#security-review-entries).
 
-- Uses only `secrets.GITHUB_TOKEN`, in its `notify` job — PR-triggered
-    workflow secret allowlist invariant holds.
+- Uses only `secrets.GITHUB_TOKEN`, in `trufflehog-verify` (for Nix's
+    GitHub fetches) and in `notify` — PR-triggered workflow secret
+    allowlist invariant holds. No token reaches the `trufflehog` job's
+    scan step.
+- The trust root is the release's `trufflehog_<version>_checksums.txt`,
+    keyless-signed through GitHub OIDC. `cosign verify-blob` accepts it
+    only with issuer `https://token.actions.githubusercontent.com` and
+    identity
+    `https://github.com/trufflesecurity/trufflehog/.github/workflows/release.yml@refs/tags/v<version>`,
+    with cosign's Rekor transparency-log check left on, and any failure
+    to verify fails the job. A compromise of that release workflow could
+    sign a malicious binary; that is the same trust any new TruffleHog
+    release asks for, and no check here can tell it apart.
+- A malicious binary can forge a clean scan and at most obtain the
+    job's `contents: read` token: it runs on the runner as the runner
+    user, so it could tamper with the post-step code of `actions/checkout`
+    or `step-security/harden-runner`, which receive `github.token` as an
+    input. The `trufflehog` job reaches only GitHub hosts, cannot use
+    sudo or start a container, uses no Actions cache, and passes no token
+    to the scan step, so that token reads nothing a public clone does
+    not. The required `gitleaks` scan is the second
+    detector that a forged clean scan does not silence.
+- Upstream re-pushing a container image under an existing tag does not
+    affect this scan, which reads no image. A release whose signature or
+    checksums fail verification, or whose tarball does not match the
+    verified checksums and so fails the scan's digest check, keeps the
+    required `trufflehog` check red on every PR and on `main` until Renovate moves
+    `.github/trufflehog-version` to a release that verifies, or upstream
+    repairs that release's assets.
 - A finding is a security incident whether it verified or came back
     `unknown`. Triage is the same as for gitleaks:
     rotate → purge with `git filter-repo` → force-push behind a
@@ -405,8 +430,9 @@ runs. Neither substitutes for the other, and dropping either needs a
     re-signing requirement.
     Rotate first, without waiting to learn whether an `unknown` finding
     is live: history rewriting is the slower half of the response.
-- The `trufflesecurity/trufflehog@*` pattern is in the `allowed_actions`
-    allowlist; do not remove it without replacing the workflow.
+- No workflow uses the `trufflesecurity/trufflehog` action, which the
+    `trufflehog-version-pin` lint rejects, so this scan needs no
+    `trufflesecurity` pattern in the `allowed_actions` allowlist.
 
 ## Dependency review<a name="dependency-review"></a>
 

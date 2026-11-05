@@ -1037,11 +1037,10 @@ Keep EXPECTED in sync with the lintTools list in nix/devshell-lint.nix.
 Lint: every workflow that writes a flake.lock runs a
 generator for each freshness hook that declares `flake.lock` a
 trigger, runs each generator it lists as workflow-derived from a
-freshness hook that declares `.github/workflows/ci.yml` a trigger,
-lists each pin-derived generator in no other list, and may commit
-exactly the lock plus the outputs all three generator lists declare
-with `@generates` / `@generates-block`, and uploads exactly that
-committable set from the job that writes the lock. A hook's
+freshness hook that declares `.github/workflows/ci.yml` a trigger, and
+may commit exactly the lock plus the outputs both generator lists
+declare with `@generates` / `@generates-block`, and uploads exactly
+that committable set from the job that writes the lock. A hook's
 trigger is its `files` and `excludes` patterns evaluated as pre-commit
 evaluates them, with Python `re.search`; a pattern that does not
 compile is a could-not-run. `ephemeral-refs-gap-fresh` is exempt from
@@ -1480,9 +1479,8 @@ self-enforcing.
 
 Lint: a pin digest may not move under an unchanged
 version label. Diffs action pins (`uses: <path>@<sha> # <version>`)
-in workflows/composite actions, the octoscan container digest pair and
-the TruffleHog image ref (`.github/trufflehog-image`) against the base
-ref; a changed SHA/digest whose version
+in workflows/composite actions and the octoscan container digest pair
+against the base ref; a changed SHA/digest whose version
 comment did not change is a repointed released tag (the
 digest-repoint supply-chain class) and fails. Floating-major pins
 (`# vN`) legitimately retarget across patch releases, so instead of
@@ -2052,13 +2050,16 @@ Exits 0 when every invocation is guarded, 1 when one is not. Exits 2
 when the check cannot run: `shfmt` or `jq` absent from PATH, a script
 `shfmt` cannot parse, or a scan set matching no script.
 
-### scripts/check-trufflehog-image-pin.sh
+### scripts/check-trufflehog-version-pin.sh
 
-Lint: every `trufflesecurity/trufflehog` step in
-`.github/workflows/*.yml` (or `.yaml`) passes
-`version: ${{ steps.trufflehog-image.outputs.version }}`, and
-`.github/trufflehog-image` holds one line `X.Y.Z@sha256:<64 hex>` whose
-`X.Y.Z` is the version in each such step's `# vX.Y.Z` pin comment.
+Lint: TruffleHog runs only as the signed release binary
+pinned in `.github/trufflehog-version`. The file holds one `X.Y.Z` line,
+no workflow or composite action `uses:` the
+`trufflesecurity/trufflehog` action, and
+`.github/workflows/trufflehog.yml` runs `scripts/trufflehog-release.sh`
+in both its `verify` and its `scan` form. A `uses:` naming the action
+through a subpath, or a `docker://` reference to upstream's image on any
+registry, counts as naming it.
 
 ### scripts/check-upload-artifact-strict.sh
 
@@ -2286,17 +2287,6 @@ exposed by `nix/treefmt-config.nix` as `devTooling.<system>.treefmtConfig`.
 **Options:**
 
 - `--check` — exit 1 if the doc would change; exit 2 if the check cannot run (doc missing, or nix eval fails); do not mutate the working tree
-
-### scripts/refresh-trufflehog-image.sh
-
-Write .github/trufflehog-image, the TruffleHog container
-image ref `trufflehog.yml` hands the trufflesecurity/trufflehog action,
-from the release in that action's `# vX.Y.Z` pin comment and the digest
-ghcr.io serves for that release's tag.
-
-**Options:**
-
-- `--check` — exit 1 if the file is missing or would change; exit 2 if the workflow is missing or unparsable, if it does not pin the action at exactly one release, or if ghcr.io cannot be reached or answers without one well-formed digest
 
 ## Other
 
@@ -2857,6 +2847,49 @@ Exit codes:
   2  bad arguments, or input that is not an array of run objects of
       the expected shape
 ```
+
+### scripts/trufflehog-release.sh
+
+Verify and run the TruffleHog release binary pinned in
+.github/trufflehog-version. `verify` downloads the release's checksums
+file with its keyless cosign signature and certificate, checks the
+signature against the TruffleHog release workflow's identity for that
+tag, and prints the linux/amd64 tarball's pinned digest. `scan` downloads
+that tarball, checks it against a digest `verify` printed, extracts the
+`trufflehog` binary and runs a secret scan over the checked-out
+repository, over the commit range the triggering event implies.
+
+Splitting the two lets the job that holds the signature tooling hand the
+job that runs the scan nothing but a version and a digest.
+
+Usage:
+
+```text
+  trufflehog-release.sh verify
+  trufflehog-release.sh scan --version <X.Y.Z> --sha256 <64 hex>
+```
+
+Environment (scan): GITHUB_EVENT_NAME and GITHUB_EVENT_PATH select the
+range exactly as the trufflesecurity/trufflehog action does.
+
+Test seams: TRUFFLEHOG_VERSION_FILE_OVERRIDE replaces the version file
+path; TRUFFLEHOG_RELEASE_BASE_URL_OVERRIDE replaces the release download
+prefix.
+
+Exits 0 when the signature verified (verify) or the scan found nothing
+(scan), 1 when verification failed (a cosign failure, a checksums file
+without exactly one tarball line or with a malformed digest, a digest
+mismatch, a tarball without a regular-file `trufflehog`), 2 when the
+script could not run (a missing tool, a missing or malformed version
+file, a malformed argument, an unsupported event, a download failure).
+In `scan`, a non-zero exit from the trufflehog binary itself (a finding,
+or its own error) is passed through unchanged, so 1 or 2 can also come
+from the binary.
+
+**Options:**
+
+- `verify` — print `version=<X.Y.Z>` and `sha256=<hex>` on stdout
+- `scan` — scan the repository at the current work tree's root
 
 ## Libraries
 

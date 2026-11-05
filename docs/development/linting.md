@@ -1121,13 +1121,6 @@ Fixing content inside one of these regions means editing its generator — or,
 for the enforcement matrix, the `enforcer:` / `ci:` / `hook:` annotations in
 [`docs/invariant-index.md`](../invariant-index.md) it renders from.
 
-`refresh-trufflehog-image.sh` also declares `@generates .github/trufflehog-image`, which is not a doc. It resolves the image digest
-from ghcr.io, so no `*-fresh` hook can run it, and its `doc-freshness`
-harness stubs the registry rather than reading the committed file. The
-committed file is gated by the `trufflehog-image-pin` lint and the
-`trufflehog` job's `--check` step; see
-[trufflehog-image-pin](../security/workflow-hardening.md#trufflehog-image-pin).
-
 `CHANGELOG.md` is generator-owned too, on different terms: git-cliff writes
 it, no `*-fresh` hook covers it, and freshness is asserted by
 `scripts/check-changelog-fresh.sh` in the required `changelog-links` job over
