@@ -373,8 +373,8 @@ harden-runner egress block lets it reach only GitHub, so a GitHub
 credential can verify and any other provider's comes back `unknown`.
 Both fail the scan. An `unverified` result passes: either the provider
 rejected the credential, or its detector has no verifier and never
-checked it. Such a credential fails the run only if a gitleaks rule
-also matches it. The action runs a container image, and its `version:` input
+checked it. The separate `gitleaks` scan still fails on such a credential
+when one of its rules matches it. The action runs a container image, and its `version:` input
 pins that image by tag and digest to the action pin's release: a step
 reads the ref from `.github/trufflehog-image` and passes it on, and the
 `trufflehog-image-pin` lint fails when the file names another release.

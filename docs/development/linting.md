@@ -1070,7 +1070,7 @@ The documentation regions below are written by a `refresh-*.sh` generator
 and must not be hand-edited — one per `@generates` / `@generates-block`
 declaration naming a doc, which `grep -h '^# @generates' scripts/refresh-*.sh`
 lists (`README.md` carries two of them; the non-doc file that list also
-names is covered at the end of this section). Two are whole files:
+names is covered below). Two are whole files:
 [`docs/reference/test-harnesses.md`](../reference/test-harnesses.md) and
 [`docs/security/enforcement-matrix.md`](../security/enforcement-matrix.md),
 whose generators emit the heading and every line around the table. Ten are

@@ -159,6 +159,8 @@ TruffleHog image ref in `.github/trufflehog-image` against
     the GitHub compare API — a dangling force-pushed commit fails.
     API errors fail the job loudly (exit 2), never silently.
 1. Version-label bumps (SHA and comment move together) pass here;
-    they are quarantined by `minimumReleaseAge` and, for pins inside
+    they are quarantined by `minimumReleaseAge` where the source has
+    release timestamps (the octoscan image has none, so Renovate raises
+    it with no age check) and, for pins inside
     the audit's scope, re-checked daily by `ratchet-pin-audit` (scope in
     its [runbook](../runbooks/ratchet-pin-audit.md)).
