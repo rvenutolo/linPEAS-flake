@@ -383,7 +383,7 @@ version and the tarball digest; the `trufflehog` job downloads the
 tarball, checks that digest, and runs the binary with GitHub-only egress
 and sudo and containers disabled, through `scripts/trufflehog-release.sh`.
 A skipped required check counts as passing, so the `trufflehog` job runs
-even when verification failed and fails at its first step. The
+even when verification failed and fails at its gate step. The
 `trufflehog-version-pin` lint keeps the action out and both invocations
 wired. Renovate bumps the version file.
 Like gitleaks, a failed or cancelled run outside a pull request files a
@@ -407,15 +407,20 @@ runs. Neither substitutes for the other, and dropping either needs a
     to verify fails the job. A compromise of that release workflow could
     sign a malicious binary; that is the same trust any new TruffleHog
     release asks for, and no check here can tell it apart.
-- A malicious binary can forge a clean scan and nothing else: the
-    `trufflehog` job reaches only GitHub hosts, cannot use sudo or start
-    a container, holds a `contents: read` job token, and passes no token
-    to the scan step. The required `gitleaks` scan is the second
+- A malicious binary can forge a clean scan and at most obtain the
+    job's `contents: read` token: it runs on the runner as the runner
+    user, so it could tamper with the post-step code of `actions/checkout`
+    or `step-security/harden-runner`, which receive `github.token` as an
+    input. The `trufflehog` job reaches only GitHub hosts, cannot use
+    sudo or start a container, uses no Actions cache, and passes no token
+    to the scan step, so that token reads nothing a public clone does
+    not. The required `gitleaks` scan is the second
     detector that a forged clean scan does not silence.
 - Upstream re-pushing a container image under an existing tag does not
     affect this scan, which reads no image. A release whose signature or
-    checksums fail verification keeps the required `trufflehog` check
-    red on every PR and on `main` until Renovate moves
+    checksums fail verification, or whose tarball does not match the
+    verified checksums and so fails the scan's digest check, keeps the
+    required `trufflehog` check red on every PR and on `main` until Renovate moves
     `.github/trufflehog-version` to a release that verifies, or upstream
     repairs that release's assets.
 - A finding is a security incident whether it verified or came back

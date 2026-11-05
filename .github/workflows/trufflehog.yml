@@ -64,15 +64,16 @@ jobs:
         run: nix shell .#cosign --command bash scripts/trufflehog-release.sh verify >> "${GITHUB_OUTPUT}"
 
   # The binary runs on the runner, not in a container, so no token reaches
-  # the scan step (the job token, which checkout and harden-runner read,
-  # is `contents: read` only), the job reaches only GitHub hosts and it
-  # cannot use sudo or start a container: a malicious binary can forge a
-  # clean scan and nothing else.
+  # the scan step. The job token, which checkout and harden-runner read as
+  # an input, is `contents: read` only, the job reaches only GitHub hosts,
+  # it cannot use sudo or start a container and it uses no Actions cache:
+  # a malicious binary can forge a clean scan and at most obtain that
+  # token, which reads nothing a public clone does not.
   trufflehog:
     name: trufflehog
     needs: trufflehog-verify
     # A skipped required check counts as passing, so this job runs even
-    # when verification failed and fails in its first step instead.
+    # when verification failed and fails at its gate step instead.
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 30
