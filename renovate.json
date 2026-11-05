@@ -55,6 +55,12 @@
       "matchDepNames": ["ghcr.io/synacktiv/octoscan"],
       "minimumReleaseAgeBehaviour": "timestamp-optional",
       "automerge": true
+    },
+    {
+      "description": "TruffleHog release version: scoped automerge after the 7-day quarantine, for the same reason as github-actions. matchDepNames narrows this rule to the TruffleHog release so each custom-regex dependency keeps its own explicit automerge scope. GitHub releases carry a publish timestamp, so the default timestamp-required behaviour applies. The PR's own trufflehog run is its gate: it verifies the new tag's signed checksums and scans with the new binary, and a release that does not verify keeps the PR red.",
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["trufflesecurity/trufflehog"],
+      "automerge": true
     }
   ],
   "customManagers": [
@@ -111,6 +117,15 @@
       "datasourceTemplate": "docker",
       "depNameTemplate": "ghcr.io/synacktiv/octoscan",
       "packageNameTemplate": "ghcr.io/synacktiv/octoscan"
+    },
+    {
+      "description": "TruffleHog release version in .github/trufflehog-version, read by scripts/trufflehog-release.sh. The trufflehog workflow verifies the release's checksums file against upstream's keyless cosign signature for that exact tag before any binary runs, so a version bump needs no digest pinned in this repo: the signature is the trust anchor, and a release asset re-uploaded under an unchanged tag cannot leave a stale digest that blocks main. Upstream tags are v-prefixed and the file holds the bare X.Y.Z, so extractVersion strips the prefix.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/trufflehog-version$/"],
+      "matchStrings": ["^(?<currentValue>\\d+\\.\\d+\\.\\d+)\\n"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "trufflesecurity/trufflehog",
+      "extractVersionTemplate": "^v(?<version>.+)$"
     }
   ]
 }

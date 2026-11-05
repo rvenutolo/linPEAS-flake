@@ -349,4 +349,65 @@ if expect_rc scan_rejects_symlink_binary 1; then
   if [[ -f ${MARKER} ]]; then fail scan_rejects_symlink_binary "binary ran"; else pass scan_rejects_symlink_binary; fi
 fi
 
+# --- workflow shape ---------------------------------------------------------
+
+# The job that executes the binary must never skip on a failed verify (a
+# skipped required check passes), must keep GitHub-only egress with sudo
+# and containers disabled, and must hold no token; notify must see both
+# jobs. Each query must print `true` against the real workflow.
+readonly WORKFLOW="${REPO_ROOT}/.github/workflows/trufflehog.yml"
+readonly HARDEN_SEL='.jobs.trufflehog.steps[] | select(.uses // "" | test("^step-security/harden-runner@"))'
+# shellcheck disable=SC2016 # a GitHub Actions expression, not a shell one
+shape_checks=(
+  'scan_needs_verify|[.jobs.trufflehog.needs] | flatten | any_c(. == "trufflehog-verify")'
+  'scan_if_always|.jobs.trufflehog.if == "always()"'
+  'scan_harden_runner_first|.jobs.trufflehog.steps[0].uses // "" | test("^step-security/harden-runner@")'
+  'scan_egress_block|['"${HARDEN_SEL}"' | .with."egress-policy" == "block"] | (length == 1 and all)'
+  'scan_sudo_and_containers_disabled|['"${HARDEN_SEL}"' | .with."disable-sudo-and-containers" | tostring == "true"] | (length == 1 and all)'
+  'scan_endpoints_github_only|['"${HARDEN_SEL}"' | .with."allowed-endpoints" // "" | sub("\\s+"; " ") | split(" ") | .[] | select(. != "") | select(test("^([a-z0-9-]+\\.)*(github\\.com|githubusercontent\\.com):443$") | not)] | length == 0'
+  'scan_endpoints_present|['"${HARDEN_SEL}"' | .with."allowed-endpoints" // "" | sub("\\s+"; " ") | split(" ") | .[] | select(. != "")] | length > 0'
+  'no_trufflehog_action|[.. | select(kind == "map") | select(has("uses")) | .uses | select(test("(?i)^trufflesecurity/trufflehog"))] | length == 0'
+  'scan_holds_no_token|[.jobs.trufflehog | .. | select(kind == "scalar") | select(tag == "!!str") | select(test("secrets\\.|github\\.token"))] | length == 0'
+  'scan_gates_on_verify_result|.jobs.trufflehog.steps[1].env.VERIFY_RESULT == "${{ needs.trufflehog-verify.result }}" and (.jobs.trufflehog.steps[1].run | test("VERIFY_RESULT\\} != .success.")) and (.jobs.trufflehog.steps[1].if == null)'
+  'notify_needs_both|[.jobs.notify.needs] | flatten | (any_c(. == "trufflehog-verify") and any_c(. == "trufflehog"))'
+  'verify_runs_release_script|[.jobs."trufflehog-verify".steps[].run // "" | select(test("scripts/trufflehog-release\\.sh verify"))] | length == 1'
+  'scan_runs_release_script|[.jobs.trufflehog.steps[].run // "" | select(test("scripts/trufflehog-release\\.sh scan"))] | length == 1'
+)
+for entry in "${shape_checks[@]}"; do
+  label="workflow_shape(${entry%%|*})"
+  got="$(yq --unwrapScalar "${entry#*|}" "${WORKFLOW}" 2>&1)" || got="yq failed: ${got}"
+  if [[ ${got} == true ]]; then pass "${label}"; else fail "${label}" "query gave $(printf '%q' "${got}")"; fi
+done
+
+# notify's combined result: success only when both jobs succeeded; a
+# cancelled verification, or a cancelled scan after a verified release, is
+# `cancelled`; anything else fails.
+combine_run="$(yq '.jobs.notify.steps[] | select(.id == "combined") | .run' "${WORKFLOW}")"
+notify_cases=(
+  'success success success'
+  'success failure failure'
+  'failure failure failure'
+  'failure success failure'
+  'skipped success failure'
+  'success skipped failure'
+  'cancelled failure cancelled'
+  'failure cancelled failure'
+  'cancelled cancelled cancelled'
+  'success cancelled cancelled'
+  'cancelled success cancelled'
+  'skipped cancelled failure'
+  'skipped skipped failure'
+  'success unknown failure'
+)
+for case_entry in "${notify_cases[@]}"; do
+  IFS=' ' read -r verify_result scan_result want <<<"${case_entry}"
+  label="workflow_shape(notify_result ${verify_result}+${scan_result})"
+  : >"${scratch}/gh-output"
+  rc=0
+  VERIFY_RESULT="${verify_result}" SCAN_RESULT="${scan_result}" GITHUB_OUTPUT="${scratch}/gh-output" \
+    bash -c "${combine_run}" >/dev/null 2>&1 || rc=$?
+  got="$(<"${scratch}/gh-output")"
+  if [[ ${rc} == 0 && ${got} == "result=${want}" ]]; then pass "${label}"; else fail "${label}" "exit ${rc}, output $(printf '%q' "${got}"), want result=${want}"; fi
+done
+
 exit "${failures}"
