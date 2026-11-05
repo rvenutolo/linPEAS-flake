@@ -2667,10 +2667,9 @@ rather than judging one, so it has no finding to report.
 ### scripts/octoscan-scan.sh
 
 Run synacktiv/octoscan against `.github/workflows`
-via the pinned ghcr container image. Single source of truth for
-the image digest, the version label tracked by Renovate, the
-noise-suppression flags, and the exit-code mapping shared by the
-CI workflow and the pre-commit hook.
+with the `octoscan` binary on PATH. Single source of truth for the
+noise-suppression flags and the exit-code mapping shared by the CI
+workflow and the pre-commit hook.
 
 Usage:
 
@@ -2683,14 +2682,14 @@ Exit codes:
 
 ```text
   0 — scan clean
-  1 — findings present, the scanner ran and errored (image pull
-      failure, scanner internal error), a suppressed runner label is
+  1 — findings present, the scanner ran and errored (a
+      scanner internal error), a suppressed runner label is
       no longer flagged (`stale-suppression`), or the command line is
       unusable. A finding is told from a scanner error by the
       `has-finding` line printed to stdout (`has-finding=true|false`)
       — the same contract the CI workflow exposes via
       `$GITHUB_OUTPUT` — and by the `classification=` field beside it.
-  2 — the scan could not proceed: `docker` is absent, `--sarif` was
+  2 — the scan could not proceed: `octoscan` is absent, `--sarif` was
       given while `jq` is absent, or a per-file SARIF temp file or the
       runner-label probe directory could not be created. The two tool guards report before any workflow
       file is read and print the `infra-failure` classification
@@ -2739,8 +2738,10 @@ Suppressions (CLI flags — `--config-file` is documented but
       docs/development/linting.md#runner-label-allowlist.
 ```
 
-Renovate manages OCTOSCAN_DIGEST + OCTOSCAN_VERSION in lockstep
-(renovate.json customManager scoped to this file).
+Scanner source: the `octoscan` on PATH. The pre-commit hook and the CI
+workflow both supply the flake.lock-pinned nixpkgs build (`.#octoscan`),
+so the scanner updates when flake.lock does; upstream publishes no signed
+release artifacts to verify instead.
 
 ### scripts/retry-command.sh
 

@@ -72,18 +72,21 @@ in
   octoscan = {
     enable = true;
     description = "synacktiv/octoscan workflow vulnerability scanner.";
-    # Digest + version pinned in scripts/octoscan-scan.sh.
-    # Renovate's customManager is scoped to that script.
+    # The scanner is the flake.lock-pinned nixpkgs build, the same
+    # `.#octoscan` the CI workflow runs, so a flake.lock bump is
+    # what updates it.
     # Hook always scans the full .github/workflows directory
     # to match the CI workflow's invocation; trigger is
     # restricted to workflow yaml changes via `files`.
     entry = "${pkgs-unstable.writeShellScript "octoscan-hook" ''
       set -Eeuo pipefail
       IFS=$'\n\t'
-      # Skip inside nix build sandbox — docker is unavailable
-      # and the script would fail. The local pre-commit invocation
-      # has full PATH and the hook fires normally.
+      # Skip inside the nix build sandbox, so `nix flake check` does
+      # not run the scan: the local pre-commit run and the octoscan
+      # workflow are where it runs.
       if [[ -n "''${NIX_BUILD_TOP:-}" ]]; then exit 0; fi
+      PATH="${pkgs-unstable.octoscan}/bin:''${PATH}"
+      export PATH
       exec ${pkgs-unstable.bash}/bin/bash scripts/octoscan-scan.sh
     ''}";
     files = "^\\.github/workflows/.*\\.ya?ml$";
