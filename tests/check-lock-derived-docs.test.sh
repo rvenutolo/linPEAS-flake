@@ -117,7 +117,7 @@ EOF
 # listed-but-absent generator names a path nothing writes. delta is the
 # workflow-derived one: it splices blocks into two docs, the shape the
 # runner-label generator has. zeta is the pin-derived one: it owns one
-# file outright, the shape the TruffleHog image generator has.
+# file outright.
 #
 # Each carries the output declaration the real generators carry, in the
 # header position the annotation parser reads, so a fixture generator

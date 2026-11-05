@@ -353,8 +353,9 @@ fi
 
 # The job that executes the binary must never skip on a failed verify (a
 # skipped required check passes), must keep GitHub-only egress with sudo
-# and containers disabled, and must hold no token; notify must see both
-# jobs. Each query must print `true` against the real workflow.
+# and containers disabled, and no step may name a secret or the job token,
+# in dot or bracket form; notify must see both jobs. Each query must print
+# `true` against the real workflow.
 readonly WORKFLOW="${REPO_ROOT}/.github/workflows/trufflehog.yml"
 readonly HARDEN_SEL='.jobs.trufflehog.steps[] | select(.uses // "" | test("^step-security/harden-runner@"))'
 # shellcheck disable=SC2016 # a GitHub Actions expression, not a shell one
@@ -367,7 +368,7 @@ shape_checks=(
   'scan_endpoints_github_only|['"${HARDEN_SEL}"' | .with."allowed-endpoints" // "" | sub("\\s+"; " ") | split(" ") | .[] | select(. != "") | select(test("^([a-z0-9-]+\\.)*(github\\.com|githubusercontent\\.com):443$") | not)] | length == 0'
   'scan_endpoints_present|['"${HARDEN_SEL}"' | .with."allowed-endpoints" // "" | sub("\\s+"; " ") | split(" ") | .[] | select(. != "")] | length > 0'
   'no_trufflehog_action|[.. | select(kind == "map") | select(has("uses")) | .uses | select(test("(?i)^trufflesecurity/trufflehog"))] | length == 0'
-  'scan_holds_no_token|[.jobs.trufflehog | .. | select(kind == "scalar") | select(tag == "!!str") | select(test("secrets\\.|github\\.token"))] | length == 0'
+  'scan_holds_no_token|[.jobs.trufflehog | .. | select(kind == "scalar") | select(tag == "!!str") | select(test("secrets[.\\[]|github(\\.token|\\[)"))] | length == 0'
   'scan_gates_on_verify_result|.jobs.trufflehog.steps[1].env.VERIFY_RESULT == "${{ needs.trufflehog-verify.result }}" and (.jobs.trufflehog.steps[1].run | test("VERIFY_RESULT\\} != .success.")) and (.jobs.trufflehog.steps[1].if == null)'
   'notify_needs_both|[.jobs.notify.needs] | flatten | (any_c(. == "trufflehog-verify") and any_c(. == "trufflehog"))'
   'verify_runs_release_script|[.jobs."trufflehog-verify".steps[].run // "" | select(test("scripts/trufflehog-release\\.sh verify"))] | length == 1'

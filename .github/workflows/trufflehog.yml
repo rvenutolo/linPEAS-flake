@@ -63,9 +63,11 @@ jobs:
         id: verify
         run: nix shell .#cosign --command bash scripts/trufflehog-release.sh verify >> "${GITHUB_OUTPUT}"
 
-  # The binary runs on the runner, not in a container, so this job holds
-  # no token, reaches only GitHub hosts and cannot use sudo or start a
-  # container: a malicious binary can forge a clean scan and nothing else.
+  # The binary runs on the runner, not in a container, so no token reaches
+  # the scan step (the job token, which checkout and harden-runner read,
+  # is `contents: read` only), the job reaches only GitHub hosts and it
+  # cannot use sudo or start a container: a malicious binary can forge a
+  # clean scan and nothing else.
   trufflehog:
     name: trufflehog
     needs: trufflehog-verify

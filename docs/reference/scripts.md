@@ -1480,9 +1480,8 @@ self-enforcing.
 
 Lint: a pin digest may not move under an unchanged
 version label. Diffs action pins (`uses: <path>@<sha> # <version>`)
-in workflows/composite actions, the octoscan container digest pair and
-the TruffleHog image ref (`.github/trufflehog-image`) against the base
-ref; a changed SHA/digest whose version
+in workflows/composite actions and the octoscan container digest pair
+against the base ref; a changed SHA/digest whose version
 comment did not change is a repointed released tag (the
 digest-repoint supply-chain class) and fails. Floating-major pins
 (`# vN`) legitimately retarget across patch releases, so instead of
@@ -2052,13 +2051,14 @@ Exits 0 when every invocation is guarded, 1 when one is not. Exits 2
 when the check cannot run: `shfmt` or `jq` absent from PATH, a script
 `shfmt` cannot parse, or a scan set matching no script.
 
-### scripts/check-trufflehog-image-pin.sh
+### scripts/check-trufflehog-version-pin.sh
 
-Lint: every `trufflesecurity/trufflehog` step in
-`.github/workflows/*.yml` (or `.yaml`) passes
-`version: ${{ steps.trufflehog-image.outputs.version }}`, and
-`.github/trufflehog-image` holds one line `X.Y.Z@sha256:<64 hex>` whose
-`X.Y.Z` is the version in each such step's `# vX.Y.Z` pin comment.
+Lint: TruffleHog runs only as the signed release binary
+pinned in `.github/trufflehog-version`. The file holds one `X.Y.Z` line,
+no workflow or composite action `uses:` the
+`trufflesecurity/trufflehog` action, and
+`.github/workflows/trufflehog.yml` runs `scripts/trufflehog-release.sh`
+in both its `verify` and its `scan` form.
 
 ### scripts/check-upload-artifact-strict.sh
 
@@ -2286,17 +2286,6 @@ exposed by `nix/treefmt-config.nix` as `devTooling.<system>.treefmtConfig`.
 **Options:**
 
 - `--check` — exit 1 if the doc would change; exit 2 if the check cannot run (doc missing, or nix eval fails); do not mutate the working tree
-
-### scripts/refresh-trufflehog-image.sh
-
-Write .github/trufflehog-image, the TruffleHog container
-image ref `trufflehog.yml` hands the trufflesecurity/trufflehog action,
-from the release in that action's `# vX.Y.Z` pin comment and the digest
-ghcr.io serves for that release's tag.
-
-**Options:**
-
-- `--check` — exit 1 if the file is missing or would change; exit 2 if the workflow is missing or unparsable, if it does not pin the action at exactly one release, or if ghcr.io cannot be reached or answers without one well-formed digest
 
 ## Other
 

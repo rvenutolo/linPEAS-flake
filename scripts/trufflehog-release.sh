@@ -254,6 +254,11 @@ function scan() {
   require_tool sha256sum
   require_tool mktemp
 
+  # Resolved before the event is read, so a run outside a work tree is
+  # reported as that rather than as whatever the event lacks.
+  local root
+  root="$(repo_toplevel)"
+
   local range rc=0
   range="$(event_range)" || rc=$?
   if ((rc == 3)); then
@@ -266,8 +271,6 @@ function scan() {
   base="${range%%$'\n'*}"
   head="${range#*$'\n'}"
 
-  local root
-  root="$(repo_toplevel)"
   tmp_dir="$(make_temp --directory)"
   local -r tarball="trufflehog_${version}_linux_amd64.tar.gz"
   fetch_asset "${version}" "${tarball}" "${tmp_dir}/${tarball}"
