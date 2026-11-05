@@ -28,9 +28,13 @@ on:
     # this workflow is not a required check
     # (`required-checks-no-paths` forbids paths filters on required
     # workflows — do not promote this one without removing the
-    # filter). The weekly cron still sweeps everything.
+    # filter). The weekly cron still sweeps everything. A flake.lock
+    # or nix/packages.nix change can swap the octoscan binary itself,
+    # so a nixpkgs bump scans with the new version on its own PR.
     paths:
       - ".github/workflows/**"
+      - "flake.lock"
+      - "nix/packages.nix"
       - "scripts/octoscan-scan.sh"
   push:
     branches: [main]
@@ -55,8 +59,8 @@ jobs:
       actions: read # read other workflows in repo
     # `has-finding` is `'true'` only when the `scan` step ran and
     # octoscan exited `2` (findings present). Any other failure
-    # (exit `1` from octoscan, docker pull failure, checkout
-    # failure) leaves `has-finding=false` and is classified as an
+    # (exit `1` from octoscan, Nix setup or substitution failure,
+    # checkout failure) leaves `has-finding=false` and is classified as an
     # infra failure by the notify jobs below.
     outputs:
       has-finding: ${{ steps.scan.outputs.has-finding }}
@@ -65,20 +69,28 @@ jobs:
         with:
           egress-policy: block
           allowed-endpoints: >
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
             api.github.com:443
-            ghcr.io:443
+            cache.nixos.org:443
+            codeload.github.com:443
             github.com:443
             objects.githubusercontent.com:443
-            pkg-containers.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            releases.nixos.org:443
+            tarballs.nixos.org:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # `$/` waits on actionlint support; this job runs its own commit, so `./` is the same tree.
+      - uses: ./.github/actions/setup-nix # zizmor: ignore[self-repository]
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: octoscan scan
         id: scan
-        # Single source of truth for the pinned ghcr image digest +
-        # OCTOSCAN_VERSION lives in scripts/octoscan-scan.sh.
-        # Renovate's customManager is scoped to that script.
+        # The scanner is the flake.lock-pinned nixpkgs build exposed as
+        # `.#octoscan`, the same binary the pre-commit hook runs.
         run: |
           set -Eeuo pipefail
           rc=0
@@ -88,12 +100,12 @@ jobs:
           # GITHUB_OUTPUT; rc=0 clean, rc=1 = findings present, the
           # scanner ran and errored, or a runner-label suppression is
           # stale, rc=2 = the scan could not proceed
-          # (docker or jq absent, or a per-file temp file could not be
+          # (octoscan or jq absent, or a per-file temp file could not be
           # created); notify jobs branch on has-finding. The captured
           # text is printed to the step log too, because the
           # `classification=` line the notify-infra body sends a reader
           # to is on stdout.
-          stdout="$(scripts/octoscan-scan.sh --sarif octoscan.sarif)" || rc=$?
+          stdout="$(nix shell .#octoscan --command scripts/octoscan-scan.sh --sarif octoscan.sarif)" || rc=$?
           printf '%s\n' "${stdout}"
           has_finding="$(printf '%s\n' "${stdout}" | grep -E '^has-finding=' | tail -n1 || true)"
           [[ -n "${has_finding}" ]] || has_finding="has-finding=false"
@@ -155,7 +167,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   # Infrastructure failure: the job failed without a complete findings
-  # result (e.g. docker pull failure, checkout / harden-runner failure,
+  # result (e.g. Nix setup or substitution failure, checkout /
+  # harden-runner failure,
   # octoscan exit `1` from an internal scanner error, a SARIF upload
   # failure after a clean scan) or was cancelled — no runner, or its
   # timeout. Filed under a distinct label so transient breakage is
@@ -196,8 +209,8 @@ jobs:
           title: "octoscan: infrastructure failure (scan did not complete)"
           body: |
             `octoscan / scan` failed without a complete findings <!-- notify-arms: octoscan.yml/notify-infra = failure cancelled non-pr -->
-            result (e.g. docker pull failure, checkout / harden-runner
-            failure, octoscan exit `1` from an internal scanner error,
+            result (e.g. Nix setup or substitution failure, checkout /
+            harden-runner failure, octoscan exit `1` from an internal scanner error,
             or the SARIF upload step failing after a clean scan). On a
             scanner error no SARIF was uploaded — the script drops a
             partial one. If the log's `classification=` line reads
@@ -211,8 +224,9 @@ jobs:
             - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
             Remediation: inspect the failing step in the run log. If
-            the cause is transient (registry auth, network), close
+            the cause is transient (Nix cache, network), close
             this issue once the next run is green.
-            If persistent (image breakage, octoscan regression),
-            re-pin the digest or open an upstream issue.
+            If persistent (an octoscan regression in the locked
+            nixpkgs), hold the flake.lock bump that brought it or open
+            an upstream issue.
           github-token: ${{ secrets.GITHUB_TOKEN }}
