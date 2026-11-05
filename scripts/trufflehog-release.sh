@@ -32,7 +32,9 @@
 # mismatch, a tarball without a regular-file `trufflehog`), 2 when the
 # script could not run (a missing tool, a missing or malformed version
 # file, a malformed argument, an unsupported event, a download failure).
-# A scan that finds a secret exits with the binary's own non-zero status.
+# In `scan`, a non-zero exit from the trufflehog binary itself (a finding,
+# or its own error) is passed through unchanged, so 1 or 2 can also come
+# from the binary.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -133,7 +135,8 @@ function verify() {
   fi
 
   local line_hash line_name line_rest sha='' matches=0
-  while IFS=' ' read -r line_hash line_name line_rest; do
+  # The `|| [[ -n ... ]]` keeps a final line that lacks its newline.
+  while IFS=' ' read -r line_hash line_name line_rest || [[ -n ${line_hash} ]]; do
     if [[ ${line_name} == "${tarball}" && -z ${line_rest} ]]; then
       matches=$((matches + 1))
       sha="${line_hash}"
@@ -150,6 +153,27 @@ function verify() {
   printf 'version=%s\nsha256=%s\n' "${version}" "${sha}"
 }
 
+# @description Print one string field of the event payload. Errexit is off
+# while the caller captures this function's output, so every jq status is
+# checked here.
+# @arg $1 jq filter  @arg $2 field label for the diagnostic
+# @stdout the field, a 40-digit lower-case hex revision
+# @exitcode 2 the field is missing, not a string, or not a revision
+function event_revision() {
+  local -r filter="$1"
+  local -r label="$2"
+  local value
+  if ! value="$(jq --exit-status --raw-output "${filter} | select(type == \"string\")" "${GITHUB_EVENT_PATH}")"; then
+    log_err "the event payload has no string ${label}"
+    exit 2
+  fi
+  if [[ ! ${value} =~ ^[0123456789abcdef]{40}$ ]]; then
+    log_err "the event payload's ${label} is not a 40-digit hex revision"
+    exit 2
+  fi
+  printf '%s\n' "${value}"
+}
+
 # @description Print the BASE and HEAD revisions for the event, one per
 # line (either may be empty), copying the trufflehog action's mapping. A
 # push with no commits prints nothing and returns 3.
@@ -164,6 +188,10 @@ function event_range() {
       log_err "GITHUB_EVENT_PATH does not name a file"
       exit 2
     fi
+    if ! jq --exit-status 'type == "object"' "${GITHUB_EVENT_PATH}" >/dev/null; then
+      log_err "the event payload is not a JSON object"
+      exit 2
+    fi
     ;;
   workflow_dispatch | schedule) ;;
   *)
@@ -174,19 +202,22 @@ function event_range() {
   case "${event}" in
   push)
     local commits
-    commits="$(jq --raw-output '.commits | length' "${GITHUB_EVENT_PATH}")"
+    if ! commits="$(jq --exit-status --raw-output '.commits | select(type == "array") | length' "${GITHUB_EVENT_PATH}")"; then
+      log_err "the push payload has no commits array"
+      exit 2
+    fi
     if [[ ${commits} == 0 ]]; then
       return 3
     fi
-    head="$(jq --raw-output '.after' "${GITHUB_EVENT_PATH}")"
-    base="$(jq --raw-output '.before' "${GITHUB_EVENT_PATH}")"
+    head="$(event_revision '.after' 'after')" || exit 2
+    base="$(event_revision '.before' 'before')" || exit 2
     if [[ ${base} == "${NULL_SHA}" ]]; then
       base=''
     fi
     ;;
   pull_request)
-    base="$(jq --raw-output '.pull_request.base.sha' "${GITHUB_EVENT_PATH}")"
-    head="$(jq --raw-output '.pull_request.head.sha' "${GITHUB_EVENT_PATH}")"
+    base="$(event_revision '.pull_request.base.sha' 'pull_request.base.sha')" || exit 2
+    head="$(event_revision '.pull_request.head.sha' 'pull_request.head.sha')" || exit 2
     ;;
   esac
   printf '%s\n%s\n' "${base}" "${head}"

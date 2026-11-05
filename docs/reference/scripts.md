@@ -2892,7 +2892,9 @@ without exactly one tarball line or with a malformed digest, a digest
 mismatch, a tarball without a regular-file `trufflehog`), 2 when the
 script could not run (a missing tool, a missing or malformed version
 file, a malformed argument, an unsupported event, a download failure).
-A scan that finds a secret exits with the binary's own non-zero status.
+In `scan`, a non-zero exit from the trufflehog binary itself (a finding,
+or its own error) is passed through unchanged, so 1 or 2 can also come
+from the binary.
 
 **Options:**
 

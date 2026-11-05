@@ -48,6 +48,14 @@ function build_release() {
   rm --recursive --force -- "${scratch}/stage" "${RELEASE_DIR}"
   mkdir --parents "${stage}" "${RELEASE_DIR}"
   case "${variant}" in
+  nobin)
+    mkdir "${stage}/evil"
+    cat >"${stage}/evil/trufflehog" <<'NOBIN_EOF'
+#!/usr/bin/env bash
+printf EVIL_RAN >"${STUB_MARKER}"
+NOBIN_EOF
+    chmod +x "${stage}/evil/trufflehog"
+    ;;
   symlink)
     # The link target is a user-owned stub that stays on disk, so only the
     # link check, not a permissions error or a dangling target, can reject it.
@@ -62,12 +70,15 @@ LINK_EOF
     cat >"${stage}/trufflehog" <<'BIN_EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@" >"${STUB_MARKER}"
+ls -A "${0%/*}" >"${STUB_MARKER}.listing"
 exit "${STUB_EXIT:-0}"
 BIN_EOF
     chmod +x "${stage}/trufflehog"
     ;;
   esac
-  if [[ ${variant} == extras ]]; then
+  if [[ ${variant} == nobin ]]; then
+    tar --create --gzip --file "${RELEASE_DIR}/${TARBALL}" --directory "${stage}" evil
+  elif [[ ${variant} == extras ]]; then
     mkdir "${stage}/evil"
     cat >"${stage}/evil/trufflehog" <<'EVIL_EOF'
 #!/usr/bin/env bash
@@ -102,7 +113,7 @@ function fail() {
 # Runs the script from the repo root; sets rc, out, err.
 function run() {
   rc=0
-  rm --force -- "${MARKER}" "${COSIGN_MARKER}"
+  rm --force -- "${MARKER}" "${MARKER}.listing" "${COSIGN_MARKER}"
   (cd "${REPO_ROOT}" && env \
     PATH="${STUB_BIN}:${PATH}" \
     TRUFFLEHOG_VERSION_FILE_OVERRIDE="${scratch}/version" \
@@ -190,6 +201,12 @@ write_checksums "${FIXTURE_SHA}  ${TARBALL}\n${FIXTURE_SHA}  ${TARBALL}\n"
 run COSIGN_EXIT=0
 if expect_rc verify_rejects_duplicate_line 1; then pass verify_rejects_duplicate_line; fi
 
+write_checksums "${FIXTURE_SHA}  ${TARBALL}"
+run COSIGN_EXIT=0
+if expect_rc verify_accepts_unterminated_final_line 0; then
+  if [[ ${out} == *"sha256=${FIXTURE_SHA}" ]]; then pass verify_accepts_unterminated_final_line; else fail verify_accepts_unterminated_final_line "stdout $(printf '%q' "${out}")"; fi
+fi
+
 for bad in 'zz' "${FIXTURE_SHA:0:63}" "${FIXTURE_SHA^^}"; do
   write_checksums "${bad}  ${TARBALL}\n"
   run COSIGN_EXIT=0
@@ -220,14 +237,14 @@ fi
 # --- scan -------------------------------------------------------------------
 
 build_release plain
-write_event '{"pull_request":{"base":{"sha":"basesha"},"head":{"sha":"headsha"}}}'
-scan_scenario scan_pull_request_range pull_request "$(argv_for basesha headsha)" 0
+write_event '{"pull_request":{"base":{"sha":"1111111111111111111111111111111111111111"},"head":{"sha":"2222222222222222222222222222222222222222"}}}'
+scan_scenario scan_pull_request_range pull_request "$(argv_for 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222)" 0
 
-write_event '{"commits":[{"id":"x"}],"before":"beforesha","after":"aftersha"}'
-scan_scenario scan_push_range push "$(argv_for beforesha aftersha)" 0
+write_event '{"commits":[{"id":"x"}],"before":"3333333333333333333333333333333333333333","after":"4444444444444444444444444444444444444444"}'
+scan_scenario scan_push_range push "$(argv_for 3333333333333333333333333333333333333333 4444444444444444444444444444444444444444)" 0
 
-write_event '{"commits":[{"id":"x"}],"before":"'"${NULL_SHA}"'","after":"aftersha"}'
-scan_scenario scan_push_zero_before push "$(argv_for '' aftersha)" 0
+write_event '{"commits":[{"id":"x"}],"before":"'"${NULL_SHA}"'","after":"4444444444444444444444444444444444444444"}'
+scan_scenario scan_push_zero_before push "$(argv_for '' 4444444444444444444444444444444444444444)" 0
 
 write_event '{"commits":[],"before":"b","after":"a"}'
 SCENARIO_ARGS=(scan --version "${VERSION}" --sha256 "${FIXTURE_SHA}")
@@ -246,9 +263,37 @@ for event in release '' issues; do
   SCENARIO_ARGS=(scan --version "${VERSION}" --sha256 "${FIXTURE_SHA}")
   run GITHUB_EVENT_NAME="${event}" GITHUB_EVENT_PATH="${scratch}/event.json"
   if expect_rc "scan_unknown_event_exits_2(${event:-empty})" 2; then
-    if [[ -f ${MARKER} ]]; then fail scan_unknown_event_exits_2 "binary ran"; else pass "scan_unknown_event_exits_2(${event:-empty})"; fi
+    if [[ -f ${MARKER} ]]; then fail "scan_unknown_event_exits_2(${event:-empty})" "binary ran"; else pass "scan_unknown_event_exits_2(${event:-empty})"; fi
   fi
 done
+
+# An unreadable or incomplete event payload exits 2 and the binary never runs.
+bad_payload_cases=(
+  'push|{not json'
+  'pull_request|{not json'
+  'push|[]'
+  'pull_request|"text"'
+  'pull_request|{"pull_request":null}'
+  'pull_request|{}'
+  'pull_request|{"pull_request":{"base":{"sha":"1111111111111111111111111111111111111111"}}}'
+  'pull_request|{"pull_request":{"base":{"sha":7},"head":{"sha":"2222222222222222222222222222222222222222"}}}'
+  'pull_request|{"pull_request":{"base":{"sha":"basesha"},"head":{"sha":"headsha"}}}'
+  'push|{"before":"3333333333333333333333333333333333333333","after":"4444444444444444444444444444444444444444"}'
+  'push|{"commits":null}'
+  'push|{"commits":[{}],"before":"3333333333333333333333333333333333333333"}'
+  'push|{"commits":[{}],"before":null,"after":"4444444444444444444444444444444444444444"}'
+)
+for case_entry in "${bad_payload_cases[@]}"; do
+  event="${case_entry%%|*}"
+  write_event "${case_entry#*|}"
+  SCENARIO_ARGS=(scan --version "${VERSION}" --sha256 "${FIXTURE_SHA}")
+  run GITHUB_EVENT_NAME="${event}" GITHUB_EVENT_PATH="${scratch}/event.json"
+  label="scan_rejects_bad_payload(${case_entry:0:60})"
+  if expect_rc "${label}" 2; then
+    if [[ -f ${MARKER} ]]; then fail "${label}" "binary ran"; else pass "${label}"; fi
+  fi
+done
+write_event '{}'
 
 # A stable nonzero finding status propagates.
 write_event '{}'
@@ -274,7 +319,7 @@ for args in \
   run GITHUB_EVENT_NAME=schedule GITHUB_EVENT_PATH="${scratch}/event.json"
   if expect_rc "scan_rejects_malformed_args(${args:0:30})" 2; then
     if [[ ${err} == *'cannot download'* || -f ${MARKER} ]]; then
-      fail scan_rejects_malformed_args "download attempted or binary ran"
+      fail "scan_rejects_malformed_args(${args:0:30})" "download attempted or binary ran"
     else pass "scan_rejects_malformed_args(${args:0:30})"; fi
   fi
 done
@@ -284,6 +329,18 @@ mv "${scratch}/release.hidden" "${scratch}/release"
 build_release extras
 scan_scenario scan_extracts_only_binary schedule "$(argv_for '' '')" 0
 if [[ -f ${MARKER} && "$(<"${MARKER}")" == *EVIL_RAN* ]]; then fail scan_extracts_only_binary "evil ran"; fi
+# Nothing but the binary may sit next to it after extraction.
+if [[ ! -f ${MARKER}.listing || "$(<"${MARKER}.listing")" != trufflehog ]]; then
+  fail scan_extracts_only_binary "extraction directory held $(cat "${MARKER}.listing" 2>/dev/null | tr '\n' ' ')"
+fi
+
+build_release nobin
+SCENARIO_ARGS=(scan --version "${VERSION}" --sha256 "${FIXTURE_SHA}")
+run GITHUB_EVENT_NAME=schedule GITHUB_EVENT_PATH="${scratch}/event.json"
+if expect_rc scan_rejects_missing_top_level_binary 1; then
+  if [[ -f ${MARKER} ]]; then fail scan_rejects_missing_top_level_binary "a binary ran"; else pass scan_rejects_missing_top_level_binary; fi
+fi
+build_release plain
 
 build_release symlink
 SCENARIO_ARGS=(scan --version "${VERSION}" --sha256 "${FIXTURE_SHA}")
