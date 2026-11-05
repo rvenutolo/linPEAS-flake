@@ -848,8 +848,7 @@ generator already declares what it writes in its own comment header —
 `@generates-block <path>` for a region it splices into a hand-authored
 file — and the committable set is exactly `flake.lock` plus the outputs
 declared by the generators in `LOCK_DERIVED_GENERATORS` and
-`WORKFLOW_DERIVED_GENERATORS` (and in `PIN_DERIVED_GENERATORS`, described
-below, when a workflow declares it). Both annotation kinds count: the split between whole
+`WORKFLOW_DERIVED_GENERATORS`. Both annotation kinds count: the split between whole
 file and spliced block is a judgment about who owns the surrounding
 prose, not about who writes the bytes. `flake.lock` is on the list
 because the workflow writes it directly rather than through a
@@ -914,20 +913,12 @@ A lock-writing workflow may also declare an optional third list,
 an executable generator run by a freshness hook whose trigger admits
 `.github/workflows/ci.yml`, and its declared outputs join the same
 committable bound: `COMMITTABLE_PATHS` is exactly `flake.lock` plus the
-outputs every generator list declares, in both directions, so it stays the
+outputs both generator lists declare, in both directions, so it stays the
 one allowlist the credentialed job reads. The rule runs one way only.
 Many hooks name `ci.yml`, and a workflow is bound only to the ones it
 lists. A generator in both lists fails: it claims two triggers for the
 same docs, and one of the claims is false. An absent list is an empty
 one.
-
-`PIN_DERIVED_GENERATORS` is optional too, for generators whose output
-derives from an action pin in a workflow by a registry lookup. No
-freshness hook can run one, because a hook has no network, so no hook
-binding applies: a check that reads the output must keep a stale one red
-at PR time. No workflow declares one. Each entry must be an executable generator that declares
-its outputs and sits in neither other list, and its declared outputs join
-the same committable bound.
 
 The compute job hands its files to the credentialed job through one
 `actions/upload-artifact` step, and that step's `path:` list cannot read

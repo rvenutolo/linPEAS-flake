@@ -1037,11 +1037,10 @@ Keep EXPECTED in sync with the lintTools list in nix/devshell-lint.nix.
 Lint: every workflow that writes a flake.lock runs a
 generator for each freshness hook that declares `flake.lock` a
 trigger, runs each generator it lists as workflow-derived from a
-freshness hook that declares `.github/workflows/ci.yml` a trigger,
-lists each pin-derived generator in no other list, and may commit
-exactly the lock plus the outputs all three generator lists declare
-with `@generates` / `@generates-block`, and uploads exactly that
-committable set from the job that writes the lock. A hook's
+freshness hook that declares `.github/workflows/ci.yml` a trigger, and
+may commit exactly the lock plus the outputs both generator lists
+declare with `@generates` / `@generates-block`, and uploads exactly
+that committable set from the job that writes the lock. A hook's
 trigger is its `files` and `excludes` patterns evaluated as pre-commit
 evaluates them, with Python `re.search`; a pattern that does not
 compile is a could-not-run. `ephemeral-refs-gap-fresh` is exempt from
