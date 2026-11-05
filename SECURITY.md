@@ -116,10 +116,12 @@ review. A compromise of the upstream `linpeas.sh` feed produces an
 attested release within roughly 24 hours of upstream doing it; a
 compromised flake input merges within roughly a week, and a compromised
 Renovate-tracked dependency merges in the first weekly slot after its 7-day
-`minimumReleaseAge` quarantine, except the octoscan image and the
-`cachix/git-hooks.nix` and SchemaStore master-HEAD trackers: their sources
-carry no release timestamp, so Renovate raises them with no age check and
-they merge in the next weekly slot. Either ships with the next release. This is the
+`minimumReleaseAge` quarantine. For the `cachix/git-hooks.nix` and
+SchemaStore master-HEAD trackers that quarantine is measured from the
+commit date, which the committer sets, so a backdated commit clears it at
+once. The octoscan image is the exception: GHCR carries no release
+timestamp, so Renovate raises it with no age check and it merges in the
+next weekly slot. Either ships with the next release. This is the
 documented and accepted trust model for a thin wrapper repo — it matches
 the trust model
 of `curl ... | bash`, with the addition of reproducible, hash-pinned

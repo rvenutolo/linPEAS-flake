@@ -5,6 +5,13 @@
   "timezone": "UTC",
   "platformAutomerge": true,
   "minimumReleaseAge": "7 days",
+  "logLevelRemap": [
+    {
+      "description": "Renovate logs this warning whenever a timestamp-optional packageRule raises an update that has no release timestamp. The octoscan image always does (GHCR exposes none), so at warn level it sits permanently under the dependency dashboard's Repository problems. The rules that set timestamp-optional say why each accepts that; the message stays in the job log at info.",
+      "matchMessage": "/^Some release\\(s\\) did not have a releaseTimestamp/",
+      "newLogLevel": "info"
+    }
+  ],
   "prConcurrentLimit": 3,
   "dependencyDashboard": true,
   "labels": ["dependencies"],
@@ -29,14 +36,14 @@
       "automerge": true
     },
     {
-      "description": "cachix/git-hooks.nix master HEAD: automerge once every required check passes. renovate-flake-lock-refresh.yml supplies the lockfile this manager cannot write; while flake.nix is ahead of flake.lock the flake-check job is red, so the PR cannot merge before the refresh lands. git-refs carries no release timestamp, so under the default minimumReleaseAgeBehaviour (timestamp-required) an update never clears minimumReleaseAge and no PR is raised; timestamp-optional raises it with no age check, and the required checks named here remain its gate.",
+      "description": "cachix/git-hooks.nix master HEAD: automerge once every required check passes. renovate-flake-lock-refresh.yml supplies the lockfile this manager cannot write; while flake.nix is ahead of flake.lock the flake-check job is red, so the PR cannot merge before the refresh lands. github-digest ages a master-HEAD digest against its commit date, so minimumReleaseAge applies when Renovate reads one; a commit date is set by the committer, so it is a weaker age signal than a registry push time. timestamp-optional is the fallback: should a release come back without a timestamp, it is raised with no age check rather than held forever, and the required checks named here remain its gate.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["cachix/git-hooks.nix"],
       "minimumReleaseAgeBehaviour": "timestamp-optional",
       "automerge": true
     },
     {
-      "description": "SchemaStore/schemastore master HEAD: automerge once every required check passes. The pin feeds scripts/check-jsonschema.sh, which validates this repo's JSON and YAML against the bumped SHA in CI, so a schema set that rejects a tracked file keeps the PR red. git-refs carries no release timestamp, so under the default minimumReleaseAgeBehaviour (timestamp-required) an update never clears minimumReleaseAge and no PR is raised; timestamp-optional raises it with no age check, and the required checks named here remain its gate.",
+      "description": "SchemaStore/schemastore master HEAD: automerge once every required check passes. The pin feeds scripts/check-jsonschema.sh, which validates this repo's JSON and YAML against the bumped SHA in CI, so a schema set that rejects a tracked file keeps the PR red. github-digest ages a master-HEAD digest against its commit date, so minimumReleaseAge applies when Renovate reads one; a commit date is set by the committer, so it is a weaker age signal than a registry push time. timestamp-optional is the fallback: should a release come back without a timestamp, it is raised with no age check rather than held forever, and the required checks named here remain its gate.",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["SchemaStore/schemastore"],
       "minimumReleaseAgeBehaviour": "timestamp-optional",
@@ -62,16 +69,16 @@
       ]
     },
     {
-      "description": "cachix/git-hooks.nix master HEAD tracker. Uses git-refs datasource because that repo publishes 0 GitHub releases and 0 tags — master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; raises it with no age check (see the packageRule for why). This manager only substitutes the SHA in flake.nix; renovate-flake-lock-refresh.yml runs `nix flake update pre-commit-hooks` on the PR branch and commits the refreshed flake.lock. Until that commit lands the PR is red and cannot merge. When the auto-refresh does not fire, an issue is filed under the renovate-flake-lock-refresh-failure label and the manual fallback is in docs/architecture/flake-input-bumps.md.",
+      "description": "cachix/git-hooks.nix master HEAD tracker. Uses the github-digest datasource because that repo publishes 0 GitHub releases and 0 tags — master HEAD is the only upstream-truth signal — and github-digest, unlike git-refs, reports the commit date as a release timestamp, so minimumReleaseAge can age the update (see the packageRule). This manager only substitutes the SHA in flake.nix; renovate-flake-lock-refresh.yml runs `nix flake update pre-commit-hooks` on the PR branch and commits the refreshed flake.lock. Until that commit lands the PR is red and cannot merge. When the auto-refresh does not fire, an issue is filed under the renovate-flake-lock-refresh-failure label and the manual fallback is in docs/architecture/flake-input-bumps.md.",
       "customType": "regex",
       "managerFilePatterns": ["/^flake\\.nix$/"],
       "matchStrings": [
         "github:cachix/git-hooks\\.nix/(?<currentDigest>[0-9a-f]{40})"
       ],
       "currentValueTemplate": "master",
-      "datasourceTemplate": "git-refs",
+      "datasourceTemplate": "github-digest",
       "depNameTemplate": "cachix/git-hooks.nix",
-      "packageNameTemplate": "https://github.com/cachix/git-hooks.nix"
+      "packageNameTemplate": "cachix/git-hooks.nix"
     },
     {
       "description": "NixOS/nixpkgs stable branch tracker. Captures the YY.MM suffix of the nixos-YY.MM branch in flake.nix and watches NixOS/nixpkgs tags for new YY.MM tags (versioningTemplate restricts to MAJOR.MINOR form). NixOS tags only at GA, so this naturally proposes the next stable branch when it ships. This manager only substitutes the branch name in flake.nix; renovate-flake-lock-refresh.yml runs `nix flake update nixpkgs` on the PR branch and commits the refreshed flake.lock, and the PR stays red until it does. Expect downstream side-effects (image base-layer rotation, new bundled coreutils/bash versions, CRITICAL CVEs in the runtime payload) — see docs/architecture/flake-input-bumps.md for the triage tables.",
@@ -85,14 +92,14 @@
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)$"
     },
     {
-      "description": "SchemaStore master HEAD tracker for the JSON Schema URLs consumed by scripts/check-jsonschema.sh. Same shape as the cachix/git-hooks.nix manager — SchemaStore publishes 0 releases and 0 tags, master HEAD is the only upstream-truth signal. Renovate opens a PR whenever master advances; it is raised with no age check (see the packageRule for why). The bumped SHA is what check-jsonschema.sh validates against in CI, so a schema set that rejects a tracked file keeps the PR red.",
+      "description": "SchemaStore master HEAD tracker for the JSON Schema URLs consumed by scripts/check-jsonschema.sh. Same shape as the cachix/git-hooks.nix manager — SchemaStore publishes 0 releases and 0 tags, master HEAD is the only upstream-truth signal. Renovate ages each new master HEAD against its commit date (see the packageRule). The bumped SHA is what check-jsonschema.sh validates against in CI, so a schema set that rejects a tracked file keeps the PR red.",
       "customType": "regex",
       "managerFilePatterns": ["/^scripts/check-jsonschema\\.sh$/"],
       "matchStrings": ["SCHEMASTORE_SHA='(?<currentDigest>[0-9a-f]{40})'"],
       "currentValueTemplate": "master",
-      "datasourceTemplate": "git-refs",
+      "datasourceTemplate": "github-digest",
       "depNameTemplate": "SchemaStore/schemastore",
-      "packageNameTemplate": "https://github.com/SchemaStore/schemastore"
+      "packageNameTemplate": "SchemaStore/schemastore"
     },
     {
       "description": "octoscan container image pinned by digest in scripts/octoscan-scan.sh (single source of truth for the CI workflow and the pre-commit hook). The matchString spans both the OCTOSCAN_DIGEST and OCTOSCAN_VERSION shell vars so Renovate updates both atomically — no drift between digest and version label. Uses docker datasource; Renovate resolves the newest tag for ghcr.io/synacktiv/octoscan and substitutes both currentDigest + currentValue in one PR. Automerge is enabled via a scoped packageRule (matchDepNames narrow), matching the github-actions pattern (digest-pinned); unlike github-actions it is raised with no release-age wait, since GHCR carries no release timestamp (see its packageRule). The `sha256:` prefix MUST stay inside the currentDigest capture group: the docker datasource reports digests prefixed, so capturing bare hex makes every run compare `<hex>` against `sha256:<hex>`, report an update for a digest that never moved, and open a PR that check-pin-digest-provenance.sh then hard-fails as a repointed released tag — a standing false supply-chain alarm.",
