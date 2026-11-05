@@ -115,8 +115,11 @@ Each is gated by CI (build success + SRI-hash integrity), not by content
 review. A compromise of the upstream `linpeas.sh` feed produces an
 attested release within roughly 24 hours of upstream doing it; a
 compromised flake input merges within roughly a week, and a compromised
-Renovate-tracked dependency waits out the 7-day cooldown and merges in the
-weekly slot after it; either ships with the next release. This is the
+Renovate-tracked dependency merges in the first weekly slot after its 7-day
+`minimumReleaseAge` quarantine, except the octoscan image and the
+`cachix/git-hooks.nix` and SchemaStore master-HEAD trackers: their sources
+carry no release timestamp, so Renovate raises them with no age check and
+they merge in the next weekly slot. Either ships with the next release. This is the
 documented and accepted trust model for a thin wrapper repo — it matches
 the trust model
 of `curl ... | bash`, with the addition of reproducible, hash-pinned

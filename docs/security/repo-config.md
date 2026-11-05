@@ -128,7 +128,7 @@ Wired into the `renovate-invariants` CI job.
 ## Pin digest provenance
 
 `scripts/check-pin-digest-provenance.sh` (in the `lint-doc-invariants`
-CI group) diffs every action pin (`uses: <path>@<sha> # <version>`)
+CI group) diffs every action pin (`uses: <path>@<sha> # <version>`),
 the octoscan `OCTOSCAN_DIGEST`/`OCTOSCAN_VERSION` pair, and the
 TruffleHog image ref in `.github/trufflehog-image` against
 `origin/main`:
@@ -151,8 +151,8 @@ TruffleHog image ref in `.github/trufflehog-image` against
     object's hash covers the commit it tags, so retagging a released
     version moves the tag object too and the resolved commits still
     differ. Container digests name no git object, resolve to
-    themselves, and so never reach an API call — the octoscan pair is
-    judged purely on rule 1.
+    themselves, and so never reach an API call — the octoscan pair and
+    the TruffleHog image ref are judged purely on rule 1.
 1. A floating-major pin (`# vN`, no immutable patch tag upstream)
     legitimately retargets across patches, so its digest moves are
     instead verified reachable from the upstream default branch via

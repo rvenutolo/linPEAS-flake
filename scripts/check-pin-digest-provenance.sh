@@ -492,8 +492,8 @@ while IFS= read -r key; do
     # repoint without softening the gate: a tag object's hash covers the
     # commit it tags, so retagging a released version moves the tag
     # object too and the resolved commits still differ. Container
-    # digests resolve to themselves, so the octoscan pair never reaches
-    # an API call here.
+    # digests resolve to themselves, so the octoscan pair and the
+    # TruffleHog image ref never reach an API call here.
     resolved_base=""
     while IFS= read -r sha; do
       [[ -n ${sha} ]] || continue

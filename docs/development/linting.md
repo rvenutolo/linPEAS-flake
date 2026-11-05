@@ -1066,10 +1066,11 @@ even when the pre-commit hook is bypassed.
 
 ## Generated-document ownership
 
-Fourteen regions are written by a `refresh-*.sh` generator and must not be
-hand-edited — one per `@generates` / `@generates-block` declaration those
-generators carry, which `grep -h '^# @generates' scripts/refresh-*.sh` lists
-(`README.md` carries two of them). Two are whole files:
+The documentation regions below are written by a `refresh-*.sh` generator
+and must not be hand-edited — one per `@generates` / `@generates-block`
+declaration naming a doc, which `grep -h '^# @generates' scripts/refresh-*.sh`
+lists (`README.md` carries two of them; the non-doc file that list also
+names is covered at the end of this section). Two are whole files:
 [`docs/reference/test-harnesses.md`](../reference/test-harnesses.md) and
 [`docs/security/enforcement-matrix.md`](../security/enforcement-matrix.md),
 whose generators emit the heading and every line around the table. Ten are
@@ -1098,7 +1099,7 @@ functional-gates table in [`ci.md`](../architecture/ci.md) and the CI tested
 column of the platform-support table in [`nix.md`](../install/nix.md).
 
 `refresh-just-recipes.sh` and `refresh-runner-labels.sh` each own two of those,
-which is why twelve generators produce fourteen regions. This list splits by
+which is why there are more regions than generators writing them. This list splits by
 what the generator emits; the annotations split by size-label ownership, where
 a page whose block is the whole of its content is `@generates` even though it
 splices into a fixed header — see [labeling.md](labeling.md#ignore-list-parity) for the
@@ -1119,6 +1120,13 @@ the web UI, or with `--no-verify` — is therefore caught by the next regenerati
 Fixing content inside one of these regions means editing its generator — or,
 for the enforcement matrix, the `enforcer:` / `ci:` / `hook:` annotations in
 [`docs/invariant-index.md`](../invariant-index.md) it renders from.
+
+`refresh-trufflehog-image.sh` also declares `@generates .github/trufflehog-image`, which is not a doc. It resolves the image digest
+from ghcr.io, so no `*-fresh` hook can run it, and its `doc-freshness`
+harness stubs the registry rather than reading the committed file. The
+committed file is gated by the `trufflehog-image-pin` lint and the
+`trufflehog` job's `--check` step; see
+[trufflehog-image-pin](../security/workflow-hardening.md#trufflehog-image-pin).
 
 `CHANGELOG.md` is generator-owned too, on different terms: git-cliff writes
 it, no `*-fresh` hook covers it, and freshness is asserted by

@@ -3,9 +3,11 @@
 This page is the triage runbook for the Renovate PRs that touch
 flake-input pins in `flake.nix`:
 
-- **`cachix/git-hooks.nix`** — master HEAD tracker. Fires when
-    upstream master has moved and the new head has cleared the global
-    7-day `minimumReleaseAge` quarantine.
+- **`cachix/git-hooks.nix`** — master HEAD tracker. Fires on the
+    Friday Renovate run after upstream master moves. git-refs carry no
+    release timestamp, so its packageRule sets
+    `minimumReleaseAgeBehaviour: timestamp-optional` and Renovate raises
+    it with no `minimumReleaseAge` check.
 - **`NixOS/nixpkgs`** — stable-branch tracker. Fires when the next
     NixOS GA tag (`YY.MM`) lands plus the global 7-day
     `minimumReleaseAge` quarantine. **Blast: the linpeas runtime
@@ -100,8 +102,8 @@ bump that already landed breaks something.
 
 Bump cadence, which sets how often either case comes up:
 
-- `cachix/git-hooks.nix`: whenever upstream master advances past the
-    7-day quarantine, at most once per Friday Renovate run.
+- `cachix/git-hooks.nix`: whenever upstream master advances, at most
+    once per Friday Renovate run, with no release-age wait.
 - `NixOS/nixpkgs`: twice per year (May `YY.05`, November `YY.11`).
 - `nixpkgs-unstable`: weekly via the `update-flake-lock.yml` cron, not
     Renovate. Carries the tooling layer.
@@ -207,8 +209,8 @@ Out of scope for unstable bumps (these only happen on stable):
 
 PR title looks like one of:
 
-- `Update cachix/git-hooks.nix digest to <new-SHA>`
-- `Update NixOS/nixpkgs to <version>`
+- `chore(deps): update cachix/git-hooks.nix digest to <short-SHA>`
+- `chore(deps): update dependency nixos/nixpkgs to <version>`
 
 Only the dependency-name substring is matched, so the surrounding wording
 is not load-bearing — the `identify` job shells out to
@@ -655,9 +657,9 @@ Which refreshes run, past those gates:
     so the runner-label refresh runs beside it. `compute-refresh` runs
     the generators in `PIN_DERIVED_GENERATORS`
     (`scripts/refresh-trufflehog-image.sh`), which reaches `ghcr.io`
-    anonymously; that host and its blob host
-    `pkg-containers.githubusercontent.com` are on the job's egress
-    allowlist for it. Most such PRs leave the action pin where it was,
+    anonymously; `ghcr.io` is on the job's egress allowlist for it, with
+    its blob host `pkg-containers.githubusercontent.com` beside it as the
+    `egress-allowlist` lint requires. Most such PRs leave the action pin where it was,
     so the usual outcome is again no diff.
 
 A PR that needs more than one gets them all in the one
@@ -747,7 +749,8 @@ the gate. That matters most here, because this workflow reacts to
 someone else's PR — a red run in the Actions tab has no watcher at the
 moment it goes red, and the PR it was meant to repair sits with a
 failing `flake-check` (lock refresh), `doc-freshness` (runner-label
-refresh) or `lint-workflow-security` (TruffleHog image refresh) instead. A combination the job graph cannot
+refresh), or `lint-workflow-security` and `trufflehog` (TruffleHog image
+refresh) instead. A combination the job graph cannot
 produce classifies as `failure` too: an issue naming a drifted workflow
 beats the silence. `tests/classify-refresh-notify-result.test.sh` holds
 the matrix, including these cases: a failed `identify` reports, a `ci` completion that is not a
@@ -839,10 +842,12 @@ The `trufflesecurity/trufflehog` action runs a container image, which
 `trufflehog.yml` pins by tag and digest through `.github/trufflehog-image`
 (see [trufflehog-image-pin](../security/workflow-hardening.md#trufflehog-image-pin)).
 Renovate moves the action pin in its `github-actions` group but not the
-image: ghcr.io publishes no release timestamps, so Renovate's release-age
-gate never clears an image update. The PR that moves the pin therefore
-arrives with the file naming the old release, and the
-`trufflehog-image-pin` lint keeps `lint-workflow-security` red on it.
+image: no Renovate manager reads `.github/trufflehog-image`, because the
+image's tag follows the action pin rather than a release stream of its
+own. The PR that moves the pin therefore arrives with the file naming the
+old release, and it stays red in the required `lint-workflow-security`
+check, through the `trufflehog-image-pin` lint, and in the required
+`trufflehog` check, through its `--check` step.
 
 `compute-refresh` runs `scripts/refresh-trufflehog-image.sh`. It reads
 the `# vX.Y.Z` comment of the action pin, asks ghcr.io anonymously for
@@ -966,9 +971,10 @@ one.
 `PIN_DERIVED_GENERATORS` is optional too, for generators whose output
 derives from an action pin in a workflow by a registry lookup, such as
 `scripts/refresh-trufflehog-image.sh`. No freshness hook can run one,
-because a hook has no network, so no hook binding applies: the lint that
-reads the output (`trufflehog-image-pin` here) is what keeps a stale one
-red at PR time. Each entry must be an executable generator that declares
+because a hook has no network, so no hook binding applies: the checks
+that read the output keep a stale one red at PR time — for the TruffleHog
+image, the `trufflehog-image-pin` lint and the `trufflehog` job's
+`--check` step. Each entry must be an executable generator that declares
 its outputs and sits in neither other list, and its declared outputs join
 the same committable bound.
 

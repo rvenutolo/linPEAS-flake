@@ -15,11 +15,11 @@ name: renovate-flake-lock-refresh
 #   - A bump of the `trufflesecurity/trufflehog` action pin in
 #     `.github/workflows/trufflehog.yml` leaves `.github/trufflehog-image`
 #     naming the old release's container image, and the
-#     `trufflehog-image-pin` lint fails until
-#     `scripts/refresh-trufflehog-image.sh` resolves the new release's
-#     digest on ghcr.io and rewrites it. Renovate cannot move the image
-#     itself: ghcr.io publishes no release timestamps, so its release-age
-#     gate never clears an image update.
+#     `trufflehog-image-pin` lint and the `trufflehog` job's `--check`
+#     step fail until `scripts/refresh-trufflehog-image.sh` resolves the
+#     new release's digest on ghcr.io and rewrites it. Renovate does not
+#     move the image itself: no Renovate manager reads the file, whose
+#     tag follows the action pin.
 #
 # The manual fallback for all three is the
 # `docs/architecture/flake-input-bumps.md` runbook. A PR can need more

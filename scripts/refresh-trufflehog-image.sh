@@ -20,8 +20,8 @@
 # anonymous: the image is public, and ghcr.io issues a pull token scoped
 # to it without credentials.
 #
-# Renovate cannot keep this file in step itself (ghcr.io publishes no
-# release timestamps, so its release-age gate never clears the image), so
+# Renovate does not keep this file in step itself (no Renovate manager
+# reads it: the image's tag follows the action pin), so
 # renovate-flake-lock-refresh.yml runs this on every Renovate PR that
 # changes trufflehog.yml and commits the result.
 # scripts/check-trufflehog-image-pin.sh keeps a PR whose file names
