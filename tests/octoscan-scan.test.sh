@@ -228,21 +228,69 @@ function run_sarif_location_scenario() {
   rm --force -- "${stdout_file}" "${stderr_file}" "${outcome_file}" "${sarif_file}"
 }
 
+# @description List the scripts/lib files the scan script sources, directly
+#              or through another library, one repo-relative path per line.
+#              Every `source` line in a file read must have the
+#              `source "${dir}/[lib/]<name>.sh"` shape: one that does not is
+#              an input this cannot name, so it fails instead of being
+#              skipped.
+# @noargs
+function scan_script_lib_deps() {
+  local -a queue=("scripts/octoscan-scan.sh") seen=()
+  local f name n_source n_matched line
+  while ((${#queue[@]} > 0)); do
+    f="${queue[0]}"
+    queue=("${queue[@]:1}")
+    n_source="$(LC_ALL=C grep --count --extended-regexp '^[[:space:]]*source[[:space:]]' -- "${REPO_ROOT}/${f}" || true)"
+    n_matched=0
+    while IFS= read -r line; do
+      [[ -n ${line} ]] || continue
+      n_matched=$((n_matched + 1))
+      name="${line##*/}"
+      name="scripts/lib/${name%\"}"
+      if [[ " ${seen[*]} " != *" ${name} "* ]]; then
+        seen+=("${name}")
+        queue+=("${name}")
+      fi
+    done < <(LC_ALL=C grep --only-matching --extended-regexp \
+      '^[[:space:]]*source "[$][{][_A-Za-z][_A-Za-z0-9]*[}]/(lib/)?[-_.A-Za-z0-9]+[.]sh"' \
+      -- "${REPO_ROOT}/${f}" || true)
+    if ((n_matched != n_source)); then
+      printf '%s: %d source line(s), %d in the readable shape\n' "${f}" "${n_source}" "${n_matched}" >&2
+      return 1
+    fi
+  done
+  if ((${#seen[@]} > 0)); then
+    printf '%s\n' "${seen[@]}"
+  fi
+}
+
 # @description Assert the octoscan workflow's pull_request paths filter
 #              names every input that can change a scan's result: the
-#              workflows it scans, this script, and the two files that
-#              decide which octoscan binary runs. A filter missing one
-#              lets a PR change that input with no scan on the PR.
+#              workflows it scans, this script and every library it
+#              sources, and the two files that decide which octoscan binary
+#              runs. A filter missing one lets a PR change that input with
+#              no scan on the PR.
 # @noargs
 function check_pr_paths_cover_scanner_inputs() {
   local -r name='the PR paths filter covers every scanner input'
   local -r workflow="${REPO_ROOT}/.github/workflows/octoscan.yml"
-  local -ra required=(
+  local -a required=(
     '.github/workflows/**'
     'scripts/octoscan-scan.sh'
     'flake.lock'
     'nix/packages.nix'
   )
+  local deps
+  if ! deps="$(scan_script_lib_deps)"; then
+    printf 'FAIL: %s — cannot list the libraries scripts/octoscan-scan.sh sources\n' "${name}" >&2
+    failures=$((failures + 1))
+    return 0
+  fi
+  local dep
+  while IFS= read -r dep; do
+    [[ -n ${dep} ]] && required+=("${dep}")
+  done <<<"${deps}"
   local paths missing=() p
   if ! paths="$(yq --exit-status '.on.pull_request.paths[]' "${workflow}" 2>&1)"; then
     printf 'FAIL: %s — cannot read on.pull_request.paths from %s: %s\n' \
@@ -254,6 +302,7 @@ function check_pr_paths_cover_scanner_inputs() {
     grep --fixed-strings --line-regexp --quiet -- "${p}" <<<"${paths}" || missing+=("${p}")
   done
   if ((${#missing[@]} > 0)); then
+    local IFS=' '
     printf 'FAIL: %s — missing: %s\n' "${name}" "${missing[*]}" >&2
     failures=$((failures + 1))
   else
