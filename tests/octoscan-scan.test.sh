@@ -112,7 +112,9 @@ function run_scenario() {
 #              `runner-label`, and it gets its own code. A `--format sarif`
 #              call prints one result whose location is the path the script
 #              passed to `scan`, so the merged SARIF shows which path form
-#              reaches code scanning.
+#              reaches code scanning. Like the real scanner, it cannot scan
+#              a target it cannot open from its working directory: that is a
+#              scanner error (exit 1).
 # @arg $1 exit code the stub returns for a workflow scan
 # @arg $2 exit code for the runner-label probe (default 2: label still flagged)
 function make_octoscan_stub() {
@@ -131,6 +133,7 @@ for a in "\$@"; do
   [[ \${prev} == --format && \${a} == sarif ]] && sarif=1
   prev="\${a}"
 done
+[[ -r \${target} ]] || exit 1
 if ((sarif)); then
   printf '{"runs":[{"tool":{"driver":{"name":"octoscan"}},"results":[{"ruleId":"stub-rule","locations":[{"physicalLocation":{"artifactLocation":{"uri":"%s"}}}]}]}]}\n' "\${target}"
 fi
@@ -169,9 +172,15 @@ SEQ
 #              on no file in the repository.
 # @arg $1 scenario name
 # @arg $2 stub directory to put first on PATH
+# @arg $3 directory the script is started from
+# @arg $4 expected `has-finding=` line
+# @arg $5 expected classification
 function run_sarif_location_scenario() {
   local -r name="$1"
   local -r stub_dir="$2"
+  local -r workdir="$3"
+  local -r expected_finding="$4"
+  local -r expected_class="$5"
   local stdout_file stderr_file outcome_file sarif_file
   stdout_file="$(mktemp)"
   stderr_file="$(mktemp)"
@@ -179,20 +188,24 @@ function run_sarif_location_scenario() {
   sarif_file="$(mktemp)"
 
   local actual_exit=0
-  env --unset=BASH_ENV "PATH=${stub_dir}:${PATH}" "${SCRIPT}" --sarif "${sarif_file}" \
+  (cd -- "${workdir}" &&
+    env --unset=BASH_ENV "PATH=${stub_dir}:${PATH}" "${SCRIPT}" --sarif "${sarif_file}") \
     >"${stdout_file}" 2>"${stderr_file}" || actual_exit=$?
   printf 'harness-assert-outcome: exit=%d\n' "${actual_exit}" >"${outcome_file}"
+  # The script deletes a partial SARIF when any file errored; record that
+  # outcome as an empty report so the scenario reports it, rather than the
+  # recorder aborting on a missing output file.
+  [[ -e ${sarif_file} ]] || : >"${sarif_file}"
   harness_assert_record "${name}" '"uri": ".github/workflows/' \
     "${outcome_file}" "${stdout_file}" "${stderr_file}" "${sarif_file}"
-  harness_assert_also 'has-finding=true'
-  harness_assert_also 'classification=findings'
+  harness_assert_also "${expected_finding}"
+  harness_assert_also "${expected_class}"
 
   local failed=0 uris bad
-  if [[ ${actual_exit} -ne 1 ]] ||
-    ! grep --fixed-strings --quiet -- 'has-finding=true' "${stdout_file}" ||
-    ! grep --fixed-strings --quiet -- 'classification=findings' "${stdout_file}"; then
-    printf 'FAIL: %s — expected exit 1 with has-finding=true and classification=findings, got exit %d:\n' \
-      "${name}" "${actual_exit}" >&2
+  if ! grep --fixed-strings --quiet -- "${expected_finding}" "${stdout_file}" ||
+    ! grep --fixed-strings --quiet -- "${expected_class}" "${stdout_file}"; then
+    printf 'FAIL: %s — expected %s and %s, got exit %d:\n' \
+      "${name}" "${expected_finding}" "${expected_class}" "${actual_exit}" >&2
     cat -- "${stdout_file}" >&2
     failed=1
   fi
@@ -213,6 +226,39 @@ function run_sarif_location_scenario() {
     failures=$((failures + 1))
   fi
   rm --force -- "${stdout_file}" "${stderr_file}" "${outcome_file}" "${sarif_file}"
+}
+
+# @description Assert the octoscan workflow's pull_request paths filter
+#              names every input that can change a scan's result: the
+#              workflows it scans, this script, and the two files that
+#              decide which octoscan binary runs. A filter missing one
+#              lets a PR change that input with no scan on the PR.
+# @noargs
+function check_pr_paths_cover_scanner_inputs() {
+  local -r name='the PR paths filter covers every scanner input'
+  local -r workflow="${REPO_ROOT}/.github/workflows/octoscan.yml"
+  local -ra required=(
+    '.github/workflows/**'
+    'scripts/octoscan-scan.sh'
+    'flake.lock'
+    'nix/packages.nix'
+  )
+  local paths missing=() p
+  if ! paths="$(yq --exit-status '.on.pull_request.paths[]' "${workflow}" 2>&1)"; then
+    printf 'FAIL: %s — cannot read on.pull_request.paths from %s: %s\n' \
+      "${name}" "${workflow}" "${paths}" >&2
+    failures=$((failures + 1))
+    return 0
+  fi
+  for p in "${required[@]}"; do
+    grep --fixed-strings --line-regexp --quiet -- "${p}" <<<"${paths}" || missing+=("${p}")
+  done
+  if ((${#missing[@]} > 0)); then
+    printf 'FAIL: %s — missing: %s\n' "${name}" "${missing[*]}" >&2
+    failures=$((failures + 1))
+  else
+    printf 'PASS: %s\n' "${name}"
+  fi
 }
 
 function main() {
@@ -287,8 +333,21 @@ function main() {
 
   local stub_sarif
   stub_sarif="$(make_octoscan_stub 2)"
-  run_sarif_location_scenario 'merged SARIF names repo-relative workflow paths' "${stub_sarif}"
+  run_sarif_location_scenario 'merged SARIF names repo-relative workflow paths' \
+    "${stub_sarif}" "${REPO_ROOT}" 'has-finding=true' 'classification=findings'
   rm --recursive --force -- "${stub_sarif}"
+
+  # The hook runs from the repository root, but a person can start the script
+  # from anywhere in the tree. Every workflow must still reach the scanner by
+  # its repo-relative path, opened from the root: a clean scan with
+  # repo-relative SARIF locations, not a run of per-file scanner errors.
+  local stub_subdir
+  stub_subdir="$(make_octoscan_stub 0)"
+  run_sarif_location_scenario 'a scan started from a subdirectory scans every workflow' \
+    "${stub_subdir}" "${REPO_ROOT}/docs" 'has-finding=false' 'classification=clean'
+  rm --recursive --force -- "${stub_subdir}"
+
+  check_pr_paths_cover_scanner_inputs
 
   harness_assert_verify || failures=$((failures + 1))
 
