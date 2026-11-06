@@ -88,7 +88,7 @@ tree.)
     than the staged files to match the CI invocation (it self-skips
     inside the Nix build sandbox, so `nix flake check` does not run the
     scan); PR to `main` filtered to `.github/workflows/**`, the octoscan
-    scan script, `flake.lock` and `nix/packages.nix` (the last two can
+    scan script and the `scripts/lib` files it sources, `flake.lock` and `nix/packages.nix` (the last two can
     change the octoscan binary); push to `main`; weekly
     Friday cron (the whole workflow directory, unfiltered); manual dispatch.
 - **Trust root:** the nixpkgs build of octoscan from the flake's locked
