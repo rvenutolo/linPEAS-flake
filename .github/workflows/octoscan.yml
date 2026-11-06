@@ -30,11 +30,15 @@ on:
     # workflows — do not promote this one without removing the
     # filter). The weekly cron still sweeps everything. A flake.lock
     # or nix/packages.nix change can swap the octoscan binary itself,
-    # so a nixpkgs bump scans with the new version on its own PR.
+    # so a nixpkgs bump scans with the new version on its own PR. The
+    # scripts/lib files are the libraries the scan script sources;
+    # tests/octoscan-scan.test.sh fails if one is missing here.
     paths:
       - ".github/workflows/**"
       - "flake.lock"
       - "nix/packages.nix"
+      - "scripts/lib/repo.sh"
+      - "scripts/lib/temp.sh"
       - "scripts/octoscan-scan.sh"
   push:
     branches: [main]
