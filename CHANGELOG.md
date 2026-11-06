@@ -6,6 +6,28 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261105-ec02c390] - 2026-11-06
+
+### CI
+- Run octoscan from the flake-locked nixpkgs package ([#1490](https://github.com/rvenutolo/linPEAS-flake/pull/1490))
+- Run TruffleHog from its cosign-verified release binary ([#1487](https://github.com/rvenutolo/linPEAS-flake/pull/1487))
+- Age the git-hooks.nix and SchemaStore pins by commit date ([#1485](https://github.com/rvenutolo/linPEAS-flake/pull/1485))
+
+### Chores
+- Bump linpeas to 20261105-ec02c390 ([#1496](https://github.com/rvenutolo/linPEAS-flake/pull/1496))
+- Update flake.lock ([#1495](https://github.com/rvenutolo/linPEAS-flake/pull/1495))
+- Update davidanson/markdownlint-cli2-action action to v25 ([#1493](https://github.com/rvenutolo/linPEAS-flake/pull/1493))
+- Update dependency trufflesecurity/trufflehog to v3.99.7 ([#1492](https://github.com/rvenutolo/linPEAS-flake/pull/1492))
+
+### Documentation
+- Fix the drift the cycle-closing docs audit found ([#1484](https://github.com/rvenutolo/linPEAS-flake/pull/1484))
+
+### Fixes
+- Scan PRs that change octoscan's sourced libraries ([#1494](https://github.com/rvenutolo/linPEAS-flake/pull/1494))
+
+### Tests
+- Guard octoscan's PR paths filter and subdirectory runs ([#1491](https://github.com/rvenutolo/linPEAS-flake/pull/1491))
+
 ## [20261102-ebea5d0c] - 2026-11-03
 
 ### Chores
