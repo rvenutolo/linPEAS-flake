@@ -119,7 +119,8 @@ Renovate-tracked dependency merges in the first weekly slot after its 7-day
 `minimumReleaseAge` quarantine. For the `cachix/git-hooks.nix` and
 SchemaStore master-HEAD trackers that quarantine is measured from the
 commit date, which the committer sets, so a backdated commit clears it at
-once. Either ships with the next release. This is the
+once. A compromised flake input or Renovate-tracked dependency ships with
+the next release. This is the
 documented and accepted trust model for a thin wrapper repo — it matches
 the trust model
 of `curl ... | bash`, with the addition of reproducible, hash-pinned
@@ -260,9 +261,11 @@ provenance only.
 `step-security/harden-runner` runs as the first step of every job in
 every workflow, with `egress-policy: block` as the policy. Each job declares an
 `allowed-endpoints:` allowlist scoped to the minimum outbound hosts it
-needs: a two-host floor (`api.github.com`, `github.com`),
-`objects.githubusercontent.com` on all but a couple of jobs whose
-allowlist is the bare floor, `release-assets.githubusercontent.com` on
+needs: `api.github.com` on every job, `github.com` and
+`objects.githubusercontent.com` on most — the exceptions are the API-only
+`ci-watchdog` and `docs-audit-reminder` jobs and the SARIF-upload jobs,
+which reach the API host and the Actions artifact-storage wildcards
+instead — `release-assets.githubusercontent.com` on
 many jobs — a `github.com/…/releases/download/` URL 302s there, so a
 Nix build that fetches the pinned `linpeas.sh` release asset reaches it,
 as does `codeql-action/init`'s bundle; `scripts/check-egress-allowlist.sh`
