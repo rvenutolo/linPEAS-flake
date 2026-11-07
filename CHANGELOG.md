@@ -6,6 +6,14 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261107-6821b3db] - 2026-11-07
+
+### CI
+- Run SARIF uploads in jobs that run no scanner ([#1498](https://github.com/rvenutolo/linPEAS-flake/pull/1498))
+
+### Chores
+- Bump linpeas to 20261107-6821b3db ([#1499](https://github.com/rvenutolo/linPEAS-flake/pull/1499))
+
 ## [20261105-ec02c390] - 2026-11-06
 
 ### CI
