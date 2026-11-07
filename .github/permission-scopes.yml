@@ -33,8 +33,8 @@ gitleaks.yml:
   notify: [issues]
 image-cve-scan.yml:
   # The Trivy and Grype jobs hold no write scope, so a compromised
-  # scanner reaches only a contents: read token; these jobs upload
-  # their SARIF.
+  # scanner finds a contents: read GITHUB_TOKEN; these jobs upload their
+  # SARIF, each taking its artifact by ID.
   image-cve-scan-trivy-upload-sarif: [security-events]
   image-cve-scan-trivy-notify-finding: [issues]
   image-cve-scan-trivy-notify-infra: [issues]
@@ -50,7 +50,7 @@ links.yml:
   notify: [issues]
 octoscan.yml:
   # The scanner's own job holds no write scope, so a compromised octoscan
-  # build reaches only a contents: read token; this job uploads its SARIF.
+  # build finds a contents: read GITHUB_TOKEN; this job uploads its SARIF.
   upload-sarif: [security-events]
   notify-finding: [issues]
   notify-infra: [issues]
