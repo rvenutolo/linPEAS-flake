@@ -150,7 +150,7 @@ the [Trivy](docs/security/verification.md#oci-image-cve-scan-trivy) and
 [Grype](docs/security/verification.md#oci-image-cve-scan-grype)
 sections. The rest of this section covers `codeql.yml`.
 
-**`codeql.yml`** scans GitHub Actions workflow definitions on every PR,
+**`codeql.yml`** scans GitHub Actions workflow definitions on every PR to `main`,
 every push to `main`, and weekly. It runs unfiltered because the OpenSSF
 Scorecard SAST check scores the fraction of recent merged PRs that ran a
 SAST tool, so skipping path-narrow PRs would drag that fraction down.
@@ -262,10 +262,12 @@ provenance only.
 every workflow, with `egress-policy: block` as the policy. Each job declares an
 `allowed-endpoints:` allowlist scoped to the minimum outbound hosts it
 needs: `api.github.com` on every job, `github.com` and
-`objects.githubusercontent.com` on most — the exceptions are the API-only
-`ci-watchdog` and `docs-audit-reminder` jobs and the SARIF-upload jobs,
-which reach the API host and the Actions artifact-storage wildcards
-instead — `release-assets.githubusercontent.com` on
+`objects.githubusercontent.com` on most — the exceptions are the `retry`
+job of `ci-watchdog.yml` and the `pressure` job of
+`docs-audit-reminder.yml`, which allow the two GitHub hosts alone, and
+the SARIF-upload jobs, which add the Actions artifact-storage wildcards
+and drop `objects.githubusercontent.com` —
+`release-assets.githubusercontent.com` on
 many jobs — a `github.com/…/releases/download/` URL 302s there, so a
 Nix build that fetches the pinned `linpeas.sh` release asset reaches it,
 as does `codeql-action/init`'s bundle; `scripts/check-egress-allowlist.sh`

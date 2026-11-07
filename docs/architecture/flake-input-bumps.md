@@ -443,9 +443,8 @@ jobs instead, though not all: `patch-tag-pins` is pre-commit only,
 workflow, `octoscan`'s live coverage is the `octoscan.yml`
 workflow, which runs on the bump PR itself because a `flake.lock`
 change can swap the octoscan binary (its harness in `harness-group`
-runs the scanner only against stubs and fixtures, but does assert that
-the workflow's PR `paths:` filter still names every scanner input), and
-the two
+runs the scan script with a stubbed octoscan and asserts that the
+workflow's PR `paths:` filter names the scanner's inputs), and the two
 actionlint canaries (`actionlint-shellcheck-active`,
 `actionlint-pyflakes-active`) run as pre-commit hooks, with
 `harness-group` running their harnesses — the hook's own default

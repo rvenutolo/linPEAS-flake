@@ -436,7 +436,7 @@ runs. Neither substitutes for the other, and dropping either needs a
 
 ## Dependency review<a name="dependency-review"></a>
 
-`dependency-review.yml` runs on every PR via
+`dependency-review.yml` runs on every PR to `main` via
 `actions/dependency-review-action`. Required check named
 `dependency-review`. `fail-on-severity: moderate`,
 `comment-summary-in-pr: on-failure`. Its egress allowlist includes
