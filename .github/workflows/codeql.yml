@@ -12,7 +12,7 @@ name: codeql
 # false positive or a transient CodeQL infra flake wedge every PR. The
 # merge gate is the in-tree workflow lints plus the zizmor pre-commit
 # hook; CodeQL is the deeper dataflow second opinion that runs on every
-# PR for fast feedback without holding the merge button hostage.
+# PR to `main` for fast feedback without holding the merge button hostage.
 # The `analyze` step is invoked with `fail-on: critical`, so a
 # CRITICAL finding fails the job and — on push, cron and dispatch
 # runs — the `notify-finding` job opens a deduped issue via
