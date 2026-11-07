@@ -106,10 +106,11 @@ tree.)
     findings but cannot reach other tools' code-scanning alerts.
 - **Status:** advisory by design. It is the cheapest scanner, but it fails
     on *any* finding (no severity threshold), so as a required check a
-    single false positive would block merge. On non-PR runs, a finding, and
-    a failure that produced no complete findings result, a cancelled job among them, are paged as separate
-    deduped issues, under `octoscan-finding` <!-- notify-arms: octoscan.yml/notify-finding = finding non-pr -->
-    and `octoscan-infra` <!-- notify-arms: octoscan.yml/notify-infra = failure cancelled non-pr -->.
+    single false positive would block merge. On non-PR runs, a finding is
+    paged under `octoscan-finding` <!-- notify-arms: octoscan.yml/notify-finding = finding non-pr -->,
+    and a failure that produced no complete findings result — a cancelled
+    job included — under `octoscan-infra` <!-- notify-arms: octoscan.yml/notify-infra = failure cancelled non-pr -->,
+    as separate deduped issues.
     A failed or cancelled `upload-sarif` job is paged under the same
     `octoscan-infra` issue <!-- notify-arms: octoscan.yml/notify-upload-sarif = failure cancelled non-pr -->.
     octoscan's rule set is narrowed only

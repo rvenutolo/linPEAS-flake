@@ -322,7 +322,7 @@ exemption.
 
 ## Gitleaks secret scanning<a name="gitleaks-secret-scanning"></a>
 
-`gitleaks.yml` runs on push to main, every PR, a weekly Friday cron,
+`gitleaks.yml` runs on push to main, every PR to `main`, a weekly Friday cron,
 and manual dispatch. On a PR, `gitleaks-action` scans the PR's commits.
 On a push it scans the pushed range with `--no-merges --first-parent`,
 which leaves out a merge commit and the branch it brought in, so the
@@ -360,7 +360,7 @@ request run's failure shows on the PR.
 
 ## TruffleHog secret scanning<a name="trufflehog-secret-scanning"></a>
 
-`trufflehog.yml` runs on push to main, every PR, a weekly Friday cron,
+`trufflehog.yml` runs on push to main, every PR to `main`, a weekly Friday cron,
 and manual dispatch. It scans the commits between a push's before and
 after SHAs or a PR's base and head, the branches merge commits bring in
 included, and the full history (`fetch-depth: 0`) on the cron and a
@@ -514,7 +514,7 @@ filtering) that reaches the Security tab under
 category `grype-image-cve`, using Grype as a second-opinion scanner
 alongside Trivy. The job fails (and emits a notify issue) on a CRITICAL
 finding, and — like Trivy — on any infrastructure failure ahead of the
-count step; the two notify jobs below distinguish the cases. Advisory only — not
+count step; the finding and infra notify jobs below distinguish the cases. Advisory only — not
 a required status check; prevention path is a nixpkgs bump via
 `update-flake-lock`. As with Trivy, the scan job holds only
 `contents: read` and saves its SARIF as an artifact; the
