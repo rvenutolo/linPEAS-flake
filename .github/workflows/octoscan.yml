@@ -117,11 +117,11 @@ jobs:
           # Script prints `has-finding=true|false` to stdout exactly
           # once and writes the SARIF report to the path passed via
           # `--sarif`. Capture stdout to forward `has-finding` to
-          # GITHUB_OUTPUT; rc=0 clean, rc=1 = findings present, the
-          # scanner ran and errored, or a runner-label suppression is
-          # stale, rc=2 = the scan could not proceed
-          # (octoscan or jq absent, or a per-file temp file could not be
-          # created); notify jobs branch on has-finding. The captured
+          # GITHUB_OUTPUT; rc=0 clean, rc=1 = findings present, or a scan
+          # that ran but did not complete cleanly, rc=2 = the scan could
+          # not proceed; the header of `scripts/octoscan-scan.sh` holds
+          # the exit-code contract. Notify jobs branch on has-finding. The
+          # captured
           # text is printed to the step log too, because the
           # `classification=` line the notify-infra body sends a reader
           # to is on stdout.
