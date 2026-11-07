@@ -32,12 +32,17 @@ dockerhub-sync.yml:
 gitleaks.yml:
   notify: [issues]
 image-cve-scan.yml:
-  image-cve-scan-trivy: [security-events]
+  # The Trivy and Grype jobs hold no write scope, so a compromised
+  # scanner reaches only a contents: read token; these jobs upload
+  # their SARIF.
+  image-cve-scan-trivy-upload-sarif: [security-events]
   image-cve-scan-trivy-notify-finding: [issues]
   image-cve-scan-trivy-notify-infra: [issues]
-  image-cve-scan-grype: [security-events]
+  image-cve-scan-trivy-notify-upload-sarif: [issues]
+  image-cve-scan-grype-upload-sarif: [security-events]
   image-cve-scan-grype-notify-finding: [issues]
   image-cve-scan-grype-notify-infra: [issues]
+  image-cve-scan-grype-notify-upload-sarif: [issues]
 labeler.yml:
   label: [pull-requests]
   size: [pull-requests]

@@ -453,37 +453,47 @@ Scorecard summary of each changed dependency.
 ## OCI image CVE scan (Trivy)<a name="oci-image-cve-scan-trivy"></a>
 
 `image-cve-scan.yml`'s `image-cve-scan-trivy` job (weekly cron +
-path-filtered push to `main` + dispatch) uploads SARIF
-(CRITICAL + HIGH) to the Security tab, then
+path-filtered push to `main` + dispatch) saves its SARIF
+(CRITICAL + HIGH) as an artifact, then
 post-processes the SARIF to count CRITICAL findings and **fails the
 job** when count > 0. The job emits an `outputs.has-finding` boolean
 (`'true'` iff the count step ran and returned a non-zero count) so
 notify jobs can distinguish a real CRITICAL CVE from an
 infrastructure failure that prevented a CRITICAL count from being
-produced.
+produced. The job holds only `contents: read`: a separate
+`image-cve-scan-trivy-upload-sarif` job, which holds
+`security-events: write` and runs neither Trivy nor Nix, uploads the
+artifact to the Security tab under category `trivy-image-cve`.
 
-Two follow-on jobs open or update deduped issues via
-`notify-workflow-result`. Each waits for both scanner jobs and gates on
-the Trivy job's result and its `has-finding` output:
+Three follow-on jobs open or update deduped issues via
+`notify-workflow-result`. Each waits for both scanner jobs and both
+upload jobs; the first two gate on the Trivy job's result and its
+`has-finding` output:
 
 - `image-cve-scan-trivy-notify-finding` (label: `image-cve-critical-trivy`) — real
     CRITICAL CVE reported by Trivy <!-- notify-arms: image-cve-scan.yml/image-cve-scan-trivy-notify-finding = finding -->.
     Remediation: bump `nixpkgs`.
 
 - `image-cve-scan-trivy-notify-infra` (label: `image-cve-infra-trivy`) — job failed
-    before Trivy produced a CRITICAL count (build, scan, SARIF
-    upload, or the count step itself broke — Trivy may or may not have
+    before Trivy produced a CRITICAL count (build, scan, saving the
+    SARIF artifact, or the count step itself broke — Trivy may or may not have
     found a CRITICAL), or the job was cancelled (no runner, or its
     timeout) <!-- notify-arms: image-cve-scan.yml/image-cve-scan-trivy-notify-infra = failure cancelled -->.
     Remediation: inspect the failing step; if transient, close
     once the next run is green.
+
+- `image-cve-scan-trivy-notify-upload-sarif` (label: `image-cve-infra-trivy`,
+    the same deduped issue) — the upload job failed or was cancelled
+    after the scan saved its SARIF, so the run's results may be missing
+    from the Security tab <!-- notify-arms: image-cve-scan.yml/image-cve-scan-trivy-notify-upload-sarif = failure cancelled -->.
 
 - NOT in required-checks (intentional — `update-flake-lock` must still
     land even if a CVE is present, with explicit maintainer awareness).
 
 - Trivy's own `exit-code: "0"` + `ignore-unfixed: true` intentional;
     the CRITICAL-fail decision lives in the `fail on CRITICAL findings`
-    step so a CRITICAL finding does not stop the SARIF upload.
+    step so a CRITICAL finding does not stop the SARIF artifact, and so
+    the upload, from going ahead.
 
 - Prevention path: nixpkgs auto-bump via `update-flake-lock`. CRITICAL
     finding → bump nixpkgs, then rebuild the OCI image.
@@ -497,27 +507,34 @@ the Trivy job's result and its `has-finding` output:
 ## OCI image CVE scan (Grype)<a name="oci-image-cve-scan-grype"></a>
 
 `image-cve-scan.yml`'s `image-cve-scan-grype` job (weekly cron +
-path-filtered push to `main` + dispatch) uploads SARIF (fixed-only
+path-filtered push to `main` + dispatch) produces SARIF (fixed-only
 findings, all severities; results below HIGH carry `warning` level
 because `severity-cutoff: high` sets the result level rather than
-filtering) to the Security tab under
+filtering) that reaches the Security tab under
 category `grype-image-cve`, using Grype as a second-opinion scanner
 alongside Trivy. The job fails (and emits a notify issue) on a CRITICAL
 finding, and — like Trivy — on any infrastructure failure ahead of the
 count step; the two notify jobs below distinguish the cases. Advisory only — not
 a required status check; prevention path is a nixpkgs bump via
-`update-flake-lock`.
+`update-flake-lock`. As with Trivy, the scan job holds only
+`contents: read` and saves its SARIF as an artifact; the
+`image-cve-scan-grype-upload-sarif` job holds `security-events: write`
+and uploads it.
 
-Two follow-on jobs open or update a deduped issue via the
+Three follow-on jobs open or update a deduped issue via the
 `notify-workflow-result` composite. Each waits for both scanner jobs and
-gates on the Grype job's result and its `has-finding` output:
+both upload jobs; the first two gate on the Grype job's result and its
+`has-finding` output:
 
 - `image-cve-scan-grype-notify-finding` (label: `image-cve-critical-grype`) — real
     CRITICAL CVE was identified by Grype <!-- notify-arms: image-cve-scan.yml/image-cve-scan-grype-notify-finding = finding -->.
 - `image-cve-scan-grype-notify-infra` (label: `image-cve-infra-grype`) — job failed
-    before producing a CRITICAL count (build / scan / SARIF upload /
-    the count step itself — Grype may or may not have found a
+    before producing a CRITICAL count (build / scan / saving the SARIF
+    artifact / the count step itself — Grype may or may not have found a
     CRITICAL), or the job was cancelled (no runner, or its timeout) <!-- notify-arms: image-cve-scan.yml/image-cve-scan-grype-notify-infra = failure cancelled -->.
+- `image-cve-scan-grype-notify-upload-sarif` (label: `image-cve-infra-grype`,
+    the same deduped issue) — the upload job failed or was cancelled
+    after the scan saved its SARIF <!-- notify-arms: image-cve-scan.yml/image-cve-scan-grype-notify-upload-sarif = failure cancelled -->.
 
 ## SBOM attestation<a name="sbom-attestation"></a>
 
