@@ -19,8 +19,10 @@
 #
 # Builtin schemas ship with check-jsonschema and are pinned by the
 # nixpkgs revision in flake.lock. The SchemaStore schema is pinned by
-# commit SHA; Renovate's customManager (`schemastore-pin` in
-# renovate.json) bumps it on the same cadence as other tracked SHAs.
+# commit SHA; the `SchemaStore/schemastore` regex customManager in
+# renovate.json (matching `SCHEMASTORE_SHA=` in this file, `github-digest`
+# datasource) bumps it, aged by commit date under the same
+# `minimumReleaseAge` as other tracked SHAs.
 #
 # Exit codes:
 #   0  no file failed schema validation

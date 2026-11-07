@@ -442,8 +442,9 @@ jobs instead, though not all: `patch-tag-pins` is pre-commit only,
 `check-cron-table`'s live coverage is the `cron-table-drift-check`
 workflow, `octoscan`'s live coverage is the `octoscan.yml`
 workflow, which runs on the bump PR itself because a `flake.lock`
-change can swap the octoscan binary (its harness runs test-only in
-`harness-group`), and the two
+change can swap the octoscan binary (its harness in `harness-group`
+runs the scan script with a stubbed octoscan and asserts that the
+workflow's PR `paths:` filter names the scanner's inputs), and the two
 actionlint canaries (`actionlint-shellcheck-active`,
 `actionlint-pyflakes-active`) run as pre-commit hooks, with
 `harness-group` running their harnesses — the hook's own default
@@ -841,7 +842,7 @@ lists: `LOCK_DERIVED_GENERATORS` names the generators it runs, and
 commit — the compute job holds no write credential, so that list, not the
 artifact it uploads, is the trust boundary. A workflow that also
 regenerates docs derived from `.github/workflows/ci.yml` names those
-generators in a third list, `WORKFLOW_DERIVED_GENERATORS`;
+generators in a second list, `WORKFLOW_DERIVED_GENERATORS`;
 `renovate-flake-lock-refresh.yml` is the one that does.
 
 `COMMITTABLE_PATHS` is not written by hand against the generator lists. Every
@@ -909,7 +910,7 @@ running a generator whose writes are bound to nothing puts its doc
 outside the check entirely, which is the first failure wearing a
 compliant-looking list.
 
-A lock-writing workflow may also declare an optional third list,
+A lock-writing workflow may also declare an optional second list,
 `WORKFLOW_DERIVED_GENERATORS`, for generators whose docs derive from
 `.github/workflows/ci.yml` rather than from the lock. Each entry must be
 an executable generator run by a freshness hook whose trigger admits

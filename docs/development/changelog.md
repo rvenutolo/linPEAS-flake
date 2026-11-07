@@ -115,7 +115,7 @@ changelog states the allowlist size that was in force when that commit
 landed — deliberately not the current count, since the changelog records
 what shipped. The
 [link-duplication guard](#link-duplication-guard) below asserts on every
-PR that no `15-check allowlist` survives regeneration, so removing this
+PR to `main` that no `15-check allowlist` survives regeneration, so removing this
 preprocessor fails the required `changelog-links` job; the replacement
 value itself is not pinned by any check.
 
@@ -145,7 +145,7 @@ survives). `CHANGELOG.md` is generator-owned and excluded from treefmt
 and markdownlint, so this check is the only guard against a malformed
 regeneration. It runs offline — git-cliff parses the PR number from the
 `(#N)` subject suffix, so no token is needed — as the required
-`changelog-links` CI job on every PR.
+`changelog-links` CI job on every PR to `main`.
 
 Exit 1 means an assertion failed. Exit 2 means the check could not run —
 git-cliff failed, nix is absent, or `cliff.toml` is missing — so there was
