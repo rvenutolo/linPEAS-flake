@@ -262,8 +262,9 @@ printf -v scanned 'scanned %d workflow file(s): %d clean, %d with findings, %d e
 # when another file produced a finding, so it routes to the infra-failure path
 # (has-finding=false, exit 1) and is re-examined rather than reported clean.
 if ((n_error > 0 || merge_failed || probe_failed)); then
-  # Truncated/partial SARIF is worse than missing SARIF; drop it so downstream
-  # consumers (CI upload-sarif) skip cleanly instead of uploading garbage.
+  # Truncated/partial SARIF is worse than missing SARIF; drop it so nothing
+  # downstream uploads garbage (in CI the artifact step fails on the missing
+  # file and the upload job is skipped).
   [[ -n ${sarif_out} ]] && rm -f -- "${sarif_out}"
   printf 'has-finding=false\n'
   # Whether findings were also recorded changes what an operator does next: a

@@ -32,21 +32,29 @@ dockerhub-sync.yml:
 gitleaks.yml:
   notify: [issues]
 image-cve-scan.yml:
-  image-cve-scan-trivy: [security-events]
+  # The Trivy and Grype jobs hold no write scope, so a compromised
+  # scanner finds a contents: read GITHUB_TOKEN; these jobs upload their
+  # SARIF, each taking its artifact by ID.
+  image-cve-scan-trivy-upload-sarif: [security-events]
   image-cve-scan-trivy-notify-finding: [issues]
   image-cve-scan-trivy-notify-infra: [issues]
-  image-cve-scan-grype: [security-events]
+  image-cve-scan-trivy-notify-upload-sarif: [issues]
+  image-cve-scan-grype-upload-sarif: [security-events]
   image-cve-scan-grype-notify-finding: [issues]
   image-cve-scan-grype-notify-infra: [issues]
+  image-cve-scan-grype-notify-upload-sarif: [issues]
 labeler.yml:
   label: [pull-requests]
   size: [pull-requests]
 links.yml:
   notify: [issues]
 octoscan.yml:
-  scan: [security-events]
+  # The scanner's own job holds no write scope, so a compromised octoscan
+  # build finds a contents: read GITHUB_TOKEN; this job uploads its SARIF.
+  upload-sarif: [security-events]
   notify-finding: [issues]
   notify-infra: [issues]
+  notify-upload-sarif: [issues]
 pages.yml:
   deploy: [id-token, pages]
   notify: [issues]

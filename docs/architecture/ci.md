@@ -114,9 +114,9 @@ Merge-commit only. Enforced at both layers:
 
 ## Non-blocking coverage / advisory checks
 
-- `image-cve-scan.yml` (weekly cron + push on the paths that change the image + dispatch) runs Trivy and Grype against the released OCI image and uploads SARIF to code-scanning under distinct categories (`trivy-image-cve`, `grype-image-cve`) for cross-scanner DB coverage.
+- `image-cve-scan.yml` (weekly cron + push on the paths that change the image + dispatch) runs Trivy and Grype against the released OCI image and uploads SARIF to code-scanning under distinct categories (`trivy-image-cve`, `grype-image-cve`) for cross-scanner DB coverage. Each scanner job holds only `contents: read` and saves its SARIF as an artifact; a separate upload job per scanner, holding `security-events: write` and running no scanner, publishes it.
     - Most findings are CVE-DB-driven, not PR-driven, so the scheduled run against a fresh DB is the meaningful signal — and it fires even in weeks with no PR activity. The push trigger covers the other direction: when the image itself changes, waiting for the next Friday leaves the new contents unscanned for up to a week, and no cron ordering helps a bump that lands off-schedule.
-    - Both scanners are advisory only (job-level failure is `count > 0` of CRITICAL CVEs or an infrastructure failure ahead of the count; a CRITICAL finding does not stop the SARIF upload); each scanner files deduped issues under separate finding and infrastructure labels, on the results listed in the [OCI image CVE scan sections](../security/verification.md#oci-image-cve-scan-trivy); the prevention path is a nixpkgs bump via `update-flake-lock`.
+    - Both scanners are advisory only (job-level failure is `count > 0` of CRITICAL CVEs or an infrastructure failure ahead of the count; a CRITICAL finding does not stop the SARIF artifact or its upload); each scanner files deduped issues under separate finding and infrastructure labels, on the results listed in the [OCI image CVE scan sections](../security/verification.md#oci-image-cve-scan-trivy); the prevention path is a nixpkgs bump via `update-flake-lock`.
 - `docs-audit-reminder.yml` (monthly cron + dispatch) opens a deduped `docs-audit` issue when CI-structure churn suggests hand-written CI prose has drifted. Advisory by construction: freshness gates cover only generated content (whole generator-owned files and spliced blocks), and the semantic claims they miss need a reading agent rather than a lint. Non-zero drift pressure never fails the job — a workflow that reddens during normal CI churn trains the maintainer to ignore red — but a genuine failure, such as the pressure script erroring or a GitHub API call failing, does go red and files a deduped `docs-audit-reminder-failure` issue, because that is a real problem rather than a drift signal. Drift pressure counts commits touching CI structure since the commit recorded in `.github/docs-audit-state`, so it reads as *change nobody has audited yet*: the issue closes itself once that count is zero, which is what running `just docs-audit-done` in an audit's final fix PR produces. An audit whose point was never recorded leaves pressure climbing and the issue open, which is the correct signal for an audit that never happened. See [Docs correctness audit](../development/docs-audit.md) for the full loop.
 - `octoscan.yml`'s PR trigger is paths-filtered to the files it reads (`.github/workflows/**`, `scripts/octoscan-scan.sh` and the `scripts/lib` files it sources; composite actions under `.github/actions/` are not scan targets) and to `flake.lock` and `nix/packages.nix`, which can swap the octoscan binary, so a bump scans with the new version on its own PR. `codeql.yml` deliberately runs on **every** PR with no paths filter, so the OpenSSF Scorecard SAST check keeps seeing a SAST run on every merged PR (it scores the fraction analysed, and a paths filter would drag that fraction down). Both stay outside the required set: octoscan because `required-checks-no-paths` forbids paths filters on required workflows, codeql so that a single CRITICAL false positive or a CodeQL infrastructure flake cannot wedge every PR.
 
@@ -293,9 +293,13 @@ conclusion and is ignored, so a notify job that does not wait for it can
 see only transient failures, hold off, and lose a later real failure: the
 watchdog then reports the run instead of re-running it, and the workflow
 files its own issues, so nothing files. `image-cve-scan.yml` lists both
-scanner jobs in the `needs:` of all four of its notify jobs for this
-reason, and each notify job's gate and `result:` still name only the
-scanner it reports on.
+scanner jobs and both SARIF upload jobs in the `needs:` of all six of
+its notify jobs for this reason, and each notify job's gate and
+`result:` still name only the one job it reports on. A SARIF-upload
+notify job also waits on the infra notify job that files under the same
+label, so when both file in one run the second comments on the issue
+the first opened instead of racing it to open a duplicate; `octoscan.yml`
+wires its `notify-upload-sarif` job the same way.
 
 A never-scheduled cancel is also unpageable from inside the run. The
 `notify` job that would file the issue needs the runner that was

@@ -97,17 +97,21 @@ tree.)
     signatures or attestations for its release binaries, so there is no
     release artifact to verify instead. It updates through `flake.lock`
     bumps. The scanner runs as a native process: in CI it can reach
-    sudo and the `scan` job's `GITHUB_TOKEN` (`contents: read`,
-    `actions: read`, `security-events: write`; setup-nix writes it into
-    `nix.conf`), the same exposure the Trivy and Grype jobs accept, under
-    harden-runner's `block` egress policy.
+    sudo (the Nix installer needs it) and the `scan` job's `GITHUB_TOKEN`
+    (setup-nix writes it into `nix.conf`), under harden-runner's `block`
+    egress policy. That token is `contents: read` only, so it reads
+    nothing a public clone does not. The SARIF goes to a separate
+    `upload-sarif` job, which holds `security-events: write` and runs no
+    scanner and no Nix; a compromised build can forge or suppress its own
+    findings but cannot reach other tools' code-scanning alerts.
 - **Status:** advisory by design. It is the cheapest scanner, but it fails
     on *any* finding (no severity threshold), so as a required check a
     single false positive would block merge. On non-PR runs, a finding, and
-    a failure that produced no complete findings result — a cancelled job and a SARIF
-    upload failing after a clean scan among them — are paged as separate
+    a failure that produced no complete findings result, a cancelled job among them, are paged as separate
     deduped issues, under `octoscan-finding` <!-- notify-arms: octoscan.yml/notify-finding = finding non-pr -->
     and `octoscan-infra` <!-- notify-arms: octoscan.yml/notify-infra = failure cancelled non-pr -->.
+    A failed or cancelled `upload-sarif` job is paged under the same
+    `octoscan-infra` issue <!-- notify-arms: octoscan.yml/notify-upload-sarif = failure cancelled non-pr -->.
     octoscan's rule set is narrowed only
     by the suppression set in `scripts/octoscan-scan.sh` — two disabled
     rules (`local-action`, `dangerous-write`) and a single `--ignore` regex
