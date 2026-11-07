@@ -44,9 +44,12 @@ labeler.yml:
 links.yml:
   notify: [issues]
 octoscan.yml:
-  scan: [security-events]
+  # The scanner's own job holds no write scope, so a compromised octoscan
+  # build reaches only a contents: read token; this job uploads its SARIF.
+  upload-sarif: [security-events]
   notify-finding: [issues]
   notify-infra: [issues]
+  notify-upload-sarif: [issues]
 pages.yml:
   deploy: [id-token, pages]
   notify: [issues]
