@@ -145,7 +145,7 @@ survives). `CHANGELOG.md` is generator-owned and excluded from treefmt
 and markdownlint, so this check is the only guard against a malformed
 regeneration. It runs offline — git-cliff parses the PR number from the
 `(#N)` subject suffix, so no token is needed — as the required
-`changelog-links` CI job on every PR.
+`changelog-links` CI job on every PR to `main`.
 
 Exit 1 means an assertion failed. Exit 2 means the check could not run —
 git-cliff failed, nix is absent, or `cliff.toml` is missing — so there was

@@ -158,7 +158,7 @@ tree.)
 - **Triggers:** runs as a **pre-commit hook on every commit that touches a
     workflow YAML under `.github/workflows/`** (`--min-severity=low`,
     scanning the changed workflow files), plus a weekly Friday cron and
-    manual dispatch. The hook also runs server-side on every PR and push:
+    manual dispatch. The hook also runs server-side on every PR to `main` and push:
     the required `flake-check` job runs `nix flake check`, which builds
     `checks.pre-commit`, and the zizmor hook carries no sandbox bail
     (unlike octoscan), so it re-runs there too, over the workflow files
