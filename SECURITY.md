@@ -229,7 +229,7 @@ PR, via the failed check.
     SLSA attestation with `gh attestation verify`; mismatched attestation
     is the canonical detection signal.
 
-- `SCORECARD_PAT` — a fine-grained read-only personal access token
+- `SCORECARD_TOKEN` — a fine-grained read-only personal access token
     consumed as `GITHUB_AUTH_TOKEN` by `scorecard-drift-check.yml` on the
     scorecard step only; the `Webhooks` check needs the `Webhooks` read
     permission, which no `GITHUB_TOKEN` `permissions:` block can grant.
