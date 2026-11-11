@@ -1,10 +1,10 @@
-# SCORECARD_PAT rotation runbook
+# SCORECARD_TOKEN rotation runbook
 
 The `scorecard-drift-check.yml` workflow calls the OSSF Scorecard
 CLI against this repo. The `Webhooks` check requires a permission
 (`Webhooks` read) that no `GITHUB_TOKEN` `permissions:` block can
 grant, so a fine-grained PAT is stored as
-the repo secret `SCORECARD_PAT` and consumed via the `GITHUB_AUTH_TOKEN`
+the repo secret `SCORECARD_TOKEN` and consumed via the `GITHUB_AUTH_TOKEN`
 env var on the scorecard step.
 
 This runbook is the durable record of how to create and rotate that PAT.
@@ -43,8 +43,8 @@ This runbook is the durable record of how to create and rotate that PAT.
 ## Store the token
 
 1. Repo → **Settings** → **Secrets and variables** → **Actions** → **Repository secrets**.
-1. If updating: select existing `SCORECARD_PAT` → **Update secret** → paste new value → **Update secret**.
-1. If creating: **New repository secret** → name `SCORECARD_PAT` → paste value → **Add secret**.
+1. If updating: select existing `SCORECARD_TOKEN` → **Update secret** → paste new value → **Update secret**.
+1. If creating: **New repository secret** → name `SCORECARD_TOKEN` → paste value → **Add secret**.
 
 ## Verify
 

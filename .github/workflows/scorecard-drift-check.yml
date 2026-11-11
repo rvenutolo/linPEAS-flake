@@ -32,7 +32,7 @@ name: scorecard-drift-check
 #
 # Token: scorecard's Webhooks check needs the Webhooks read
 # permission, which no GITHUB_TOKEN permissions block can grant, so a
-# fine-grained PAT is stored as SCORECARD_PAT and passed via the
+# fine-grained PAT is stored as SCORECARD_TOKEN and passed via the
 # GITHUB_AUTH_TOKEN env var on the scorecard step only (never
 # job-wide). Rotation steps: docs/runbooks/scorecard-pat-rotation.md.
 #
@@ -91,14 +91,14 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: scorecard --checks=<curated 11> → check-scorecard-threshold.sh
         id: probe
-        # SCORECARD_PAT rotation: docs/runbooks/scorecard-pat-rotation.md
+        # SCORECARD_TOKEN rotation: docs/runbooks/scorecard-pat-rotation.md
         # SCORECARD_EXPERIMENTAL=1 unlocks the SBOM and Webhooks checks
         # (both are flagged experimental by the scorecard CLI; without
         # the env var the CLI refuses to run them and exits 1 with
         # "one or more checks failed during execution", which reads as
         # a scan failure rather than as a missing opt-in).
         env:
-          GITHUB_AUTH_TOKEN: ${{ secrets.SCORECARD_PAT }}
+          GITHUB_AUTH_TOKEN: ${{ secrets.SCORECARD_TOKEN }}
           REPO: ${{ github.repository }}
           SCORECARD_EXPERIMENTAL: "1"
         run: |
@@ -193,7 +193,7 @@ jobs:
 
             If failure mode is `401` / `403` /
             `Resource not accessible by personal access token`, the
-            `SCORECARD_PAT` secret is expired or under-scoped — see
+            `SCORECARD_TOKEN` secret is expired or under-scoped — see
             [docs/runbooks/scorecard-pat-rotation.md](https://github.com/${{ github.repository }}/blob/main/docs/runbooks/scorecard-pat-rotation.md).
 
             This issue auto-closes on the next clean run.
