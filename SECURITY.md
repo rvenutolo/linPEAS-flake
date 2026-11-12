@@ -196,36 +196,33 @@ PR, via the failed check.
     tokens are minted per job by `actions/create-github-app-token`, live
     one hour, and revoke at job end. See
     [`docs/security/repo-config.md`](docs/security/repo-config.md) for
-    the full credential model. Rotate on suspected compromise only.
+    the full credential model.
 
 - `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN_RW` / `DOCKERHUB_TOKEN_DELETE` —
-    the Docker Hub account name plus two scoped access tokens used by the
-    release pipeline and its post-release sync. The split limits blast
-    radius:
+    the Docker Hub account name plus two personal access tokens used by
+    the release pipeline and its post-release sync. Docker Hub personal
+    access tokens cannot be limited to one repository: each reaches every
+    repository on the account, `rvenutolo/linpeas` included. The split
+    limits blast radius by permission instead:
 
-    - `DOCKERHUB_TOKEN_RW` — Read, Write on `rvenutolo/linpeas`. Used
+    - `DOCKERHUB_TOKEN_RW` — Read & Write. Used
         ONLY by `release-on-bump.yml` (the `image-amd64`, `image-arm64`,
         and `manifest` jobs). The `verify` job deliberately runs without
         it — `gh attestation verify` reads from Sigstore and the GitHub
         API, and `cosign verify` reads the published images with
         anonymous registry pulls, so no registry push credential enters
         that job's env. Cannot delete tags.
-    - `DOCKERHUB_TOKEN_DELETE` — Read, Write, Delete on
-        `rvenutolo/linpeas`. Used ONLY by `dockerhub-sync.yml` (the sole
+    - `DOCKERHUB_TOKEN_DELETE` — Read, Write & Delete. Used ONLY by `dockerhub-sync.yml` (the sole
         workflow consumer) and by the manual tag-delete snippet in
         `docs/runbooks/dockerhub-recovery.md`.
 
     The `Delete` capability is required by the `peter-evans/dockerhub-description`
     action used in `dockerhub-sync.yml`, which calls the Docker Hub repo-metadata
     endpoint; a `Read, Write`-only PAT returns `403 Forbidden` on that endpoint.
-    Rotation: no calendar cadence — on suspected compromise, or when a
-    token has expired or been revoked. If compromise is suspected: revoke at
-    <https://hub.docker.com/settings/security>, generate a replacement, then store it with
-    `gh secret set DOCKERHUB_TOKEN_RW --repo rvenutolo/linPEAS-flake` or
-    `gh secret set DOCKERHUB_TOKEN_DELETE --repo rvenutolo/linPEAS-flake` as
-    appropriate. Compromise blast radius: a `DOCKERHUB_TOKEN_RW` leak allows
-    pushing new tags but not deleting existing ones; a `DOCKERHUB_TOKEN_DELETE`
-    leak allows tag deletion in addition. Mitigation: consumers verify the
+    Compromise blast radius, across every repository on the account: a
+    `DOCKERHUB_TOKEN_RW` leak allows pushing new tags but not deleting
+    existing ones; a `DOCKERHUB_TOKEN_DELETE` leak allows tag deletion in
+    addition. Mitigation: consumers verify the
     SLSA attestation with `gh attestation verify`; mismatched attestation
     is the canonical detection signal.
 
@@ -233,10 +230,15 @@ PR, via the failed check.
     consumed as `GITHUB_AUTH_TOKEN` by `scorecard-drift-check.yml` on the
     scorecard step only; the `Webhooks` check needs the `Webhooks` read
     permission, which no `GITHUB_TOKEN` `permissions:` block can grant.
-    Rotation:
-    on PAT expiry (bounded at one year), on suspected compromise, or
-    on GitHub revocation —
-    [`docs/runbooks/scorecard-pat-rotation.md`](docs/runbooks/scorecard-pat-rotation.md).
+    Read-only on Contents, Metadata and Webhooks of this repository, so a
+    leak exposes repository data that is already public plus the
+    webhook configuration.
+
+Creating, storing, verifying and replacing each of these credentials,
+including the App's full registration, is in
+[`docs/runbooks/ci-credentials.md`](docs/runbooks/ci-credentials.md).
+Replace one on suspected compromise (revoke first), on revocation, or
+when a workflow fails auth with it.
 
 ## SBOM attestations
 
