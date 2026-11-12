@@ -46,6 +46,8 @@ not as a personal access token.
     `Pull requests: Read and write`. No `Workflows` permission.
 - **Token lifetime:** one hour; minted per job by
     `actions/create-github-app-token` and automatically revoked at job end.
+- **Setup:** registering, installing and storing the App's credentials is
+    in [CI credentials](../runbooks/ci-credentials.md#linpeas-flake-bumper-github-app).
 
 {% raw %}
 Tokens flow only through `${{ steps.app-token.outputs.token }}` →

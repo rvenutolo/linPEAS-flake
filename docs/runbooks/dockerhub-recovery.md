@@ -74,9 +74,8 @@ not a half-finished push, and the steps below assume the opposite —
 they spend `DOCKERHUB_TOKEN_DELETE` on the working assumption that the
 credential is sound. Take these first instead:
 
-1. Revoke `DOCKERHUB_TOKEN_RW` and `DOCKERHUB_TOKEN_DELETE` per the
-    rotation guidance in
-    [SECURITY.md](https://github.com/rvenutolo/linPEAS-flake/blob/main/SECURITY.md).
+1. Revoke `DOCKERHUB_TOKEN_RW` and `DOCKERHUB_TOKEN_DELETE` per
+    [CI credentials](ci-credentials.md#when-to-replace-a-credential).
     No republish below runs until they are reissued.
 1. Capture both registries' current manifests before changing
     anything — `docker buildx imagetools inspect --raw` against each,
@@ -110,7 +109,7 @@ credential is sound. Take these first instead:
 
 Docker Hub shows an access token once at creation and never re-displays
 it, so a lost copy cannot be recovered — it can only be replaced. Create
-a fresh Delete-scoped token at <https://hub.docker.com/settings/security>,
+a fresh Delete-scoped token per [CI credentials](ci-credentials.md#docker-hub-dockerhub_username-dockerhub_token_rw-dockerhub_token_delete),
 resync the repo secret, confirm the recovery commands below authenticate,
 and only then delete the token you replaced — the old one is the rollback
 target until the new one is proven, and `dockerhub-sync.yml` consumes this
@@ -253,7 +252,7 @@ third path there is no such issue: close the
 
 ## Common Docker Hub failure modes<a name="common-docker-hub-failure-modes"></a>
 
-**Token expired or revoked.** Rotate `DOCKERHUB_TOKEN_RW` (and/or `DOCKERHUB_TOKEN_DELETE` independently) at <https://hub.docker.com/settings/security>, then `gh secret set DOCKERHUB_TOKEN_RW`.
+**Token revoked or invalid.** Replace `DOCKERHUB_TOKEN_RW` (and/or `DOCKERHUB_TOKEN_DELETE` independently) per [CI credentials](ci-credentials.md#docker-hub-dockerhub_username-dockerhub_token_rw-dockerhub_token_delete).
 
 **Username mismatch.** `DOCKERHUB_USERNAME` must equal the owner segment of the `rvenutolo/linpeas` repo path.
 
@@ -313,7 +312,7 @@ answers `401` when it got no usable credential at all, and `403` with
 valid but its scope does not cover the call. Every `403` this runbook
 cites is the second shape, and the scope check runs ahead of the lookup —
 a delete of a tag that does not exist still answers `403`, never `404`.
-So a `403` says the token is the wrong one, not that it expired; a `401`
+So a `403` says the token is the wrong one, not that it stopped working; a `401`
 says the secret is empty, malformed, or revoked.
 
 That is also where the step 2 snippet fails if the `_RW` value gets
@@ -322,8 +321,8 @@ valid, just not delete-scoped — so the first `curl --fail` returns a JWT
 and it is the `DELETE` that dies. A failure on the login call instead
 means the token itself is bad, not merely under-scoped.
 
-Rotation: no calendar cadence — on suspected compromise, or when a token
-has expired or been revoked.
+Creating and replacing either token:
+[CI credentials](ci-credentials.md#docker-hub-dockerhub_username-dockerhub_token_rw-dockerhub_token_delete).
 
 ## Notify-body parity invariant<a name="notify-body-parity-invariant"></a>
 

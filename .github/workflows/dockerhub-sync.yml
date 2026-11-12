@@ -96,7 +96,7 @@ jobs:
             - sync: `${{ needs.sync.result }}`
 
             Common causes:
-            - `DOCKERHUB_TOKEN_DELETE` expired or revoked → rotate at <https://hub.docker.com/settings/security> and `gh secret set DOCKERHUB_TOKEN_DELETE`.
+            - `DOCKERHUB_TOKEN_DELETE` revoked or invalid → replace it per [docs/runbooks/ci-credentials.md](https://github.com/${{ github.repository }}/blob/main/docs/runbooks/ci-credentials.md#docker-hub-dockerhub_username-dockerhub_token_rw-dockerhub_token_delete).
             - `DOCKERHUB_USERNAME` mismatch with the `rvenutolo/linpeas` repo owner.
             - Docker Hub partial outage; manual re-run via `workflow_dispatch` is often enough.
 
