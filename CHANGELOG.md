@@ -6,6 +6,20 @@ conventional commits between release tags. Format follows
 tag matches the upstream peass-ng pin version (`YYYYMMDD-<sha>`); this
 repo is not on a semver track.
 
+## [20261115-5957cd50] - 2026-11-16
+
+### CI
+- Rename SCORECARD_PAT secret to SCORECARD_TOKEN ([#1504](https://github.com/rvenutolo/linPEAS-flake/pull/1504))
+
+### Chores
+- Bump linpeas to 20261115-5957cd50 ([#1514](https://github.com/rvenutolo/linPEAS-flake/pull/1514))
+- Update github-actions ([#1510](https://github.com/rvenutolo/linPEAS-flake/pull/1510))
+- Update flake.lock ([#1509](https://github.com/rvenutolo/linPEAS-flake/pull/1509))
+- Update dependency trufflesecurity/trufflehog to v3.99.8 ([#1508](https://github.com/rvenutolo/linPEAS-flake/pull/1508))
+
+### Documentation
+- Document setup of every CI credential ([#1506](https://github.com/rvenutolo/linPEAS-flake/pull/1506))
+
 ## [20261109-f4fdadd7] - 2026-11-10
 
 ### Chores
