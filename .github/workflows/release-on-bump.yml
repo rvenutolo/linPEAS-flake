@@ -60,7 +60,7 @@ jobs:
       tag-exists: ${{ steps.exists.outputs.exists }}
       write-latest: ${{ steps.latest.outputs.write-latest }}
     steps:
-      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -314,7 +314,7 @@ jobs:
       arm64-ghcr-digest: ${{ steps.classify.outputs.arm64-ghcr-digest }}
       arm64-hub-digest: ${{ steps.classify.outputs.arm64-hub-digest }}
     steps:
-      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: block
           # Anonymous registry reads only: no cosign (no sigstore
@@ -448,7 +448,7 @@ jobs:
       ghcr_digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
       hub_digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
     steps:
-      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -780,7 +780,7 @@ jobs:
       ghcr_digest: ${{ steps.push.outputs.ghcr_digest || steps.pull.outputs.ghcr_digest }}
       hub_digest: ${{ steps.push.outputs.hub_digest || steps.pull.outputs.hub_digest }}
     steps:
-      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -1064,7 +1064,7 @@ jobs:
       ghcr_index_digest: ${{ steps.create.outputs.ghcr_index_digest }}
       hub_index_digest: ${{ steps.create.outputs.hub_index_digest }}
     steps:
-      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -1246,7 +1246,7 @@ jobs:
       pull-requests: read
       statuses: read
     steps:
-      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: block
           allowed-endpoints: >
@@ -1571,7 +1571,7 @@ jobs:
       attestations: read
       packages: read
     steps:
-      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: block
           # No timestamp.sigstore.dev: this job only verifies (cosign
@@ -1795,7 +1795,7 @@ jobs:
       checks: read
       issues: write
     steps:
-      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+      - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
           egress-policy: block
           allowed-endpoints: >
