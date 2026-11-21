@@ -10,7 +10,7 @@
       inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
     pre-commit-hooks = {
-      url = "github:cachix/git-hooks.nix/43b3c1ab9d40fb1dbb008f451988a91e375825e9";
+      url = "github:cachix/git-hooks.nix/204b6977e00caac19e2313015a598543ca7be150";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
   };
